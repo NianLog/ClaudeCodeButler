@@ -1,0 +1,419 @@
+/**
+ * 终端日志查看器样式
+ */
+
+.terminal-log-viewer {
+  width: 100%;
+}
+
+/* 统计信息样式 */
+.log-stats {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 16px;
+}
+
+/* 日志容器样式 */
+.log-container {
+  overflow-y: auto;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  padding: 8px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  height: 400px;
+}
+
+/* 日志条目样式 */
+.log-entry {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 4px;
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.log-entry:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* 日志类型样式 */
+.log-request {
+  border-left-color: #52c41a;
+}
+
+.log-response {
+  border-left-color: #1890ff;
+}
+
+.log-system {
+  border-left-color: #722ed1;
+}
+
+.log-error {
+  border-left-color: #ff4d4f;
+  background: #fff2f0;
+}
+
+/* 日志级别样式 */
+.log-debug {
+  opacity: 0.8;
+}
+
+.log-info {
+  opacity: 1;
+}
+
+.log-warn {
+  background: #fffbe6;
+}
+
+.log-error {
+  background: #fff2f0;
+}
+
+/* 日志头部样式 */
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.log-meta {
+  flex: 1;
+}
+
+.log-actions {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* 日志元信息样式 */
+.log-timestamp {
+  font-size: 11px;
+  color: #999;
+}
+
+.log-duration {
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* 日志消息样式 */
+.log-message {
+  color: #333;
+  word-break: break-word;
+  margin-bottom: 4px;
+}
+
+.log-url {
+  margin-left: 8px;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* 日志详情样式 */
+.log-details {
+  margin-top: 8px;
+}
+
+.log-details-summary {
+  cursor: pointer;
+  color: #666;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.log-details-summary:hover {
+  color: #1890ff;
+}
+
+.log-details-content {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f8f8f8;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  font-size: 10px;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 标签样式 */
+.log-entry .ant-tag {
+  margin: 0 4px 0 0;
+  font-size: 10px;
+  line-height: 16px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 按钮样式 */
+.log-actions .ant-btn {
+  padding: 0 4px;
+  height: 20px;
+  font-size: 10px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.log-entry:hover .log-actions .ant-btn {
+  opacity: 1;
+}
+
+/* 搜索框样式 */
+.log-container .ant-input-affix-wrapper {
+  margin-bottom: 8px;
+}
+
+/* 选择器样式 */
+.log-container .ant-select {
+  width: 100px;
+}
+
+/* 空状态样式 */
+.log-container .ant-empty {
+  padding: 32px 0;
+}
+
+.log-container .ant-empty-description {
+  color: #999;
+  font-size: 12px;
+}
+
+/* 滚动条样式 */
+.log-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.log-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.log-container::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+.log-container::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+.log-details-content::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.log-details-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.log-details-content::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 2px;
+}
+
+.log-details-content::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 动画效果 */
+.log-entry {
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .log-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .log-actions {
+    align-self: flex-end;
+    margin-left: 0;
+  }
+
+  .log-message {
+    font-size: 11px;
+  }
+
+  .log-url {
+    display: block;
+    margin: 4px 0;
+  }
+
+  .log-meta .ant-tag {
+    margin-right: 2px;
+    font-size: 9px;
+  }
+
+  .log-stats {
+    font-size: 11px;
+  }
+
+  .log-container {
+    font-size: 11px;
+    padding: 6px;
+  }
+}
+
+/* 暗色主题适配 */
+[data-theme="dark"] .terminal-log-viewer {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .log-container {
+  background: #141414;
+  border-color: #434343;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .log-entry {
+  background: #1f1f1f;
+  border-color: #434343;
+}
+
+[data-theme="dark"] .log-entry:hover {
+  background: #262626;
+}
+
+[data-theme="dark"] .log-warn {
+  background: #2b2111;
+}
+
+[data-theme="dark"] .log-error {
+  background: #2a1215;
+}
+
+[data-theme="dark"] .log-details-content {
+  background: #1f1f1f;
+  border-color: #434343;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .log-message {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .log-timestamp,
+[data-theme="dark"] .log-duration {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="dark"] .log-url {
+  background: #262626;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .log-details-summary {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="dark"] .log-details-summary:hover {
+  color: #1890ff;
+}
+
+/* 状态徽章样式 */
+.terminal-log-viewer .ant-badge {
+  display: inline-flex;
+}
+
+.terminal-log-viewer .ant-badge-count {
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 10px;
+  padding: 0 4px;
+}
+
+/* 卡片头部样式 */
+.terminal-log-viewer .ant-card-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-log-viewer .ant-card-extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 警告提示样式 */
+.terminal-log-viewer .ant-alert {
+  margin-bottom: 0;
+}
+
+.terminal-log-viewer .ant-alert-icon {
+  font-size: 16px;
+}
+
+/* 工具提示样式 */
+.terminal-log-viewer .ant-tooltip-inner {
+  font-size: 11px;
+  border-radius: 4px;
+}
+
+/* 过滤器样式 */
+.log-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.log-filters .ant-tag {
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.log-filters .ant-tag:hover {
+  opacity: 0.8;
+}
+
+/* 高亮匹配的搜索文本 */
+.highlight-text {
+  background: #fff3cd;
+  color: #856404;
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+[data-theme="dark"] .highlight-text {
+  background: #423f1b;
+  color: #ffe484;
+}

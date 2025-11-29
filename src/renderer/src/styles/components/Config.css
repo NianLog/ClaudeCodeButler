@@ -1,0 +1,286 @@
+/**
+ * 配置管理组件样式
+ */
+
+.config-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 工具栏 */
+.config-toolbar {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 配置列表 */
+.config-list {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.config-list .ant-card-body {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.config-list .ant-list {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.config-list .ant-list-item {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.2s ease-in-out;
+  position: relative;
+}
+
+.config-list .ant-list-item:hover {
+  background: #fafafa;
+}
+
+.config-list .ant-list-item:last-child {
+  border-bottom: none;
+}
+
+/* 配置项 */
+.config-item {
+  position: relative;
+}
+
+.config-item.active {
+  border-left: 3px solid #1890ff;
+  background: #f6ffed;
+}
+
+.config-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #52c41a;
+}
+
+.config-avatar {
+  position: relative;
+  font-size: 20px;
+  color: #1890ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: #f0f9ff;
+  border-radius: 8px;
+}
+
+.active-indicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  background: #52c41a;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.config-name {
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 15px;
+}
+
+.config-description {
+  margin-top: 8px;
+}
+
+.config-path {
+  color: #6b7280;
+  font-size: 12px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.config-meta {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.config-meta .anticon {
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+/* 错误状态 */
+.error-state {
+  padding: 40px;
+  text-align: center;
+}
+
+/* JSON编辑器 */
+.json-editor {
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.editor-toolbar {
+  padding: 8px 12px;
+  background: #fafafa;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.json-textarea {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  border: none;
+  border-radius: 0;
+}
+
+.json-textarea.error {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+}
+
+.json-textarea:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* 配置预览 */
+.config-preview {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: 6px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .config-toolbar {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    justify-content: center;
+  }
+
+  .config-toolbar .ant-space {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .config-list .ant-list-item {
+    padding: 12px 16px;
+  }
+
+  .config-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .config-name {
+    font-size: 14px;
+  }
+}
+
+/* 暗色主题 */
+[data-theme="dark"] .config-toolbar,
+[data-theme="dark"] .config-list {
+  background: #374151;
+  border-color: #4b5563;
+}
+
+[data-theme="dark"] .config-list .ant-list-item:hover {
+  background: #4b5563;
+}
+
+[data-theme="dark"] .config-item.active {
+  background: #1e3a8a;
+}
+
+[data-theme="dark"] .config-avatar {
+  background: #1e3a8a;
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .config-name {
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .config-path {
+  background: #4b5563;
+  color: #d1d5db;
+}
+
+[data-theme="dark"] .config-meta {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .json-editor {
+  border-color: #4b5563;
+}
+
+[data-theme="dark"] .editor-toolbar {
+  background: #4b5563;
+  border-bottom-color: #6b7280;
+}
+
+[data-theme="dark"] .json-textarea {
+  background: #374151;
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .config-preview {
+  background: #4b5563;
+  color: #f9fafb;
+}

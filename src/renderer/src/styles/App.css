@@ -1,0 +1,221 @@
+/**
+ * App 组件样式
+ * 定义应用布局相关样式
+ */
+
+.app-layout {
+  height: 100vh;
+  overflow: hidden;
+  background: #f5f5f5;
+}
+
+/* 内容区域 */
+.app-content {
+  padding: 0;
+  overflow: hidden;
+  transition: margin-left 0.2s ease-in-out;
+  background: #fff;
+}
+
+.app-content:not(.sidebar-collapsed) {
+  margin-left: 200px;
+}
+
+.app-content.sidebar-collapsed {
+  margin-left: 80px;
+}
+
+.content-wrapper {
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+  background: #f5f5f5;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .app-content {
+    margin-left: 0 !important;
+  }
+
+  .content-wrapper {
+    padding: 8px;
+  }
+}
+
+/* 加载状态 */
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.app-loading .loading-text {
+  color: #666;
+  font-size: 14px;
+}
+
+/* 错误状态 */
+.app-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+}
+
+.app-error .error-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ff4d4f;
+  margin-bottom: 8px;
+}
+
+.app-error .error-message {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 500px;
+}
+
+.app-error .error-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* 空状态 */
+.app-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  flex-direction: column;
+  gap: 16px;
+  color: #999;
+}
+
+.app-empty .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.app-empty .empty-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.app-empty .empty-description {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  max-width: 400px;
+}
+
+/* 动画效果 */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.content-enter {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* 页面过渡 */
+.page-transition-enter {
+  animation: slideInRight 0.3s ease-in-out;
+}
+
+.page-transition-exit {
+  animation: slideInLeft 0.3s ease-in-out;
+}
+
+/* 滚动条样式 */
+.content-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.content-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.content-wrapper::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.content-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 暗色主题支持 */
+[data-theme="dark"] .app-layout {
+  background: #1f2937;
+}
+
+[data-theme="dark"] .app-content {
+  background: #1f2937;
+}
+
+[data-theme="dark"] .content-wrapper {
+  background: #111827;
+}
+
+[data-theme="dark"] .app-loading .loading-text {
+  color: #d1d5db;
+}
+
+[data-theme="dark"] .app-error .error-message {
+  color: #d1d5db;
+}
+
+[data-theme="dark"] .app-empty {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .content-wrapper::-webkit-scrollbar-track {
+  background: #374151;
+}
+
+[data-theme="dark"] .content-wrapper::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
+[data-theme="dark"] .content-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}

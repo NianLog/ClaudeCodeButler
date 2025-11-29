@@ -1,0 +1,558 @@
+/**
+ * 终端日志组件
+ * @description 用于显示托管模式API请求和响应的实时日志
+ * @note 从全局store读取日志数据，确保即使组件未挂载，日志也在后台持续收集
+ */
+
+import React, { useState, useEffect, useRef } from 'react'
+import {
+  Card,
+  Input,
+  Button,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+  Select,
+  Switch,
+  Badge,
+  Empty,
+  Alert
+} from 'antd'
+import {
+  ClearOutlined,
+  DownloadOutlined,
+  SearchOutlined,
+  CopyOutlined,
+  PauseOutlined,
+  PlayCircleOutlined,
+  FilterOutlined,
+  EyeOutlined,
+  BugOutlined,
+  InfoCircleOutlined,
+  ExclamationCircleOutlined,
+  CloseCircleOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  ApiOutlined
+} from '@ant-design/icons'
+import type { LogLevel } from '@shared/types/managed-mode'
+import { useManagedModeLogStore, type LogEntry } from '../../store/managed-mode-log-store'
+import './TerminalLogViewer.css'
+
+const { Text } = Typography
+const { Search } = Input
+const { Option } = Select
+
+/**
+ * 终端日志查看器属性
+ */
+interface TerminalLogViewerProps {
+  debugMode?: boolean
+  maxEntries?: number
+  height?: string
+  /**
+   * 日志类型过滤器
+   * - 'all': 显示所有日志
+   * - 'request-response': 只显示请求和响应日志（用于实时日志）
+   * - 'system': 只显示系统日志（用于运行日志）
+   */
+  logTypeFilter?: 'all' | 'request-response' | 'system'
+}
+
+/**
+ * 终端日志查看器组件
+ */
+const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
+  debugMode = false,
+  maxEntries = 1000,
+  height = '400px',
+  logTypeFilter = 'all'
+}) => {
+  // 从全局store读取日志数据（确保即使组件未挂载，日志也在后台持续收集）
+  const { logs, clearLogs: clearGlobalLogs } = useManagedModeLogStore()
+
+  // 本地状态管理（仅用于UI控制和过滤）
+  const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>([])
+  const [searchText, setSearchText] = useState('')
+  const [logFilter, setLogFilter] = useState<LogLevel | 'all'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'request' | 'response' | 'system' | 'error'>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [isPaused, setIsPaused] = useState(false)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const [logContainerRef, setLogContainerRef] = useState<HTMLDivElement | null>(null)
+
+  // 模拟实时日志接收
+  // 禁用模拟日志生成 - 现在只显示真实的代理服务日志
+  // useEffect(() => {
+  //   if (!debugMode) return
+
+  //   const interval = setInterval(() => {
+  //     if (!isPaused && logs.length < maxEntries) {
+  //       // 模拟生成日志
+  //       const mockLog = generateMockLog()
+  //       addLog(mockLog)
+  //     }
+  //   }, 2000)
+
+  //   return () => clearInterval(interval)
+  // }, [debugMode, isPaused, logs.length, maxEntries])
+
+  // 监听托管模式服务的真实日志
+  useEffect(() => {
+    if (!debugMode) return
+
+    // 监听来自托管服务的日志事件
+    const handleManagedModeLog = (event: any) => {
+      addLog({
+        timestamp: Date.now(),
+        level: event.level || 'info',
+        type: event.type || 'system',
+        source: 'managed-mode-proxy',
+        message: event.message || '',
+        data: event.data || null
+      })
+    }
+
+    // 注册监听器
+    const unsubscribe = window.electronAPI.managedMode.onLog?.(handleManagedModeLog)
+
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
+  }, [debugMode, isPaused])
+
+  // 过滤日志
+  useEffect(() => {
+    let filtered = logs
+
+    // 按logTypeFilter过滤（组件级别的过滤）
+    if (logTypeFilter === 'request-response') {
+      filtered = filtered.filter(log => log.type === 'request' || log.type === 'response')
+    } else if (logTypeFilter === 'system') {
+      filtered = filtered.filter(log => log.type === 'system' || log.type === 'error')
+    }
+
+    // 按级别过滤
+    if (logFilter !== 'all') {
+      filtered = filtered.filter(log => log.level === logFilter)
+    }
+
+    // 按类型过滤
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(log => log.type === typeFilter)
+    }
+
+    // 按状态码过滤
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(log => {
+        if (log.data?.statusCode) {
+          const status = log.data.statusCode.toString()
+          return status.startsWith(statusFilter)
+        }
+        return false
+      })
+    }
+
+    // 搜索过滤
+    if (searchText) {
+      filtered = filtered.filter(log =>
+        log.message.toLowerCase().includes(searchText.toLowerCase()) ||
+        (log.data?.url && log.data.url.toLowerCase().includes(searchText.toLowerCase())) ||
+        (log.data?.method && log.data.method.toLowerCase().includes(searchText.toLowerCase()))
+      )
+    }
+
+    setFilteredLogs(filtered)
+  }, [logs, logFilter, typeFilter, statusFilter, searchText, logTypeFilter])
+
+  // 自动滚动
+  useEffect(() => {
+    if (autoScroll && logContainerRef && !isPaused) {
+      logContainerRef.scrollTop = logContainerRef.scrollHeight
+    }
+  }, [filteredLogs, autoScroll, isPaused])
+
+  /**
+   * 添加日志
+   */
+  const addLog = (log: Omit<LogEntry, 'id'>) => {
+    const newLog: LogEntry = {
+      ...log,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }
+
+    setLogs(prevLogs => {
+      const updatedLogs = [...prevLogs, newLog]
+      // 限制日志条目数量，防止内存占用过多
+      if (updatedLogs.length > maxEntries) {
+        return updatedLogs.slice(-maxEntries)
+      }
+      return updatedLogs
+    })
+  }
+
+  /**
+   * 生成模拟日志
+   */
+  const generateMockLog = (): Omit<LogEntry, 'id'> => {
+    const types: LogEntry['type'][] = ['request', 'response', 'system', 'error']
+    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error']
+    const type = types[Math.floor(Math.random() * types.length)]
+    const level = levels[Math.floor(Math.random() * levels.length)]
+
+    const baseLog = {
+      timestamp: Date.now(),
+      level,
+      type,
+      source: 'managed-mode-proxy',
+      message: ''
+    }
+
+    switch (type) {
+      case 'request':
+        return {
+          ...baseLog,
+          level: 'info',
+          message: 'API Request Received',
+          data: {
+            method: 'POST',
+            url: '/v1/messages',
+            headers: {
+              'content-type': 'application/json',
+              'x-api-key': 'ccb-sk-***masked***'
+            },
+            body: {
+              model: 'claude-3-5-sonnet-20241022',
+              max_tokens: 4096,
+              messages: [{ role: 'user', content: 'Hello, world!' }]
+            }
+          }
+        }
+
+      case 'response':
+        return {
+          ...baseLog,
+          level: 'info',
+          message: 'API Response Sent',
+          data: {
+            statusCode: 200,
+            duration: Math.floor(Math.random() * 1000) + 100,
+            headers: {
+              'content-type': 'application/json'
+            },
+            body: {
+              id: `msg_${Date.now()}`,
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Hello! How can I help you today?' }]
+            }
+          }
+        }
+
+      case 'system':
+        return {
+          ...baseLog,
+          level: 'info',
+          message: 'Proxy server status updated',
+          data: {
+            status: 'running',
+            uptime: Date.now(),
+            memory: Math.floor(Math.random() * 100) + 50
+          }
+        }
+
+      case 'error':
+        return {
+          ...baseLog,
+          level: 'error',
+          message: 'API request failed',
+          data: {
+            statusCode: 500,
+            error: 'Internal server error',
+            duration: Math.floor(Math.random() * 1000) + 100
+          }
+        }
+
+      default:
+        return baseLog
+    }
+  }
+
+  /**
+   * 清空日志
+   */
+  const clearLogs = () => {
+    setLogs([])
+    setFilteredLogs([])
+  }
+
+  /**
+   * 导出日志
+   */
+  const exportLogs = () => {
+    const logText = filteredLogs
+      .map(log => {
+        const timestamp = new Date(log.timestamp).toISOString()
+        const dataStr = log.data ? `\n  Data: ${JSON.stringify(log.data, null, 2)}` : ''
+        const sourceStr = log.source ? ` [${log.source}]` : ''
+        return `[${timestamp}] ${log.level.toUpperCase()}${sourceStr} [${log.type.toUpperCase()}]: ${log.message}${dataStr}`
+      })
+      .join('\n\n')
+
+    const blob = new Blob([logText], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `managed-mode-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  /**
+   * 复制日志内容
+   */
+  const copyLog = (log: LogEntry) => {
+    const logText = `[${new Date(log.timestamp).toISOString()}] ${log.level.toUpperCase()} [${log.type.toUpperCase()}]: ${log.message}`
+    navigator.clipboard.writeText(logText)
+  }
+
+  /**
+   * 获取日志级别颜色
+   */
+  const getLogLevelColor = (level: LogLevel): string => {
+    switch (level) {
+      case 'debug': return 'default'
+      case 'info': return 'blue'
+      case 'warn': return 'orange'
+      case 'error': return 'red'
+      default: return 'default'
+    }
+  }
+
+  /**
+   * 获取日志类型颜色
+   */
+  const getLogTypeColor = (type: LogEntry['type']): string => {
+    switch (type) {
+      case 'request': return 'green'
+      case 'response': return 'blue'
+      case 'system': return 'purple'
+      case 'error': return 'red'
+      default: return 'default'
+    }
+  }
+
+  /**
+   * 获取状态码颜色
+   */
+  const getStatusCodeColor = (statusCode?: number): string => {
+    if (!statusCode) return 'default'
+    if (statusCode >= 200 && statusCode < 300) return 'green'
+    if (statusCode >= 300 && statusCode < 400) return 'blue'
+    if (statusCode >= 400 && statusCode < 500) return 'orange'
+    if (statusCode >= 500) return 'red'
+    return 'default'
+  }
+
+  /**
+   * 获取日志级别图标
+   */
+  const getLogLevelIcon = (level: LogLevel) => {
+    switch (level) {
+      case 'debug': return <BugOutlined />
+      case 'info': return <InfoCircleOutlined />
+      case 'warn': return <ExclamationCircleOutlined />
+      case 'error': return <CloseCircleOutlined />
+      default: return <InfoCircleOutlined />
+    }
+  }
+
+  /**
+   * 获取日志类型图标
+   */
+  const getLogTypeIcon = (type: LogEntry['type']) => {
+    switch (type) {
+      case 'request': return <ApiOutlined style={{ transform: 'rotate(-45deg)' }} />
+      case 'response': return <ApiOutlined />
+      case 'system': return <ClockCircleOutlined />
+      case 'error': return <ExclamationCircleOutlined />
+      default: return <InfoCircleOutlined />
+    }
+  }
+
+  if (!debugMode) {
+    return (
+      <div className="terminal-log-viewer">
+        <Alert
+          type="info"
+          message="调试模式未开启"
+          description="开启调试模式后，此页面将显示托管模式的实时API请求和响应日志。"
+          icon={<BugOutlined />}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="terminal-log-viewer">
+      {/* 工具栏 */}
+      <div className="log-toolbar" style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '16px',
+        padding: '8px 12px',
+        background: '#fafafa',
+        borderRadius: '6px',
+        border: '1px solid #f0f0f0'
+      }}>
+        <div className="log-stats">
+          <Space split={<span>|</span>}>
+            <Text type="secondary">总计: {logs.length}</Text>
+            <Text type="secondary">已过滤: {filteredLogs.length}</Text>
+            <Text type="secondary">错误: {logs.filter(log => log.level === 'error').length}</Text>
+            {isPaused && <Text type="warning">已暂停</Text>}
+          </Space>
+        </div>
+
+        <Space size="small">
+          <Select
+            value={typeFilter}
+            onChange={setTypeFilter}
+            style={{ width: 90 }}
+            size="small"
+          >
+            <Option value="all">全部类型</Option>
+            <Option value="request">请求</Option>
+            <Option value="response">响应</Option>
+            <Option value="system">系统</Option>
+            <Option value="error">错误</Option>
+          </Select>
+
+          <Search
+            placeholder="搜索..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 120 }}
+            size="small"
+            allowClear
+          />
+
+          <Switch
+            checked={autoScroll}
+            onChange={setAutoScroll}
+            size="small"
+            checkedChildren="自动"
+            unCheckedChildren="手动"
+          />
+
+          <Tooltip title={isPaused ? "继续接收日志" : "暂停接收日志"}>
+            <Button
+              type={isPaused ? 'primary' : 'default'}
+              size="small"
+              icon={isPaused ? <PlayCircleOutlined /> : <PauseOutlined />}
+              onClick={() => setIsPaused(!isPaused)}
+            />
+          </Tooltip>
+
+          <Button
+            size="small"
+            icon={<ClearOutlined />}
+            onClick={clearLogs}
+            disabled={logs.length === 0}
+          />
+
+          <Button
+            size="small"
+            icon={<DownloadOutlined />}
+            onClick={exportLogs}
+            disabled={filteredLogs.length === 0}
+          />
+        </Space>
+      </div>
+
+      {/* 日志容器 */}
+      <div
+        className="log-container"
+        style={{
+          height,
+          overflow: 'auto',
+          border: '1px solid #f0f0f0',
+          borderRadius: '6px',
+          padding: '8px',
+          background: '#fff'
+        }}
+        ref={setLogContainerRef}
+      >
+        {filteredLogs.length === 0 ? (
+          <Empty
+            description="暂无日志"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        ) : (
+          filteredLogs.map(log => (
+            <div key={log.id} className={`log-entry log-${log.type} log-${log.level}`}>
+              <div className="log-header">
+                <Space className="log-meta">
+                  <Tag color={getLogLevelColor(log.level)} size="small" icon={getLogLevelIcon(log.level)}>
+                    {log.level.toUpperCase()}
+                  </Tag>
+                  <Tag color={getLogTypeColor(log.type)} size="small" icon={getLogTypeIcon(log.type)}>
+                    {log.type.toUpperCase()}
+                  </Tag>
+                  {log.data?.statusCode && (
+                    <Tag color={getStatusCodeColor(log.data.statusCode)} size="small">
+                      {log.data.statusCode}
+                    </Tag>
+                  )}
+                  <Text type="secondary" className="log-timestamp">
+                    {new Date(log.timestamp).toLocaleTimeString()}
+                  </Text>
+                </Space>
+
+                <Space className="log-actions">
+                  {log.data?.duration && (
+                    <Text type="secondary" className="log-duration">
+                      {log.data.duration}ms
+                    </Text>
+                  )}
+                  <Tooltip title="复制日志">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={() => copyLog(log)}
+                    />
+                  </Tooltip>
+                </Space>
+              </div>
+
+              <div className="log-message">
+                <Text>{log.message}</Text>
+                {log.data?.url && (
+                  <Text code className="log-url">
+                    {log.data.method} {log.data.url}
+                  </Text>
+                )}
+              </div>
+
+              {log.data && (
+                <details className="log-details">
+                  <summary className="log-details-summary">
+                    <EyeOutlined /> 查看详情
+                  </summary>
+                  <pre className="log-details-content">
+                    {JSON.stringify(log.data, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default TerminalLogViewer

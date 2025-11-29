@@ -1,0 +1,167 @@
+{
+  "name": "ccb",
+  "version": "1.1.0",
+  "description": "Claude Code Butler - 配置管理工具",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:admin": "electron-vite dev --admin",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "pack": "electron-builder",
+    "dist": "electron-builder --publish=never",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "type-check": "tsc --noEmit",
+    "start": "npm run build && electron out/main/index.js",
+    "start:admin": "npm run build && node scripts/start-admin.js",
+    "start:admin-windows": "powershell.exe -Command \"Start-Process -FilePath 'electron' -ArgumentList 'out/main/index.js' -Verb RunAs\"",
+    "start:admin-macos": "osascript -e 'do shell script \"electron out/main/index.js\" with administrator privileges\"",
+    "start:admin-linux": "pkexec electron out/main/index.js",
+    "start:admin-force": "node scripts/start-admin.js",
+    "pack:mac": "electron-builder --mac",
+    "pack:linux": "electron-builder --linux",
+    "pack:all": "electron-builder --win --mac --linux",
+    "dist:mac": "electron-builder --mac --publish=never",
+    "dist:linux": "electron-builder --linux --publish=never",
+    "dist:all": "electron-builder --win --mac --linux --publish=never"
+  },
+  "keywords": [
+    "claude-code",
+    "configuration-manager",
+    "electron",
+    "typescript",
+    "react"
+  ],
+  "author": "NianSir",
+  "license": "MIT",
+  "homepage": "https://github.com/NianLog/ClaudeCodeButler#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NianLog/ClaudeCodeButler.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NianLog/ClaudeCodeButler/issues"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/react-window": "^1.8.8",
+    "antd": "^5.12.0",
+    "axios": "^1.12.2",
+    "chokidar": "^3.5.3",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.10",
+    "express": "^5.1.0",
+    "monaco-editor": "^0.54.0",
+    "node-cron": "^3.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^9.1.0",
+    "react-syntax-highlighter": "^15.6.6",
+    "react-window": "^2.2.1",
+    "recharts": "^2.8.0",
+    "remark-gfm": "^4.0.1",
+    "uuid": "^9.0.0",
+    "zustand": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/uuid": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.7.0",
+    "@typescript-eslint/parser": "^7.7.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.0",
+    "electron": "^32.0.0",
+    "electron-builder": "^24.9.0",
+    "electron-vite": "^2.0.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-import": "^2.29.1",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0",
+    "vite-plugin-monaco-editor": "^1.1.0",
+    "vitest": "^1.0.0"
+  },
+  "build": {
+    "appId": "com.claudecode.butler",
+    "productName": "CCB",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icons/icon.png"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "resources/icons/icon.png",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icons/icon.png",
+      "category": "Utility"
+    },
+    "portable": {
+      "artifactName": "CCB-Portable-${version}.exe"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*",
+      "!resources/icons/README.md"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ]
+  }
+}

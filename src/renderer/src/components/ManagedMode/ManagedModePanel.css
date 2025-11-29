@@ -1,0 +1,479 @@
+/**
+ * 托管模式管理面板样式
+ */
+
+.managed-mode-panel {
+  padding: 24px;
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+/* 面板头部样式 */
+.panel-header {
+  margin-bottom: 24px;
+}
+
+.panel-header .ant-typography {
+  margin-bottom: 8px;
+}
+
+.panel-header .ant-typography h2 {
+  color: #1890ff;
+  margin-bottom: 8px;
+}
+
+.panel-header .ant-typography p {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* 概览页面样式 */
+.managed-mode-overview {
+  min-height: 600px;
+}
+
+/* 状态统计卡片样式 */
+.managed-mode-overview .ant-statistic {
+  text-align: center;
+}
+
+.managed-mode-overview .ant-statistic .ant-statistic-title {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.managed-mode-overview .ant-statistic .ant-statistic-content {
+  font-weight: 500;
+}
+
+/* 服务状态卡片 */
+.service-status-card .ant-card-body {
+  padding: 20px;
+}
+
+.service-status-card .ant-statistic {
+  padding: 8px 0;
+}
+
+/* 小卡片样式 */
+.managed-mode-overview .ant-card-small {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.managed-mode-overview .ant-card-small:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.managed-mode-overview .ant-card-small .ant-card-head {
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.managed-mode-overview .ant-card-small .ant-card-head-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+/* 网络代理状态样式 */
+.proxy-status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.proxy-status-item:last-child {
+  border-bottom: none;
+}
+
+.proxy-status-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.proxy-status-value {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+/* 环境变量设置卡片 */
+.env-commands-card .ant-card-body {
+  padding: 20px;
+}
+
+.env-command-item {
+  margin-bottom: 16px;
+}
+
+.env-command-item:last-child {
+  margin-bottom: 0;
+}
+
+.env-command-item .ant-card-small {
+  height: 100%;
+}
+
+.env-command-item .ant-input {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.env-command-item .ant-btn {
+  margin-top: 8px;
+}
+
+/* 终端日志样式 */
+.terminal-log-section {
+  margin-top: 16px;
+}
+
+.terminal-log-section .ant-card {
+  border-radius: 8px;
+}
+
+/* 配置页面样式 */
+.managed-mode-config {
+  min-height: 600px;
+}
+
+/* 运行日志页面样式 */
+.managed-mode-logs {
+  min-height: 600px;
+}
+
+/* 标签页样式 */
+.managed-mode-panel .ant-tabs {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.managed-mode-panel .ant-tabs-tab {
+  font-size: 14px;
+  font-weight: 500;
+  padding: 12px 24px;
+  border-radius: 6px 6px 0 0;
+}
+
+.managed-mode-panel .ant-tabs-tab-active {
+  background: #1890ff;
+  color: white;
+  border-color: #1890ff;
+}
+
+.managed-mode-panel .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: white;
+}
+
+.managed-mode-panel .ant-tabs-ink-bar {
+  display: none;
+}
+
+.managed-mode-panel .ant-tabs-content-holder {
+  padding-top: 16px;
+}
+
+.managed-mode-panel .ant-tabs-tabpane {
+  min-height: 500px;
+}
+
+/* 状态徽章样式 */
+.managed-mode-panel .ant-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
+.managed-mode-panel .ant-badge-status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.managed-mode-panel .ant-badge-status-text {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+/* 统计数字样式 */
+.managed-mode-panel .ant-statistic .ant-statistic-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.managed-mode-panel .ant-statistic .ant-statistic-content-prefix {
+  margin-right: 0;
+}
+
+/* 警告提示样式 */
+.managed-mode-panel .ant-alert {
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.managed-mode-panel .ant-alert-icon {
+  font-size: 16px;
+}
+
+.managed-mode-panel .ant-alert-message {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.managed-mode-panel .ant-alert-description {
+  color: #666;
+}
+
+/* 按钮组样式 */
+.managed-mode-panel .ant-space {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.managed-mode-panel .ant-btn {
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.managed-mode-panel .ant-btn-primary {
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.2);
+}
+
+.managed-mode-panel .ant-btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+/* 输入框样式 */
+.managed-mode-panel .ant-input,
+.managed-mode-panel .ant-input-number,
+.managed-mode-panel .ant-select {
+  border-radius: 6px;
+}
+
+/* 开关样式 */
+.managed-mode-panel .ant-switch {
+  border-radius: 12px;
+}
+
+.managed-mode-panel .ant-switch-checked {
+  background-color: #52c41a;
+}
+
+/* 标签样式 */
+.managed-mode-panel .ant-tag {
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 文本样式 */
+.managed-mode-panel .ant-typography {
+  color: #333;
+}
+
+.managed-mode-panel .ant-typography code {
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: #e74c3c;
+}
+
+/* 卡片间距 */
+.managed-mode-overview .ant-row {
+  margin-bottom: 16px;
+}
+
+.managed-mode-overview .ant-row:last-child {
+  margin-bottom: 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .managed-mode-overview .ant-col {
+    margin-bottom: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .managed-mode-panel {
+    padding: 16px;
+  }
+
+  .managed-mode-panel .ant-tabs {
+    padding: 12px;
+  }
+
+  .managed-mode-panel .ant-tabs-tab {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .panel-header {
+    margin-bottom: 16px;
+  }
+
+  .panel-header .ant-typography h2 {
+    font-size: 20px;
+  }
+
+  .panel-header .ant-typography p {
+    font-size: 13px;
+  }
+
+  .managed-mode-overview .ant-statistic .ant-statistic-title {
+    font-size: 11px;
+  }
+
+  .managed-mode-overview .ant-statistic .ant-statistic-content {
+    font-size: 14px;
+  }
+
+  .env-commands-card .ant-row {
+    flex-direction: column;
+  }
+
+  .env-commands-card .ant-col {
+    width: 100% !important;
+    margin-bottom: 16px;
+  }
+
+  .proxy-status-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
+/* 暗色主题适配 */
+[data-theme="dark"] .managed-mode-panel {
+  background: #141414;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-tabs {
+  background: #1f1f1f;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-card {
+  background: #1f1f1f;
+  border-color: #434343;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-card-small {
+  background: #262626;
+  border-color: #434343;
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-card-small .ant-card-head {
+  background: #262626;
+  border-color: #434343;
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-card-small .ant-card-head-title {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-typography {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-typography h2 {
+  color: #1890ff;
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-typography p {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+[data-theme="dark"] .managed-mode-panel .ant-typography code {
+  background: #2d2d2d;
+  border-color: #434343;
+  color: #ff7875;
+}
+
+[data-theme="dark"] .proxy-status-label {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+[data-theme="dark"] .proxy-status-value {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 加载状态 */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  border-radius: 8px;
+}
+
+[data-theme="dark"] .loading-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* 动画效果 */
+.managed-mode-panel .ant-card {
+  transition: all 0.3s ease;
+}
+
+.managed-mode-panel .ant-btn {
+  transition: all 0.3s ease;
+}
+
+.managed-mode-panel .ant-tabs-tab {
+  transition: all 0.3s ease;
+}
+
+/* 滚动条样式 */
+.managed-mode-panel ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.managed-mode-panel ::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.managed-mode-panel ::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.managed-mode-panel ::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+[data-theme="dark"] .managed-mode-panel ::-webkit-scrollbar-track {
+  background: #2f2f2f;
+}
+
+[data-theme="dark"] .managed-mode-panel ::-webkit-scrollbar-thumb {
+  background: #434343;
+}
+
+[data-theme="dark"] .managed-mode-panel ::-webkit-scrollbar-thumb:hover {
+  background: #595959;
+}

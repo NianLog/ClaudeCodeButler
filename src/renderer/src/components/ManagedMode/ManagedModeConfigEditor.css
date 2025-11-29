@@ -1,0 +1,293 @@
+/**
+ * 托管模式配置编辑器样式
+ */
+
+.managed-mode-config-editor {
+  max-width: 100%;
+}
+
+/* 基础配置区域 */
+.basic-config {
+  margin-bottom: 16px;
+}
+
+/* 配置区块样式 */
+.config-section {
+  margin-bottom: 16px;
+}
+
+.config-section .ant-card-body {
+  padding: 16px;
+}
+
+.config-section .ant-form-item {
+  margin-bottom: 12px;
+}
+
+.config-section .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+
+/* GUI编辑器样式 */
+.managed-mode-gui-editor {
+  min-height: 400px;
+}
+
+.managed-mode-gui-editor .ant-row {
+  align-items: end;
+}
+
+/* JSON编辑器样式 */
+.managed-mode-json-editor {
+  min-height: 400px;
+}
+
+.json-editor-container {
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.json-editor-container .ant-input {
+  border: none;
+  border-radius: 0;
+}
+
+/* 标签页样式 */
+.managed-mode-config-editor .ant-tabs-tabpane {
+  padding: 16px 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .managed-mode-config-editor .ant-row {
+    flex-direction: column;
+  }
+
+  .managed-mode-config-editor .ant-col {
+    width: 100% !important;
+    margin-bottom: 8px;
+  }
+
+  .config-section .ant-row {
+    flex-direction: column;
+  }
+
+  .config-section .ant-col {
+    width: 100% !important;
+    margin-bottom: 8px;
+  }
+}
+
+/* 自定义字段样式 */
+.custom-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.custom-field-row .ant-input,
+.custom-field-row .ant-select {
+  flex: 1;
+}
+
+.custom-field-row .ant-btn {
+  flex-shrink: 0;
+}
+
+/* 输入框组合样式 */
+.ant-input-group .ant-input {
+  border-right: none;
+}
+
+.ant-input-group .ant-input-group-addon {
+  background: #f5f5f5;
+  border-left: none;
+  padding: 0 8px;
+}
+
+/* 状态徽章样式 */
+.ant-badge-status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.ant-badge-status-text {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+/* 卡片标题样式 */
+.config-section .ant-card-head-title {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+/* 开关样式 */
+.ant-switch {
+  min-width: 44px;
+}
+
+/* 数字输入框样式 */
+.ant-input-number {
+  width: 100%;
+}
+
+/* 选择框样式 */
+.ant-select {
+  width: 100%;
+}
+
+/* 工具栏样式 */
+.toolbar-space {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 按钮组样式 */
+.button-group {
+  display: flex;
+  gap: 8px;
+}
+
+.button-group .ant-btn {
+  flex: 1;
+}
+
+/* 警告提示样式 */
+.config-alert {
+  margin-bottom: 16px;
+}
+
+.config-alert .ant-alert-icon {
+  font-size: 16px;
+}
+
+/* 字段值编辑器 */
+.field-value-editor {
+  position: relative;
+}
+
+.field-value-editor .ant-input {
+  padding-right: 32px;
+}
+
+.field-value-editor .field-type-selector {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+}
+
+.field-type-selector .ant-btn {
+  border: none;
+  background: transparent;
+  color: #999;
+  padding: 0 4px;
+}
+
+.field-type-selector .ant-btn:hover {
+  color: #1890ff;
+}
+
+/* 代码编辑器容器 */
+.code-editor-wrapper {
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.code-editor-wrapper .monaco-editor,
+.code-editor-wrapper .ace_editor {
+  border-radius: 4px;
+}
+
+/* 加载状态 */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* 滚动条样式 */
+.json-editor-container ::-webkit-scrollbar {
+  width: 6px;
+}
+
+.json-editor-container ::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.json-editor-container ::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.json-editor-container ::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 动画效果 */
+.config-section {
+  transition: all 0.3s ease;
+}
+
+.config-section:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+}
+
+.ant-btn {
+  transition: all 0.3s ease;
+}
+
+/* 表单项布局优化 */
+.ant-form-item-label {
+  line-height: 32px;
+}
+
+.ant-form-item-control {
+  line-height: 32px;
+}
+
+/* 工具提示样式 */
+.ant-tooltip-inner {
+  font-size: 12px;
+}
+
+.ant-tooltip-arrow-content {
+  background: #001529;
+}
+
+/* 徽章组样式 */
+.ant-space-item .ant-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 暗色主题适配 */
+[data-theme="dark"] .managed-mode-config-editor {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .config-section {
+  background: #141414;
+  border-color: #434343;
+}
+
+[data-theme="dark"] .json-editor-container {
+  border-color: #434343;
+}
+
+[data-theme="dark"] .code-editor-wrapper {
+  border-color: #434343;
+}

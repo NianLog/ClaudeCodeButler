@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:;">
+  <title>CCB - Claude Code Butler</title>
+  <style>
+    /* 加载动画样式 */
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+
+    .loading-container {
+      text-align: center;
+      color: white;
+    }
+
+    .loading-logo {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: bold;
+      animation: pulse 2s infinite;
+    }
+
+    .loading-text {
+      font-size: 18px;
+      margin-bottom: 10px;
+      opacity: 0.9;
+    }
+
+    .loading-subtitle {
+      font-size: 14px;
+      opacity: 0.7;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      margin: 20px auto 0;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top: 3px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+    }
+
+    /* 错误页面样式 */
+    #error {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #f5f5f5;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+
+    .error-container {
+      text-align: center;
+      padding: 40px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+    }
+
+    .error-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      color: #ff4757;
+    }
+
+    .error-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .error-message {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .error-button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+
+    .error-button:hover {
+      background: #5a6fd8;
+    }
+
+    /* 隐藏主要内容 */
+    #app {
+      display: none;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <!-- 加载页面 -->
+  <div id="loading">
+    <div class="loading-container">
+      <div class="loading-logo">CCB</div>
+      <div class="loading-text">Claude Code Butler</div>
+      <div class="loading-subtitle">正在加载配置管理工具...</div>
+      <div class="loading-spinner"></div>
+    </div>
+  </div>
+
+  <!-- 错误页面 -->
+  <div id="error">
+    <div class="error-container">
+      <div class="error-icon">⚠️</div>
+      <div class="error-title">应用启动失败</div>
+      <div class="error-message" id="errorMessage">
+        应用启动时遇到了问题，请重试或联系技术支持。
+      </div>
+      <button class="error-button" onclick="location.reload()">重新加载</button>
+    </div>
+  </div>
+
+  <!-- 主应用容器 -->
+  <div id="app">
+    <div id="root"></div>
+  </div>
+
+  <script type="module">
+    // 应用启动脚本
+    (function() {
+      let retryCount = 0;
+      const maxRetries = 3;
+      const retryDelay = 1000;
+
+      function hideLoading() {
+        const loading = document.getElementById('loading');
+        if (loading) {
+          loading.style.opacity = '0';
+          setTimeout(() => {
+            loading.style.display = 'none';
+          }, 300);
+        }
+      }
+
+      function showError(message) {
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const errorMessage = document.getElementById('errorMessage');
+
+        if (loading) loading.style.display = 'none';
+        if (error) {
+          error.style.display = 'flex';
+          if (errorMessage) errorMessage.textContent = message;
+        }
+      }
+
+      function showApp() {
+        const app = document.getElementById('app');
+        if (app) {
+          app.style.display = 'block';
+        }
+      }
+
+      function startApp() {
+        try {
+          // 检查预加载脚本是否已加载
+          if (typeof window.electronAPI === 'undefined') {
+            throw new Error('Electron API 未加载，请重启应用');
+          }
+
+          // 检查是否在 Electron 环境中
+          if (!window.electronAPI) {
+            throw new Error('应用未在 Electron 环境中运行');
+          }
+
+          console.log('Starting CCB application...');
+
+          // 显示主应用
+          hideLoading();
+          showApp();
+
+          // 动态加载 React 应用
+          import('./src/main.tsx').catch(error => {
+            console.error('Failed to load React app:', error);
+            showError(`加载应用失败: ${error.message}`);
+          });
+
+        } catch (error) {
+          console.error('App startup error:', error);
+
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.log(`Retrying app startup (${retryCount}/${maxRetries})...`);
+            setTimeout(startApp, retryDelay * retryCount);
+          } else {
+            showError(`应用启动失败: ${error.message}`);
+          }
+        }
+      }
+
+      // 等待 DOM 加载完成
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startApp);
+      } else {
+        startApp();
+      }
+
+      // 监听未捕获的错误
+      window.addEventListener('error', (event) => {
+        console.error('Global error:', event.error);
+        showError(`应用运行时错误: ${event.error.message}`);
+      });
+
+      window.addEventListener('unhandledrejection', (event) => {
+        console.error('Unhandled promise rejection:', event.reason);
+        showError(`未处理的 Promise 错误: ${event.reason}`);
+      });
+
+    })();
+  </script>
+</body>
+</html>

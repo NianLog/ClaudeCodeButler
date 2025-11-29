@@ -1,0 +1,407 @@
+/**
+ * 现代化配置面板样式
+ * 采用卡片式布局和现代化交互设计
+ */
+
+.modern-config-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  padding: var(--space-lg);
+  /* 使用更紧凑的间距，为配置列表节省更多空间 */
+  gap: var(--space-sm);
+}
+
+/* 面板头部 */
+.config-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+  /* 移除 margin，使用父容器的 gap */
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.panel-title {
+  margin: 0 !important;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+/* 工具栏 */
+.config-panel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  /* 使用更紧凑的内部间距 */
+  gap: var(--space-md);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  /* 移除 margin，使用父容器的 gap 提供间距 */
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex: 1;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+}
+
+/* 内容区域 */
+.config-panel-content {
+  flex: 1;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  /* 减少内边距以节省空间 */
+  padding: var(--space-md);
+  /* 使用 flex 布局来管理托管卡片和配置列表 */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* 网格视图样式已移除 - 仅保留列表视图 */
+
+/* 列表视图 */
+.config-list.list-view {
+  /* 使用 flex: 1 来占用剩余的所有空间 */
+  flex: 1;
+  /* 设置最小高度以确保内容可见 */
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.list-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.config-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--bg-elevated);
+}
+
+.config-list-item:hover {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+  transform: translateX(4px);
+}
+
+.config-list-item.selected {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.1);
+}
+
+/* 系统配置列表项红色高亮 */
+.config-list-item.system-config-highlight {
+  border-color: #ff4d4f;
+  background: linear-gradient(90deg, #fff2f0 0%, #ffffff 100%);
+  box-shadow: 0 2px 4px rgba(255, 77, 79, 0.08);
+}
+
+.config-list-item.system-config-highlight:hover {
+  border-color: #ff7875;
+  background: linear-gradient(90deg, #fff1f0 0%, #fafafa 100%);
+  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.12);
+}
+
+.config-list-item.system-config-highlight.selected {
+  border-color: #ff4d4f;
+  background: linear-gradient(90deg, #fff2f0 0%, #fafafa 100%);
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.15);
+}
+
+/* 启用配置列表项绿色高亮 */
+.config-list-item.active-config-highlight {
+  border-color: #52c41a;
+  background: linear-gradient(90deg, #f6ffed 0%, #ffffff 100%);
+  box-shadow: 0 2px 4px rgba(82, 196, 26, 0.08);
+}
+
+.config-list-item.active-config-highlight:hover {
+  border-color: #73d13d;
+  background: linear-gradient(90deg, #f6ffed 0%, #fafafa 100%);
+  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.12);
+}
+
+.config-list-item.active-config-highlight.selected {
+  border-color: #52c41a;
+  background: linear-gradient(90deg, #f6ffed 0%, #fafafa 100%);
+  box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.15);
+}
+
+.list-item-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.list-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xs);
+}
+
+.list-item-name {
+  margin: 0 !important;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  line-height: 1.3;
+}
+
+.list-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.config-list-item:hover .list-item-actions {
+  opacity: 1;
+}
+
+.list-item-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.list-item-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-item-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* 加载状态 */
+.config-panel-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: var(--text-secondary);
+}
+
+/* 空状态 */
+.config-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+}
+
+/* 错误状态 */
+.config-panel-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .config-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-md);
+  }
+
+  .config-panel-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+  }
+
+  .toolbar-left {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-left .ant-input-search,
+  .toolbar-left .ant-select {
+    width: 100% !important;
+  }
+
+  .list-item-actions {
+    opacity: 1;
+  }
+}
+
+/* 暗色主题适配 */
+[data-theme="dark"] .config-list-item {
+  background: var(--bg-elevated);
+  border-color: var(--border-light);
+}
+
+[data-theme="dark"] .config-list-item:hover {
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+}
+
+/* 动画效果 */
+.config-list-item {
+  animation: slideInLeft var(--transition-normal) ease-out;
+}
+
+.config-list-item:nth-child(1) { animation-delay: 0.1s; }
+.config-list-item:nth-child(2) { animation-delay: 0.2s; }
+.config-list-item:nth-child(3) { animation-delay: 0.3s; }
+.config-list-item:nth-child(4) { animation-delay: 0.4s; }
+.config-list-item:nth-child(5) { animation-delay: 0.5s; }
+
+/* 滚动条样式 */
+.config-list::-webkit-scrollbar,
+.list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.config-list::-webkit-scrollbar-track,
+.list-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.config-list::-webkit-scrollbar-thumb,
+.list-container::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 3px;
+}
+
+.config-list::-webkit-scrollbar-thumb:hover,
+.list-container::-webkit-scrollbar-thumb:hover {
+  background: var(--border-dark);
+}
+
+/* 特殊效果已移除 - 仅保留列表视图 */
+
+/* 托管模式卡片样式 */
+.managed-mode-card {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+  transition: all var(--transition-normal) !important;
+  /* 进一步减少内边距，使卡片更加紧凑 */
+  padding: 4px !important;
+  /* 移除 margin，使用父容器的 gap */
+}
+
+.managed-mode-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+.managed-mode-card-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* 减少内部间距 */
+  gap: var(--space-sm);
+  /* 进一步减少整体高度 */
+  min-height: auto;
+  padding: 0;
+}
+
+.managed-mode-card-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.managed-mode-card-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.managed-mode-card-header {
+  display: flex;
+  align-items: center;
+  /* 进一步减少内部间距 */
+  gap: var(--space-xs);
+  /* 紧凑布局，减少额外间距 */
+  margin: 0;
+  padding: 0;
+}
+
+/* 托管模式卡片在不同状态下的样式 */
+.managed-mode-card[data-enabled="true"] {
+  border-color: #52c41a !important;
+  background: linear-gradient(135deg, #f6ffed 0%, #fafafa 100%) !important;
+}
+
+.managed-mode-card[data-enabled="false"] {
+  border-color: #f0f0f0 !important;
+}
+
+/* 响应式设计 - 托管模式卡片 */
+@media (max-width: 1024px) {
+  .managed-mode-card-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-sm);
+  }
+
+  .managed-mode-card-right {
+    align-items: flex-end;
+    margin-top: 4px;
+  }
+}
+
+@media (max-width: 768px) {
+  .managed-mode-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+  }
+
+  .managed-mode-card-right {
+    align-items: center;
+  }
+}
