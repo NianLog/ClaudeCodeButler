@@ -27,6 +27,14 @@ CCB (Claude Code Butler) 是一个基于 Electron + React + TypeScript 构建的
   - 一键切换不同配置文件
   - 配置备份与恢复功能
 
+- 🔌 **MCP 服务器管理** - 全面的 Model Context Protocol 服务器管理
+  - 可视化管理全局和项目级 MCP 服务器
+  - 支持启用/禁用服务器（基于归档机制）
+  - 服务器配置的增删改查操作
+  - 支持服务器复制和导入导出
+  - 按项目路径分组显示
+  - 实时状态监控
+
 - 🤖 **自动化规则引擎** - 基于触发器-条件-动作的智能规则系统
   - 定时任务调度 (Cron 表达式)
   - 文件监控触发器
@@ -57,7 +65,23 @@ CCB (Claude Code Butler) 是一个基于 Electron + React + TypeScript 构建的
 
 ## 📸 应用截图
 
-> 注: 截图将在后续版本中添加
+### 配置管理面板
+![Configuration Management Panel](resources/img/01-Configuration%20management%20panel..png)
+
+### 统计信息 - ClaudeCode 统计概览
+![Statistical Information](resources/img/02-Statistical%20Information%20%E2%80%93%20ClaudeCode%E2%80%99s%20Statistical%20Overview.png)
+
+### 项目管理 - 概览面板
+![Project Management](resources/img/03-Project%20Management%20%E2%80%93%20Overview%20Panel.png)
+
+### 托管模式 - 概览面板
+![Hosting Model Overview](resources/img/04-Hosting%20Model%20%E2%80%93%20Overview%20Panel.png)
+
+### 托管模式 - 配置页面
+![Hosting Model Configuration](resources/img/05-Hosting%20Model%20%E2%80%93%20Configuration%20Page.png)
+
+### MCP 服务器管理
+![MCP Server Management](resources/img/06-MCP%20server%20management..png)
 
 ---
 
@@ -72,7 +96,7 @@ CCB (Claude Code Butler) 是一个基于 Electron + React + TypeScript 构建的
 
 ```bash
 # 克隆项目
-git clone https://github.com/yourusername/ClaudeCodeButler.git
+git clone https://github.com/NianLog/ClaudeCodeButler.git
 
 # 进入项目目录
 cd ClaudeCodeButler
@@ -203,6 +227,7 @@ ClaudeCodeButler/
 ### 核心服务
 
 - **ConfigService** - 配置文件管理服务
+- **MCPManagementService** - MCP 服务器管理服务
 - **RuleEngineService** - 自动化规则引擎
 - **StatisticsService** - 使用统计服务
 - **ProjectManagementService** - 项目管理服务

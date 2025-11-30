@@ -27,6 +27,14 @@ CCB (Claude Code Butler) is a modern configuration management tool built with El
   - One-click switching between different configuration files
   - Configuration backup and restore functionality
 
+- 🔌 **MCP Server Management** - Comprehensive Model Context Protocol server management
+  - Visual management of global and project-level MCP servers
+  - Enable/disable servers (archive-based mechanism)
+  - CRUD operations for server configurations
+  - Server duplication and import/export support
+  - Grouped display by project path
+  - Real-time status monitoring
+
 - 🤖 **Automation Rule Engine** - Intelligent rule system based on trigger-condition-action pattern
   - Scheduled task scheduling (Cron expressions)
   - File monitoring triggers
@@ -57,7 +65,23 @@ CCB (Claude Code Butler) is a modern configuration management tool built with El
 
 ## 📸 Screenshots
 
-> Note: Screenshots will be added in future releases
+### Configuration Management Panel
+![Configuration Management Panel](resources/img/01-Configuration%20management%20panel..png)
+
+### Statistical Information - ClaudeCode's Statistical Overview
+![Statistical Information](resources/img/02-Statistical%20Information%20%E2%80%93%20ClaudeCode%E2%80%99s%20Statistical%20Overview.png)
+
+### Project Management - Overview Panel
+![Project Management](resources/img/03-Project%20Management%20%E2%80%93%20Overview%20Panel.png)
+
+### Hosting Model - Overview Panel
+![Hosting Model Overview](resources/img/04-Hosting%20Model%20%E2%80%93%20Overview%20Panel.png)
+
+### Hosting Model - Configuration Page
+![Hosting Model Configuration](resources/img/05-Hosting%20Model%20%E2%80%93%20Configuration%20Page.png)
+
+### MCP Server Management
+![MCP Server Management](resources/img/06-MCP%20server%20management..png)
 
 ---
 
@@ -72,7 +96,7 @@ CCB (Claude Code Butler) is a modern configuration management tool built with El
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ClaudeCodeButler.git
+git clone https://github.com/NianLog/ClaudeCodeButler.git
 
 # Navigate to project directory
 cd ClaudeCodeButler
@@ -203,6 +227,7 @@ ClaudeCodeButler/
 ### Core Services
 
 - **ConfigService** - Configuration file management service
+- **MCPManagementService** - MCP server management service
 - **RuleEngineService** - Automation rule engine
 - **StatisticsService** - Usage statistics service
 - **ProjectManagementService** - Project management service

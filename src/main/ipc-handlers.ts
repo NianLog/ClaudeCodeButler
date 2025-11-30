@@ -16,6 +16,7 @@ import { logger } from './utils/logger'
 import { logStorageService } from './services/log-storage.service';
 import { ruleStorageService } from './services/rule-storage.service';
 import { managedModeLogRotationService } from './services/managed-mode-log-rotation.service'
+import { mcpManagementService } from './services/mcp-management.service'
 
 
 // 服务实例
@@ -61,6 +62,7 @@ export function setupIpcHandlers(): void {
   setupProjectManagementHandlers()
   setupSettingsHandlers()
   setupManagedModeLogRotationHandlers()
+  setupMCPHandlers()
 
   logger.info('IPC 处理器设置完成')
 }
@@ -533,4 +535,71 @@ function setupManagedModeLogRotationHandlers(): void {
   ipcMain.handle('managedModeLogRotation:updateConfig', createSimpleHandler((config: any) =>
     managedModeLogRotationService.updateConfig(config)
   ))
+}
+
+/**
+ * MCP管理相关的 IPC 处理器
+ * @description 提供MCP服务器的增删改查、导入导出等功能
+ * @note MCP服务已经返回标准格式 {success, data/error},无需再次包装
+ */
+function setupMCPHandlers(): void {
+  // 获取所有MCP服务器列表
+  ipcMain.handle('mcp:list-all-servers', async () => {
+    return await mcpManagementService.listAllServers()
+  })
+
+  // 获取全局MCP服务器
+  ipcMain.handle('mcp:get-global-servers', async () => {
+    return await mcpManagementService.getGlobalServers()
+  })
+
+  // 获取项目级MCP服务器
+  ipcMain.handle('mcp:get-project-servers', async (_, projectPath: string) => {
+    return await mcpManagementService.getProjectServers(projectPath)
+  })
+
+  // 添加或更新MCP服务器
+  ipcMain.handle('mcp:add-or-update-server', async (_, formData: any) => {
+    return await mcpManagementService.addOrUpdateServer(formData)
+  })
+
+  // 删除MCP服务器
+  ipcMain.handle('mcp:delete-server', async (_, serverId: string, scope: string) => {
+    return await mcpManagementService.deleteServer(serverId, scope)
+  })
+
+  // 切换MCP服务器启用状态
+  ipcMain.handle('mcp:toggle-server', async (_, serverId: string, scope: string) => {
+    return await mcpManagementService.toggleServer(serverId, scope)
+  })
+
+  // 复制MCP服务器
+  ipcMain.handle('mcp:duplicate-server', async (_, serverId: string, scope: string, newServerId: string, targetScope: string) => {
+    return await mcpManagementService.duplicateServer(serverId, scope, newServerId, targetScope)
+  })
+
+  // 获取所有项目路径
+  ipcMain.handle('mcp:get-project-paths', async () => {
+    return await mcpManagementService.getProjectPaths()
+  })
+
+  // 导出服务器配置
+  ipcMain.handle('mcp:export-server-config', async (_, serverId: string, scope: string) => {
+    return await mcpManagementService.exportServerConfig(serverId, scope)
+  })
+
+  // 导入服务器配置
+  ipcMain.handle('mcp:import-server-config', async (_, jsonString: string, serverId: string, targetScope: string) => {
+    return await mcpManagementService.importServerConfig(jsonString, serverId, targetScope)
+  })
+
+  // 读取Claude配置文件
+  ipcMain.handle('mcp:read-claude-config', async () => {
+    return await mcpManagementService.readClaudeConfig()
+  })
+
+  // 保存Claude配置文件
+  ipcMain.handle('mcp:save-claude-config', async (_, config: any) => {
+    return await mcpManagementService.saveClaudeConfig(config)
+  })
 }

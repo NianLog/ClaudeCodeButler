@@ -11,7 +11,7 @@ interface AppStore {
   platform: string
 
   // UI 状态
-  activeMainTab: 'configs' | 'automation' | 'statistics' | 'managed-mode' | 'settings'
+  activeMainTab: 'configs' | 'automation' | 'statistics' | 'projects' | 'managed-mode' | 'mcp-management' | 'settings'
   sidebarCollapsed: boolean
   theme: 'light' | 'dark' | 'auto'
   language: 'zh-CN' | 'en-US'
@@ -26,7 +26,7 @@ interface AppStore {
   }>
 
   // 操作
-  setActiveMainTab: (tab: 'configs' | 'automation' | 'statistics' | 'managed-mode' | 'settings') => void
+  setActiveMainTab: (tab: 'configs' | 'automation' | 'statistics' | 'projects' | 'managed-mode' | 'mcp-management' | 'settings') => void
   toggleSidebar: () => void
   setTheme: (theme: 'light' | 'dark' | 'auto') => void
   setLanguage: (language: 'zh-CN' | 'en-US') => void

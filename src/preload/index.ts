@@ -17,6 +17,11 @@ import type {
   ApiProvider,
   EnvCommand
 } from '@shared/types/managed-mode'
+import type {
+  MCPServerListItem,
+  MCPServerFormData,
+  ClaudeConfig
+} from '@shared/types/mcp'
 
 /**
  * 配置管理 API
@@ -353,6 +358,79 @@ interface ManagedModeAPI {
   }
 }
 
+/**
+ * MCP管理 API
+ */
+interface MCPAPI {
+  // 获取所有MCP服务器列表(包括全局和项目级)
+  listAllServers: () => Promise<{
+    success: boolean
+    data?: MCPServerListItem[]
+    error?: string
+  }>
+  // 获取全局MCP服务器
+  getGlobalServers: () => Promise<{
+    success: boolean
+    data?: Record<string, any>
+    error?: string
+  }>
+  // 获取项目级MCP服务器
+  getProjectServers: (projectPath: string) => Promise<{
+    success: boolean
+    data?: Record<string, any>
+    error?: string
+  }>
+  // 添加或更新MCP服务器
+  addOrUpdateServer: (formData: MCPServerFormData) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  // 删除MCP服务器
+  deleteServer: (serverId: string, scope: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  // 切换MCP服务器启用状态
+  toggleServer: (serverId: string, scope: string) => Promise<{
+    success: boolean
+    data?: boolean
+    error?: string
+  }>
+  // 复制MCP服务器
+  duplicateServer: (serverId: string, scope: string, newServerId: string, targetScope: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  // 获取所有项目路径列表
+  getProjectPaths: () => Promise<{
+    success: boolean
+    data?: string[]
+    error?: string
+  }>
+  // 导出服务器配置
+  exportServerConfig: (serverId: string, scope: string) => Promise<{
+    success: boolean
+    data?: string
+    error?: string
+  }>
+  // 导入服务器配置
+  importServerConfig: (jsonString: string, serverId: string, targetScope: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  // 读取Claude配置文件
+  readClaudeConfig: () => Promise<{
+    success: boolean
+    data?: ClaudeConfig
+    error?: string
+  }>
+  // 保存Claude配置文件
+  saveClaudeConfig: (config: ClaudeConfig) => Promise<{
+    success: boolean
+    error?: string
+  }>
+}
+
 // 移除安全管理API
 
 /**
@@ -373,6 +451,7 @@ export interface ElectronAPI {
   projectManagement: ProjectManagementAPI
   settings: SettingsAPI
   managedMode: ManagedModeAPI
+  mcp: MCPAPI
   // 移除安全API
 }
 
@@ -591,6 +670,26 @@ const managedModeAPI: ManagedModeAPI = {
   }
 }
 
+/**
+ * 创建MCP API对象
+ */
+const mcpAPI: MCPAPI = {
+  listAllServers: () => ipcRenderer.invoke('mcp:list-all-servers'),
+  getGlobalServers: () => ipcRenderer.invoke('mcp:get-global-servers'),
+  getProjectServers: (projectPath: string) => ipcRenderer.invoke('mcp:get-project-servers', projectPath),
+  addOrUpdateServer: (formData: MCPServerFormData) => ipcRenderer.invoke('mcp:add-or-update-server', formData),
+  deleteServer: (serverId: string, scope: string) => ipcRenderer.invoke('mcp:delete-server', serverId, scope),
+  toggleServer: (serverId: string, scope: string) => ipcRenderer.invoke('mcp:toggle-server', serverId, scope),
+  duplicateServer: (serverId: string, scope: string, newServerId: string, targetScope: string) =>
+    ipcRenderer.invoke('mcp:duplicate-server', serverId, scope, newServerId, targetScope),
+  getProjectPaths: () => ipcRenderer.invoke('mcp:get-project-paths'),
+  exportServerConfig: (serverId: string, scope: string) => ipcRenderer.invoke('mcp:export-server-config', serverId, scope),
+  importServerConfig: (jsonString: string, serverId: string, targetScope: string) =>
+    ipcRenderer.invoke('mcp:import-server-config', jsonString, serverId, targetScope),
+  readClaudeConfig: () => ipcRenderer.invoke('mcp:read-claude-config'),
+  saveClaudeConfig: (config: ClaudeConfig) => ipcRenderer.invoke('mcp:save-claude-config', config)
+}
+
 // 移除安全API实现
 
 // 暴露安全的 API 到渲染进程
@@ -608,7 +707,8 @@ const electronAPI: ElectronAPI = {
   claudeCodeVersion: claudeCodeVersionAPI,
   projectManagement: projectManagementAPI,
   settings: settingsAPI,
-  managedMode: managedModeAPI
+  managedMode: managedModeAPI,
+  mcp: mcpAPI
   // 移除安全API
 }
 

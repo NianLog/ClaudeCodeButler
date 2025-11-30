@@ -110,7 +110,21 @@ export const IPC_CHANNELS = {
   MANAGED_MODE_DISABLE: 'managed-mode:disable',
   MANAGED_MODE_IS_ENABLED: 'managed-mode:is-enabled',
   MANAGED_MODE_CHECK_BACKUP: 'managed-mode:check-backup',
-  MANAGED_MODE_UPDATE_SETTINGS_CONFIG: 'managed-mode:update-settings-config'
+  MANAGED_MODE_UPDATE_SETTINGS_CONFIG: 'managed-mode:update-settings-config',
+
+  // MCP管理
+  MCP_LIST_ALL_SERVERS: 'mcp:list-all-servers',
+  MCP_GET_GLOBAL_SERVERS: 'mcp:get-global-servers',
+  MCP_GET_PROJECT_SERVERS: 'mcp:get-project-servers',
+  MCP_ADD_OR_UPDATE_SERVER: 'mcp:add-or-update-server',
+  MCP_DELETE_SERVER: 'mcp:delete-server',
+  MCP_TOGGLE_SERVER: 'mcp:toggle-server',
+  MCP_DUPLICATE_SERVER: 'mcp:duplicate-server',
+  MCP_GET_PROJECT_PATHS: 'mcp:get-project-paths',
+  MCP_EXPORT_SERVER_CONFIG: 'mcp:export-server-config',
+  MCP_IMPORT_SERVER_CONFIG: 'mcp:import-server-config',
+  MCP_READ_CLAUDE_CONFIG: 'mcp:read-claude-config',
+  MCP_SAVE_CLAUDE_CONFIG: 'mcp:save-claude-config'
 } as const
 
 /**

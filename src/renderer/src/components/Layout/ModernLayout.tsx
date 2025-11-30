@@ -27,7 +27,8 @@ import {
   ReloadOutlined,
   ProjectOutlined,
   CloudDownloadOutlined,
-  ApiOutlined
+  ApiOutlined,
+  ToolOutlined
 } from '@ant-design/icons'
 import { useAppStore } from '../../store/app-store'
 import { useBasicSettings } from '../../store/settings-store'
@@ -385,6 +386,15 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 </div>
                 {!sidebarCollapsed && <span className="nav-label">托管模式</span>}
               </div>
+              <div
+                className={`nav-item ${activeMainTab === 'mcp-management' ? 'active' : ''}`}
+                onClick={() => setActiveMainTab('mcp-management')}
+              >
+                <div className="nav-icon">
+                  <ToolOutlined />
+                </div>
+                {!sidebarCollapsed && <span className="nav-label">MCP管理</span>}
+              </div>
             </div>
 
             <div className="nav-section">
@@ -422,6 +432,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 {activeMainTab === 'statistics' && '统计信息'}
                 {activeMainTab === 'projects' && '项目管理'}
                 {activeMainTab === 'managed-mode' && '托管模式'}
+                {activeMainTab === 'mcp-management' && 'MCP管理'}
                 {activeMainTab === 'settings' && '设置'}
               </Text>
               <Text className="breadcrumb-separator">/</Text>
@@ -431,6 +442,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 {activeMainTab === 'statistics' && '数据概览'}
                 {activeMainTab === 'projects' && 'Claude Code 项目'}
                 {activeMainTab === 'managed-mode' && 'API服务管理'}
+                {activeMainTab === 'mcp-management' && 'MCP服务器管理'}
                 {activeMainTab === 'settings' && '应用设置'}
               </Text>
             </div>
