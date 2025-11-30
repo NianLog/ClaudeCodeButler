@@ -3,18 +3,21 @@
  * 定义在主进程和渲染进程之间共享的常量
  */
 
+// 导入package.json以获取版本号
+import packageJson from '../../package.json'
+
 /**
  * 应用信息
  */
 export const APP_INFO = {
   name: 'Claude Code Butler',
-  version: '1.1.0',
+  version: packageJson.version,
   description: 'Claude Code 配置管理工具',
   author: 'NianSir',
   repository: 'https://github.com/ccb-team/claude-code-butler',
   // 别名
   FULL_NAME: 'Claude Code Butler',
-  VERSION: '1.1.0',
+  VERSION: packageJson.version,
   DESCRIPTION: 'Claude Code 配置管理工具',
   AUTHOR: 'NianSir',
   HOMEPAGE: 'https://github.com/ccb-team/claude-code-butler'

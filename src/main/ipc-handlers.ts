@@ -15,6 +15,7 @@ import { SettingsService } from './services/settings-service'
 import { logger } from './utils/logger'
 import { logStorageService } from './services/log-storage.service';
 import { ruleStorageService } from './services/rule-storage.service';
+import { managedModeLogRotationService } from './services/managed-mode-log-rotation.service'
 
 
 // 服务实例
@@ -59,6 +60,7 @@ export function setupIpcHandlers(): void {
   setupClaudeCodeVersionHandlers()
   setupProjectManagementHandlers()
   setupSettingsHandlers()
+  setupManagedModeLogRotationHandlers()
 
   logger.info('IPC 处理器设置完成')
 }
@@ -495,4 +497,40 @@ function setupSettingsHandlers(): void {
   ipcMain.handle('settings:load', createSimpleHandler(async () => {
     return await settingsService.loadSettings()
   }))
+}
+
+/**
+ * 托管模式日志轮转相关的 IPC 处理器
+ * @description 提供日志持久化、历史查询等功能
+ */
+function setupManagedModeLogRotationHandlers(): void {
+  // 持久化日志到文件
+  ipcMain.handle('managedModeLogRotation:persistLogs', createSimpleHandler((logs: any[]) =>
+    managedModeLogRotationService.persistLogs(logs)
+  ))
+
+  // 获取历史日志文件列表
+  ipcMain.handle('managedModeLogRotation:getLogFileList', createSimpleHandler(() =>
+    managedModeLogRotationService.getLogFileList()
+  ))
+
+  // 读取指定日志文件
+  ipcMain.handle('managedModeLogRotation:readLogFile', createSimpleHandler((filename: string) =>
+    managedModeLogRotationService.readLogFile(filename)
+  ))
+
+  // 按时间范围查询日志
+  ipcMain.handle('managedModeLogRotation:queryLogsByTimeRange', createSimpleHandler((startTime: number, endTime: number) =>
+    managedModeLogRotationService.queryLogsByTimeRange(startTime, endTime)
+  ))
+
+  // 获取配置
+  ipcMain.handle('managedModeLogRotation:getConfig', createSimpleHandler(() =>
+    managedModeLogRotationService.getConfig()
+  ))
+
+  // 更新配置
+  ipcMain.handle('managedModeLogRotation:updateConfig', createSimpleHandler((config: any) =>
+    managedModeLogRotationService.updateConfig(config)
+  ))
 }

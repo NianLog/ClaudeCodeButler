@@ -3,9 +3,17 @@
  * @description 代理服务的启动入口
  */
 
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 import { loadConfig, createServerConfig } from './config.js'
 import { initLogger, getLogger } from './logger.js'
 import { startProxyServer } from './server.js'
+
+// 获取package.json的版本号
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
 
 /**
  * 主函数
@@ -49,7 +57,7 @@ async function main(): Promise<void> {
     }
 
     logger.info('CCB托管模式代理服务', {
-      version: '1.1.0',
+      version: packageJson.version,
       currentProvider: currentProvider.name,
       port: managedConfig.port
     })

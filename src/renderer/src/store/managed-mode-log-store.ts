@@ -42,11 +42,14 @@ interface ManagedModeLogState {
 
   // 配置
   maxEntries: number
+  persistThreshold: number // 持久化阈值：达到此数量时触发持久化（默认450）
 
   // Actions
   addLog: (log: Omit<LogEntry, 'id'>) => void
   clearLogs: () => void
   setMaxEntries: (max: number) => void
+  persistLogs: () => Promise<void> // 手动触发持久化
+  triggerPersistIfNeeded: () => Promise<void> // 检查并触发持久化
 
   // 初始化标记
   isInitialized: boolean
@@ -63,10 +66,12 @@ export const useManagedModeLogStore = create<ManagedModeLogState>((set, get) => 
   normalLogCount: 0,
   errorLogCount: 0,
   maxEntries: 500, // 默认最多保存500条日志（配合虚拟滚动优化内存占用）
+  persistThreshold: 450, // 达到450条时触发持久化，留50条余量避免频繁触发
   isInitialized: false,
 
   /**
    * 添加日志条目
+   * @description 添加日志后自动检查是否需要持久化
    */
   addLog: (log: Omit<LogEntry, 'id'>) => {
     const newLog: LogEntry = {
@@ -103,6 +108,73 @@ export const useManagedModeLogStore = create<ManagedModeLogState>((set, get) => 
         errorLogCount: errorCount
       }
     })
+
+    // 添加日志后，异步检查是否需要持久化（不阻塞UI）
+    setTimeout(() => {
+      get().triggerPersistIfNeeded().catch(error => {
+        console.error('[ManagedModeLogStore] 自动持久化失败:', error)
+      })
+    }, 0)
+  },
+
+  /**
+   * 持久化日志到文件
+   * @description 将当前内存中的日志持久化到文件，持久化后保留最新的50条
+   */
+  persistLogs: async () => {
+    const { logs } = get()
+
+    if (logs.length === 0) {
+      console.log('[ManagedModeLogStore] 没有日志需要持久化')
+      return
+    }
+
+    try {
+      console.log(`[ManagedModeLogStore] 开始持久化 ${logs.length} 条日志`)
+
+      // 调用IPC方法持久化日志
+      // 注意: createSimpleHandler 包装器会将结果包装为 { success: true, data: actualResult }
+      const result = await window.electronAPI.managedMode.logRotation.persistLogs(logs)
+
+      // 检查IPC调用本身是否成功
+      if (result.success && result.data) {
+        // 检查实际的持久化操作是否成功
+        if (result.data.success) {
+          console.log(`[ManagedModeLogStore] 持久化成功${result.data.rotated ? '（已触发轮转）' : ''}`)
+
+          // 持久化成功后，保留最新的50条日志，其余删除
+          const retainCount = 50
+          set((state) => ({
+            logs: state.logs.slice(-retainCount)
+          }))
+
+          console.log(`[ManagedModeLogStore] 已清理内存日志，保留最新 ${retainCount} 条`)
+        } else {
+          // 持久化操作失败
+          console.error('[ManagedModeLogStore] 持久化操作失败:', result.data.error)
+        }
+      } else {
+        // IPC调用失败
+        console.error('[ManagedModeLogStore] IPC调用失败:', result.error)
+      }
+    } catch (error) {
+      console.error('[ManagedModeLogStore] 持久化过程出错:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 检查并触发持久化
+   * @description 当日志数量达到阈值时，自动触发持久化
+   */
+  triggerPersistIfNeeded: async () => {
+    const { logs, persistThreshold } = get()
+
+    // 检查是否达到持久化阈值
+    if (logs.length >= persistThreshold) {
+      console.log(`[ManagedModeLogStore] 日志数量 (${logs.length}) 达到阈值 (${persistThreshold})，触发持久化`)
+      await get().persistLogs()
+    }
   },
 
   /**
@@ -122,8 +194,11 @@ export const useManagedModeLogStore = create<ManagedModeLogState>((set, get) => 
   setMaxEntries: (max: number) => {
     set((state) => {
       const logs = state.logs.length > max ? state.logs.slice(-max) : state.logs
+      // 同时调整持久化阈值，保持90%的比例
+      const threshold = Math.floor(max * 0.9)
       return {
         maxEntries: max,
+        persistThreshold: threshold,
         logs
       }
     })

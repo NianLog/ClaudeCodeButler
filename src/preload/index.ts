@@ -308,6 +308,49 @@ interface ManagedModeAPI {
   onConfigUpdated: (callback: () => void) => () => void
   // 监听日志事件
   onLog: (callback: (log: any) => void) => () => void
+
+  /**
+   * 日志轮转相关API
+   */
+  // 持久化日志到文件
+  logRotation: {
+    // 持久化日志数组 (返回值由 createSimpleHandler 包装)
+    persistLogs: (logs: any[]) => Promise<{
+      success: boolean
+      data?: { success: boolean; rotated: boolean; error?: string }
+      error?: string
+    }>
+    // 获取历史日志文件列表 (返回值由 createSimpleHandler 包装)
+    getLogFileList: () => Promise<{
+      success: boolean
+      data?: any[]
+      error?: string
+    }>
+    // 读取指定日志文件 (返回值由 createSimpleHandler 包装)
+    readLogFile: (filename: string) => Promise<{
+      success: boolean
+      data?: any[]
+      error?: string
+    }>
+    // 按时间范围查询日志 (返回值由 createSimpleHandler 包装)
+    queryLogsByTimeRange: (startTime: number, endTime: number) => Promise<{
+      success: boolean
+      data?: any[]
+      error?: string
+    }>
+    // 获取日志轮转配置 (返回值由 createSimpleHandler 包装)
+    getConfig: () => Promise<{
+      success: boolean
+      data?: any
+      error?: string
+    }>
+    // 更新日志轮转配置 (返回值由 createSimpleHandler 包装)
+    updateConfig: (config: any) => Promise<{
+      success: boolean
+      data?: void
+      error?: string
+    }>
+  }
 }
 
 // 移除安全管理API
@@ -535,6 +578,16 @@ const managedModeAPI: ManagedModeAPI = {
     return () => {
       ipcRenderer.removeListener('managed-mode:log', listener)
     }
+  },
+
+  // 日志轮转API
+  logRotation: {
+    persistLogs: (logs: any[]) => ipcRenderer.invoke('managedModeLogRotation:persistLogs', logs),
+    getLogFileList: () => ipcRenderer.invoke('managedModeLogRotation:getLogFileList'),
+    readLogFile: (filename: string) => ipcRenderer.invoke('managedModeLogRotation:readLogFile', filename),
+    queryLogsByTimeRange: (startTime: number, endTime: number) => ipcRenderer.invoke('managedModeLogRotation:queryLogsByTimeRange', startTime, endTime),
+    getConfig: () => ipcRenderer.invoke('managedModeLogRotation:getConfig'),
+    updateConfig: (config: any) => ipcRenderer.invoke('managedModeLogRotation:updateConfig', config)
   }
 }
 

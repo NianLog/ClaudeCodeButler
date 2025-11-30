@@ -6,10 +6,18 @@
 import express from 'express'
 import cors from 'cors'
 import axios from 'axios'
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 import type { Request, Response, NextFunction } from 'express'
 import type { ProxyServerConfig, ClaudeRequest, ApiProvider } from './types.js'
 import { getLogger } from './logger.js'
 import { getTransformer } from './transformers/index.js'
+
+// 获取package.json的版本号
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
 
 /**
  * 创建代理服务器
@@ -37,7 +45,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
   app.get('/health', (req: Request, res: Response) => {
     res.json({
       status: 'ok',
-      version: '1.1.0',
+      version: packageJson.version,
       timestamp: new Date().toISOString()
     })
   })

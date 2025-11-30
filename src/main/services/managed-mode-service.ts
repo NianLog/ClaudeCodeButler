@@ -3,6 +3,7 @@
  * @description 负责管理代理服务的生命周期，包括启动、停止、配置管理等
  */
 
+import { app, BrowserWindow } from 'electron'
 import { ChildProcess, spawn, utilityProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs/promises'
@@ -16,11 +17,18 @@ import type {
   ApiProvider,
   EnvCommand
 } from '../shared/types/managed-mode'
+import { managedModeLogRotationService } from './managed-mode-log-rotation.service'
 
 /**
  * 托管模式管理服务类
  */
 export class ManagedModeService extends EventEmitter {
+  /**
+   * 默认托管服务端口
+   * @description 当配置文件不存在或未指定端口时使用此默认值
+   */
+  private static readonly DEFAULT_PORT = 8487
+
   private proxyProcess: ChildProcess | null = null
   private configPath: string
   private config: ManagedModeConfig | null = null
@@ -57,26 +65,44 @@ export class ManagedModeService extends EventEmitter {
    * 初始化服务
    */
   async initialize(): Promise<void> {
+    console.log('[ManagedModeService] ===== 开始初始化托管模式服务 =====')
     try {
+      // 初始化日志轮转服务
+      console.log('[ManagedModeService] 步骤1：初始化日志轮转服务')
+      await managedModeLogRotationService.initialize()
+      console.log('[ManagedModeService] 步骤1完成：日志轮转服务初始化成功')
+
       // 加载配置
+      console.log('[ManagedModeService] 步骤2：加载托管模式配置')
       await this.loadConfig()
+      console.log('[ManagedModeService] 步骤2完成：配置加载成功')
 
       // 同步 providers：从配置管理列表自动加载并覆盖
+      console.log('[ManagedModeService] 步骤3：同步服务提供商列表')
       await this.syncProvidersFromConfigList()
+      console.log('[ManagedModeService] 步骤3完成：服务提供商同步成功')
 
       // 校准托管模式状态：比对 settings.json 与托管配置
+      console.log('[ManagedModeService] 步骤4：校准托管模式状态')
       await this.calibrateManagedModeStatus()
+      console.log('[ManagedModeService] 步骤4完成：状态校准成功')
 
       // 修改：不再自动启动托管模式，需要用户手动启用
       // 除非检测到当前系统配置就是托管配置且设置了自动启动标记
       if (this.config?.enabled && this.config.autoStart) {
-        console.log('检测到托管模式自动启动配置，正在启动托管服务...')
+        console.log('[ManagedModeService] 检测到托管模式自动启动配置，正在启动托管服务...')
         await this.start()
       } else if (this.config?.enabled) {
-        console.log('托管模式已启用但需要手动启动服务')
+        console.log('[ManagedModeService] 托管模式已启用但需要手动启动服务')
       }
+
+      console.log('[ManagedModeService] ===== 托管模式服务初始化完成 =====')
     } catch (error: any) {
-      console.error('托管模式服务初始化失败:', error.message)
+      console.error('[ManagedModeService] ===== 托管模式服务初始化失败 =====')
+      console.error('[ManagedModeService] 错误详情:', error)
+      console.error('[ManagedModeService] 错误堆栈:', error.stack)
+      // 重新抛出错误，确保上层能够捕获到初始化失败
+      throw error
     }
   }
 
@@ -105,7 +131,7 @@ export class ManagedModeService extends EventEmitter {
       // 生成期望的托管模式配置
       const expectedManagedConfig = {
         env: {
-          ANTHROPIC_BASE_URL: `http://127.0.0.1:${this.config.port || 8487}`,
+          ANTHROPIC_BASE_URL: `http://127.0.0.1:${this.config.port || ManagedModeService.DEFAULT_PORT}`,
           ANTHROPIC_AUTH_TOKEN: this.config.accessToken || '',
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
         },
@@ -470,7 +496,7 @@ export class ManagedModeService extends EventEmitter {
     const status: ManagedModeStatus = {
       running: this.proxyProcess !== null,
       enabled: this.config?.enabled || false,
-      port: this.config?.port || 8487,
+      port: this.config?.port || ManagedModeService.DEFAULT_PORT,
       pid,
       currentProvider: this.config?.currentProvider,
       currentProviderInfo,
@@ -505,7 +531,7 @@ export class ManagedModeService extends EventEmitter {
       // 生成托管模式的默认配置
       const managedConfigData = {
         env: {
-          ANTHROPIC_BASE_URL: `http://127.0.0.1:${this.config.port || 8487}`,
+          ANTHROPIC_BASE_URL: `http://127.0.0.1:${this.config.port || ManagedModeService.DEFAULT_PORT}`,
           ANTHROPIC_AUTH_TOKEN: this.config.accessToken || '',
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
         },
@@ -864,7 +890,7 @@ export class ManagedModeService extends EventEmitter {
    * 获取环境变量设置命令
    */
   getEnvCommand(): EnvCommand[] {
-    const port = this.config?.port || 8487
+    const port = this.config?.port || ManagedModeService.DEFAULT_PORT
     const baseUrl = `http://127.0.0.1:${port}`
     const accessToken = this.config?.accessToken || 'ccb-managed-mode'
 
@@ -996,7 +1022,7 @@ export class ManagedModeService extends EventEmitter {
         // 配置文件不存在,创建默认配置
         this.config = {
           enabled: false,
-          port: 8487,
+          port: ManagedModeService.DEFAULT_PORT,
           currentProvider: '',
           providers: [],
           accessToken: this.generateAccessToken(), // 自动生成访问令牌
@@ -1111,7 +1137,7 @@ export class ManagedModeService extends EventEmitter {
 
     for (let i = 0; i < maxAttempts; i++) {
       try {
-        const port = this.config?.port || 8487
+        const port = this.config?.port || ManagedModeService.DEFAULT_PORT
         const response = await axios.get(`http://127.0.0.1:${port}/health`, {
           timeout: 1000
         })
@@ -1151,7 +1177,7 @@ export class ManagedModeService extends EventEmitter {
    * @description 执行检查后根据结果调整间隔并重新调度
    */
   private performHealthCheck(): void {
-    const port = this.config?.port || 8487
+    const port = this.config?.port || ManagedModeService.DEFAULT_PORT
 
     console.log(`[健康检查] 开始执行健康检查...端口: ${port}`)
 
@@ -1434,11 +1460,11 @@ export class ManagedModeService extends EventEmitter {
     const axios = (await import('axios')).default
     const { HttpsProxyAgent } = await import('https-proxy-agent')
 
-    const app = express.default()
-    app.use(cors.default())
-    app.use(express.default.json({ limit: '50mb' }))
+    const expressApp = express.default()
+    expressApp.use(cors.default())
+    expressApp.use(express.default.json({ limit: '50mb' }))
 
-    const port = this.config?.port || 8487
+    const port = this.config?.port || ManagedModeService.DEFAULT_PORT
 
     // 中间件：验证访问令牌
     const authMiddleware = (req: any, res: any, next: any) => {
@@ -1469,13 +1495,13 @@ export class ManagedModeService extends EventEmitter {
     }
 
     // 健康检查端点（不需要认证）
-    app.get('/health', (req, res) => {
+    expressApp.get('/health', (req, res) => {
       const currentProvider = this.config?.providers.find(
         p => p.id === this.config?.currentProvider
       )
       res.json({
         status: 'ok',
-        version: '1.1.0',
+        version: app.getVersion(),
         timestamp: new Date().toISOString(),
         mode: 'integrated',
         currentProvider: currentProvider?.name || 'None',
@@ -1488,7 +1514,7 @@ export class ManagedModeService extends EventEmitter {
     })
 
     // 代理端点 - Anthropic Messages API
-    app.post('/v1/messages', authMiddleware, async (req, res) => {
+    expressApp.post('/v1/messages', authMiddleware, async (req, res) => {
       const requestTime = new Date().toISOString()
       const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`
       const isStreamRequest = req.body.stream === true
@@ -1779,7 +1805,7 @@ export class ManagedModeService extends EventEmitter {
 
     // 启动服务器
     return new Promise((resolve, reject) => {
-      const server = app.listen(port, '127.0.0.1', () => {
+      const server = expressApp.listen(port, '127.0.0.1', () => {
         console.log(`集成代理服务已启动: http://127.0.0.1:${port}`)
         console.log(`当前服务提供商: ${this.config?.currentProvider || 'None'}`)
         // 将 server 引用存储到 proxyProcess 中，以便后续管理

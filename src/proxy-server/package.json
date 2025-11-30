@@ -1,6 +1,6 @@
 {
   "name": "@ccb/proxy-server",
-  "version": "1.1.0",
+  "version": "1.1.5",
   "description": "CCB托管模式代理服务器",
   "main": "dist/index.js",
   "type": "module",
