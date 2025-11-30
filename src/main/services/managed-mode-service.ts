@@ -28,6 +28,25 @@ export class ManagedModeService extends EventEmitter {
   private isIntegrated: boolean = false // 标记是否使用集成模式
   private startTime: number | null = null // 记录服务启动时间
 
+  // 智能健康检查相关状态
+  private consecutiveSuccessCount: number = 0 // 连续成功检查次数
+  private currentHealthCheckInterval: number = 10000 // 当前健康检查间隔（毫秒），默认10s
+  private healthCheckLevel: number = 0 // 当前健康检查级别 (0-5)
+
+  /**
+   * 健康检查间隔级别配置
+   * @description 根据连续成功次数自动调整检查频率
+   * 优化阈值：让间隔升级更快速合理
+   */
+  private readonly HEALTH_CHECK_LEVELS = [
+    { level: 0, interval: 10000, threshold: 10, label: '10秒' },       // 启动/恢复: 10s，10次成功后升级(100秒)
+    { level: 1, interval: 30000, threshold: 10, label: '30秒' },       // 稳定初期: 30s，10次成功后升级(5分钟)
+    { level: 2, interval: 60000, threshold: 10, label: '1分钟' },      // 稳定中期: 1min，10次成功后升级(10分钟)
+    { level: 3, interval: 300000, threshold: 6, label: '5分钟' },      // 稳定后期: 5min，6次成功后升级(30分钟)
+    { level: 4, interval: 600000, threshold: 6, label: '10分钟' },     // 长期稳定: 10min，6次成功后升级(60分钟)
+    { level: 5, interval: 900000, threshold: Infinity, label: '15分钟' } // 最大间隔: 15min，永不升级
+  ]
+
   constructor() {
     super()
     // 配置文件路径
@@ -1112,54 +1131,175 @@ export class ManagedModeService extends EventEmitter {
   }
 
   /**
-   * 启动健康检查
+   * 启动健康检查（智能自适应间隔）
+   * @description 启动时使用高频率检查，服务稳定后逐步降低检查频率
    */
   private startHealthCheck(): void {
-    this.healthCheckInterval = setInterval(async () => {
-      try {
-        const port = this.config?.port || 8487
-        const response = await axios.get(`http://127.0.0.1:${port}/health`, {
-          timeout: 3000
-        })
+    // 重置状态到初始级别
+    this.consecutiveSuccessCount = 0
+    this.healthCheckLevel = 0
+    this.currentHealthCheckInterval = this.HEALTH_CHECK_LEVELS[0].interval
 
-        // 发送健康检查成功日志
+    console.log(`[健康检查] 启动智能健康检查，初始间隔: ${this.HEALTH_CHECK_LEVELS[0].label}`)
+
+    // 执行第一次检查并启动循环
+    this.performHealthCheck()
+  }
+
+  /**
+   * 执行单次健康检查
+   * @description 执行检查后根据结果调整间隔并重新调度
+   */
+  private performHealthCheck(): void {
+    const port = this.config?.port || 8487
+
+    console.log(`[健康检查] 开始执行健康检查...端口: ${port}`)
+
+    axios.get(`http://127.0.0.1:${port}/health`, {
+      timeout: 3000
+    })
+    .then(response => {
+      console.log(`[健康检查] 检查成功，准备调度下次检查`)
+      // 健康检查成功
+      this.consecutiveSuccessCount++
+      const currentLevel = this.HEALTH_CHECK_LEVELS[this.healthCheckLevel]
+
+      // 发送健康检查成功日志
+      // 策略：初期高频记录，稳定后降低日志频率
+      const shouldLog =
+        this.consecutiveSuccessCount === 1 || // 首次成功必须记录
+        this.consecutiveSuccessCount <= 3 ||  // 前3次检查都记录，让用户看到系统正常工作
+        this.consecutiveSuccessCount === currentLevel.threshold || // 达到升级阈值时记录
+        this.consecutiveSuccessCount % 20 === 0 // 后续每20次记录一次
+
+      if (shouldLog) {
         this.emit('log', {
           id: `health_${Date.now()}`,
           timestamp: Date.now(),
           level: 'info' as const,
           type: 'system' as const,
-          message: '健康检查通过',
+          message: `健康检查通过 (连续${this.consecutiveSuccessCount}次成功，当前间隔: ${currentLevel.label})`,
           source: 'managed-mode-service',
           data: {
             status: response.data.status,
             port,
-            uptime: this.startTime ? Date.now() - this.startTime : 0
+            uptime: this.startTime ? Date.now() - this.startTime : 0,
+            consecutiveSuccessCount: this.consecutiveSuccessCount,
+            currentInterval: currentLevel.label,
+            healthCheckLevel: this.healthCheckLevel
           }
         })
-      } catch (error) {
-        console.error('健康检查失败,服务可能已停止')
+      }
 
-        // 发送健康检查失败日志
+      // 检查是否需要升级到下一个间隔级别
+      if (this.consecutiveSuccessCount >= currentLevel.threshold &&
+          this.healthCheckLevel < this.HEALTH_CHECK_LEVELS.length - 1) {
+        this.healthCheckLevel++
+        this.consecutiveSuccessCount = 0 // 重置计数器
+        const newLevel = this.HEALTH_CHECK_LEVELS[this.healthCheckLevel]
+        this.currentHealthCheckInterval = newLevel.interval
+
+        console.log(`[健康检查] 服务稳定，升级到级别${this.healthCheckLevel}，间隔调整为: ${newLevel.label}`)
         this.emit('log', {
           id: `health_${Date.now()}`,
           timestamp: Date.now(),
-          level: 'error' as const,
-          type: 'error' as const,
-          message: '健康检查失败，服务可能已停止',
+          level: 'info' as const,
+          type: 'system' as const,
+          message: `健康检查频率降低: ${currentLevel.label} → ${newLevel.label}`,
           source: 'managed-mode-service',
           data: {
-            error: error instanceof Error ? error.message : String(error)
+            oldLevel: this.healthCheckLevel - 1,
+            newLevel: this.healthCheckLevel,
+            oldInterval: currentLevel.label,
+            newInterval: newLevel.label
           }
         })
-
-        // 服务异常,清理进程引用
-        if (this.proxyProcess) {
-          this.proxyProcess.kill('SIGKILL')
-          this.proxyProcess = null
-        }
-        this.stopHealthCheck()
       }
-    }, 10000) // 每10秒检查一次
+
+      // 重新调度下次检查
+      this.scheduleNextHealthCheck()
+    })
+    .catch(error => {
+      console.error('[健康检查] 检查失败,服务可能已停止:', error.message)
+
+      // 发送健康检查失败日志
+      this.emit('log', {
+        id: `health_${Date.now()}`,
+        timestamp: Date.now(),
+        level: 'error' as const,
+        type: 'error' as const,
+        message: `健康检查失败 (在${this.HEALTH_CHECK_LEVELS[this.healthCheckLevel].label}间隔级别)`,
+        source: 'managed-mode-service',
+        data: {
+          error: error instanceof Error ? error.message : String(error),
+          consecutiveSuccessCount: this.consecutiveSuccessCount,
+          healthCheckLevel: this.healthCheckLevel
+        }
+      })
+
+      // 重置到初始级别
+      this.resetHealthCheckLevel()
+
+      // 服务异常,清理进程引用
+      if (this.proxyProcess) {
+        this.proxyProcess.kill('SIGKILL')
+        this.proxyProcess = null
+      }
+      this.stopHealthCheck()
+    })
+  }
+
+  /**
+   * 调度下次健康检查
+   * @description 使用当前间隔调度下次检查
+   */
+  private scheduleNextHealthCheck(): void {
+    // 清除之前的定时器
+    if (this.healthCheckInterval) {
+      clearTimeout(this.healthCheckInterval)
+    }
+
+    const currentInterval = this.currentHealthCheckInterval
+    const currentLabel = this.HEALTH_CHECK_LEVELS[this.healthCheckLevel].label
+
+    console.log(`[健康检查] 调度下次检查，间隔: ${currentInterval}ms (${currentLabel})`)
+
+    // 使用当前间隔调度下次检查
+    this.healthCheckInterval = setTimeout(() => {
+      console.log(`[健康检康检查] 定时器触发，执行下次检查`)
+      this.performHealthCheck()
+    }, currentInterval)
+
+    console.log(`[健康检查] 定时器已设置`)
+  }
+
+  /**
+   * 重置健康检查级别
+   * @description 失败时重置到初始高频检查级别
+   */
+  private resetHealthCheckLevel(): void {
+    const oldLevel = this.healthCheckLevel
+    const oldInterval = this.HEALTH_CHECK_LEVELS[oldLevel].label
+
+    this.consecutiveSuccessCount = 0
+    this.healthCheckLevel = 0
+    this.currentHealthCheckInterval = this.HEALTH_CHECK_LEVELS[0].interval
+
+    console.log(`[健康检查] 检查失败，重置到初始级别 (${oldInterval} → ${this.HEALTH_CHECK_LEVELS[0].label})`)
+
+    this.emit('log', {
+      id: `health_${Date.now()}`,
+      timestamp: Date.now(),
+      level: 'warn' as const,
+      type: 'system' as const,
+      message: `健康检查失败，频率重置: ${oldInterval} → ${this.HEALTH_CHECK_LEVELS[0].label}`,
+      source: 'managed-mode-service',
+      data: {
+        oldLevel,
+        newLevel: 0,
+        reason: '检查失败'
+      }
+    })
   }
 
   /**
@@ -1167,9 +1307,13 @@ export class ManagedModeService extends EventEmitter {
    */
   private stopHealthCheck(): void {
     if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval)
+      clearTimeout(this.healthCheckInterval)
       this.healthCheckInterval = null
     }
+    // 重置状态
+    this.consecutiveSuccessCount = 0
+    this.healthCheckLevel = 0
+    this.currentHealthCheckInterval = this.HEALTH_CHECK_LEVELS[0].interval
   }
 
   /**

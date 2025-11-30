@@ -62,7 +62,7 @@ export const useManagedModeLogStore = create<ManagedModeLogState>((set, get) => 
   logs: [],
   normalLogCount: 0,
   errorLogCount: 0,
-  maxEntries: 2000, // 默认最多保存2000条日志
+  maxEntries: 500, // 默认最多保存500条日志（配合虚拟滚动优化内存占用）
   isInitialized: false,
 
   /**

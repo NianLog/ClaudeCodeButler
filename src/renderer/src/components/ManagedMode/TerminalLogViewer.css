@@ -15,25 +15,27 @@
 
 /* 日志容器样式 */
 .log-container {
-  overflow-y: auto;
   background: #fafafa;
   border: 1px solid #f0f0f0;
   border-radius: 6px;
-  padding: 8px;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.4;
   height: 400px;
+  /* 注意：不添加overflow-y和padding，因为react-window的List组件会自己管理滚动 */
 }
 
 /* 日志条目样式 */
 .log-entry {
-  margin-bottom: 8px;
+  margin-bottom: 12px; /* 增加卡片间距从8px到12px */
   padding: 8px 12px;
   background: white;
   border-radius: 4px;
   border-left: 3px solid transparent;
   transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* 确保内容垂直居中 */
 }
 
 .log-entry:hover {
@@ -79,17 +81,26 @@
 .log-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: center; /* 确保头部元素垂直居中 */
   margin-bottom: 4px;
+  min-height: 24px; /* 设置最小高度确保一致性 */
 }
 
 .log-meta {
   flex: 1;
+  /* Space组件已经是flex容器,不需要重复设置 */
+  /* display: flex;
+  align-items: center; */
+  /* gap由Space组件的size属性控制 */
 }
 
 .log-actions {
   flex-shrink: 0;
   margin-left: 8px;
+  /* Space组件已经是flex容器,不需要重复设置 */
+  /* display: flex;
+  align-items: center;
+  gap: 4px; */
 }
 
 /* 日志元信息样式 */
@@ -148,7 +159,7 @@
   border-radius: 4px;
   font-size: 10px;
   overflow-x: auto;
-  max-height: 200px;
+  max-height: 280px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;

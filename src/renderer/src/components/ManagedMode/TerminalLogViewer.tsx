@@ -2,9 +2,11 @@
  * 终端日志组件
  * @description 用于显示托管模式API请求和响应的实时日志
  * @note 从全局store读取日志数据，确保即使组件未挂载，日志也在后台持续收集
+ * @performance 使用react-window虚拟滚动优化大量日志渲染性能
  */
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { VariableSizeList } from 'react-window'
 import {
   Card,
   Input,
@@ -80,7 +82,8 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isPaused, setIsPaused] = useState(false)
   const [autoScroll, setAutoScroll] = useState(true)
-  const [logContainerRef, setLogContainerRef] = useState<HTMLDivElement | null>(null)
+  // 展开状态管理：使用Set存储已展开的日志ID
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
 
 
   // 过滤日志
@@ -129,10 +132,63 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
     setFilteredLogs(filtered)
   }, [logs, logFilter, typeFilter, statusFilter, searchText, logTypeFilter])
 
-  // 自动滚动
+  // 虚拟滚动列表引用
+  const listRef = useRef<VariableSizeList>(null)
+
+  /**
+   * 切换日志详情展开/收起
+   * @param logId 日志ID
+   * @param index 日志索引
+   */
+  const toggleLogExpand = (logId: string, index: number) => {
+    setExpandedLogs(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(logId)) {
+        newSet.delete(logId)
+      } else {
+        newSet.add(logId)
+      }
+      return newSet
+    })
+    // 重要：调用resetAfterIndex触发VariableSizeList重新计算高度
+    // 参考: https://github.com/bvaughn/react-window/issues/92
+    if (listRef.current) {
+      listRef.current.resetAfterIndex(index)
+    }
+  }
+
+  /**
+   * 获取日志条目高度
+   * @param index 日志索引
+   * @returns 高度（像素）
+   * @description 根据展开状态动态返回不同高度
+   * 参考最佳实践: https://pankajtime12.medium.com/killer-way-to-use-react-window-for-variable-size-list-53c68d75c152
+   */
+  const getItemSize = useCallback((index: number): number => {
+    const log = filteredLogs[index]
+    if (!log) return 90 // 默认高度(降低以改善美观度)
+
+    const isExpanded = expandedLogs.has(log.id)
+
+    // 基础高度：包含日志头部、消息、URL等
+    let baseHeight = 90 // 从120降至90,更美观
+
+    // 如果展开详情，需要额外空间
+    if (isExpanded && log.data) {
+      // 详情内容的预估高度：JSON字符串行数 * 行高 + padding
+      const jsonStr = JSON.stringify(log.data, null, 2)
+      const lines = jsonStr.split('\n').length
+      const detailsHeight = Math.min(lines * 16 + 60, 300) // 最大300px，避免过高
+      baseHeight += detailsHeight
+    }
+
+    return baseHeight
+  }, [filteredLogs, expandedLogs])
+
+  // 自动滚动到最新日志
   useEffect(() => {
-    if (autoScroll && logContainerRef && !isPaused) {
-      logContainerRef.scrollTop = logContainerRef.scrollHeight
+    if (autoScroll && listRef.current && !isPaused && filteredLogs.length > 0) {
+      listRef.current.scrollToItem(filteredLogs.length - 1, 'end')
     }
   }, [filteredLogs, autoScroll, isPaused])
 
@@ -238,6 +294,80 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
     }
   }
 
+  /**
+   * 虚拟滚动行渲染器
+   * @description 渲染单个日志条目，用于react-window虚拟滚动，支持动态高度
+   */
+  const LogRow = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+    const log = filteredLogs[index]
+    const isExpanded = expandedLogs.has(log.id)
+
+    return (
+      <div style={{ ...style, padding: '0 8px' }} className={`log-entry log-${log.type} log-${log.level}`}>
+        <div className="log-header">
+          <Space className="log-meta">
+            <Tag color={getLogLevelColor(log.level)} size="small" icon={getLogLevelIcon(log.level)}>
+              {log.level.toUpperCase()}
+            </Tag>
+            <Tag color={getLogTypeColor(log.type)} size="small" icon={getLogTypeIcon(log.type)}>
+              {log.type.toUpperCase()}
+            </Tag>
+            {log.data?.statusCode && (
+              <Tag color={getStatusCodeColor(log.data.statusCode)} size="small">
+                {log.data.statusCode}
+              </Tag>
+            )}
+            <Text type="secondary" className="log-timestamp">
+              {new Date(log.timestamp).toLocaleTimeString()}
+            </Text>
+          </Space>
+
+          <Space className="log-actions">
+            {log.data?.duration && (
+              <Text type="secondary" className="log-duration">
+                {log.data.duration}ms
+              </Text>
+            )}
+            <Tooltip title="复制日志">
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={() => copyLog(log)}
+              />
+            </Tooltip>
+          </Space>
+        </div>
+
+        <div className="log-message">
+          <Text>{log.message}</Text>
+          {log.data?.url && (
+            <Text code className="log-url">
+              {log.data.method} {log.data.url}
+            </Text>
+          )}
+        </div>
+
+        {log.data && (
+          <div className="log-details">
+            <div
+              className="log-details-summary"
+              onClick={() => toggleLogExpand(log.id, index)}
+              style={{ cursor: 'pointer' }}
+            >
+              <EyeOutlined /> {isExpanded ? '收起详情' : '查看详情'}
+            </div>
+            {isExpanded && (
+              <pre className="log-details-content">
+                {JSON.stringify(log.data, null, 2)}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (!debugMode) {
     return (
       <div className="terminal-log-viewer">
@@ -334,13 +464,10 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         className="log-container"
         style={{
           height,
-          overflow: 'auto',
           border: '1px solid #f0f0f0',
           borderRadius: '6px',
-          padding: '8px',
           background: '#fff'
         }}
-        ref={setLogContainerRef}
       >
         {filteredLogs.length === 0 ? (
           <Empty
@@ -348,64 +475,16 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (
-          filteredLogs.map(log => (
-            <div key={log.id} className={`log-entry log-${log.type} log-${log.level}`}>
-              <div className="log-header">
-                <Space className="log-meta">
-                  <Tag color={getLogLevelColor(log.level)} size="small" icon={getLogLevelIcon(log.level)}>
-                    {log.level.toUpperCase()}
-                  </Tag>
-                  <Tag color={getLogTypeColor(log.type)} size="small" icon={getLogTypeIcon(log.type)}>
-                    {log.type.toUpperCase()}
-                  </Tag>
-                  {log.data?.statusCode && (
-                    <Tag color={getStatusCodeColor(log.data.statusCode)} size="small">
-                      {log.data.statusCode}
-                    </Tag>
-                  )}
-                  <Text type="secondary" className="log-timestamp">
-                    {new Date(log.timestamp).toLocaleTimeString()}
-                  </Text>
-                </Space>
-
-                <Space className="log-actions">
-                  {log.data?.duration && (
-                    <Text type="secondary" className="log-duration">
-                      {log.data.duration}ms
-                    </Text>
-                  )}
-                  <Tooltip title="复制日志">
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<CopyOutlined />}
-                      onClick={() => copyLog(log)}
-                    />
-                  </Tooltip>
-                </Space>
-              </div>
-
-              <div className="log-message">
-                <Text>{log.message}</Text>
-                {log.data?.url && (
-                  <Text code className="log-url">
-                    {log.data.method} {log.data.url}
-                  </Text>
-                )}
-              </div>
-
-              {log.data && (
-                <details className="log-details">
-                  <summary className="log-details-summary">
-                    <EyeOutlined /> 查看详情
-                  </summary>
-                  <pre className="log-details-content">
-                    {JSON.stringify(log.data, null, 2)}
-                  </pre>
-                </details>
-              )}
-            </div>
-          ))
+          <VariableSizeList
+            ref={listRef}
+            height={parseInt(height) || 400}
+            itemCount={filteredLogs.length}
+            itemSize={getItemSize}
+            width="100%"
+            overscanCount={10}
+          >
+            {LogRow}
+          </VariableSizeList>
         )}
       </div>
     </div>
