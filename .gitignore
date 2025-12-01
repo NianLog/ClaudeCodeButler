@@ -159,7 +159,7 @@ tests/
 test-*.js
 test-*.sh
 debug.log
-package-lock.json
+# package-lock.json - 允许提交以支持CI/CD
 
 #AI Tools config
 GEMINI.md

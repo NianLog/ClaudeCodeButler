@@ -11,6 +11,10 @@ on:
       - main
   workflow_dispatch:
 
+# 全局permissions
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -23,6 +27,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
@@ -47,6 +52,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
