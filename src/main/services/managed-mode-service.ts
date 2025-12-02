@@ -35,6 +35,7 @@ export class ManagedModeService extends EventEmitter {
   private healthCheckInterval: NodeJS.Timeout | null = null
   private isIntegrated: boolean = false // 标记是否使用集成模式
   private startTime: number | null = null // 记录服务启动时间
+  private isRestarting: boolean = false // 标记是否正在执行重启操作
 
   // 智能健康检查相关状态
   private consecutiveSuccessCount: number = 0 // 连续成功检查次数
@@ -242,6 +243,10 @@ export class ManagedModeService extends EventEmitter {
 
       // 启动健康检查
       this.startHealthCheck()
+
+      // 重启时覆写settings配置
+      await this.applySettingsOnRestart()
+
       return
     } catch (error) {
       console.error('集成模式启动失败，尝试传统模式:', error)
@@ -378,6 +383,9 @@ export class ManagedModeService extends EventEmitter {
 
     // 启动健康检查
     this.startHealthCheck()
+
+    // 重启时覆写settings配置
+    await this.applySettingsOnRestart()
   }
 
   /**
@@ -438,21 +446,76 @@ export class ManagedModeService extends EventEmitter {
     this.startTime = null
     console.log('托管模式服务已停止，启动时间已清除')
 
-    // 停止后还原系统设置
+    // 停止后还原系统设置（重启操作时跳过还原）
+    if (!this.isRestarting) {
+      try {
+        await this.restoreSystemSettings()
+        console.log('托管模式停止：系统设置已还原')
+      } catch (restoreError) {
+        console.warn('托管模式停止：还原系统设置失败', restoreError)
+      }
+    } else {
+      console.log('重启操作：跳过还原settings，保持托管配置')
+    }
+  }
+
+  /**
+   * 重启时应用settings配置
+   * @description 重启操作时覆写settings，但不触发备份
+   */
+  private async applySettingsOnRestart(): Promise<void> {
+    if (!this.isRestarting) {
+      // 非重启操作，跳过
+      return
+    }
+
+    if (!this.config) {
+      console.warn('重启操作：配置不存在，跳过覆写settings')
+      return
+    }
+
     try {
-      await this.restoreSystemSettings()
-      console.log('托管模式停止：系统设置已还原')
-    } catch (restoreError) {
-      console.warn('托管模式停止：还原系统设置失败', restoreError)
+      // 生成托管模式的配置
+      const managedConfigData = {
+        env: {
+          ANTHROPIC_BASE_URL: `http://127.0.0.1:${this.config.port || ManagedModeService.DEFAULT_PORT}`,
+          ANTHROPIC_AUTH_TOKEN: this.config.accessToken || '',
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
+        },
+        permissions: {
+          defaultMode: 'bypassPermissions'
+        },
+        statusLine: {
+          type: 'command',
+          command: 'ccline',
+          padding: 0
+        }
+      }
+
+      // 覆写settings配置
+      const writeResult = await this.updateSettingsConfig(managedConfigData)
+      if (writeResult.success) {
+        console.log('重启操作：已覆写settings配置，保持托管模式')
+      } else {
+        console.error('重启操作：覆写settings配置失败', writeResult.error)
+      }
+    } catch (error: any) {
+      console.error('重启操作：应用settings配置失败', error.message)
     }
   }
 
   /**
    * 重启代理服务
+   * @description 重启时保持托管配置，不触发settings还原和备份
    */
   async restart(): Promise<void> {
-    await this.stop()
-    await this.start()
+    this.isRestarting = true
+    try {
+      await this.stop()
+      await this.start()
+    } finally {
+      this.isRestarting = false
+    }
   }
 
   /**
@@ -944,11 +1007,40 @@ export class ManagedModeService extends EventEmitter {
           const content = await fs.readFile(configPath, 'utf-8')
           const config = JSON.parse(content)
 
-          // 只处理有效的 claude-code 配置
+          // 支持两种配置格式：
+          // 1. 标准格式：config.env.ANTHROPIC_BASE_URL
+          // 2. 扁平格式：config.ANTHROPIC_BASE_URL
+          let baseUrl: string | undefined
+          let authToken: string | undefined
+
           if (config.env?.ANTHROPIC_BASE_URL && config.env?.ANTHROPIC_AUTH_TOKEN) {
-            const baseUrl = config.env.ANTHROPIC_BASE_URL
-            const authToken = config.env.ANTHROPIC_AUTH_TOKEN
+            // 标准格式
+            baseUrl = config.env.ANTHROPIC_BASE_URL
+            authToken = config.env.ANTHROPIC_AUTH_TOKEN
+          } else if (config.ANTHROPIC_BASE_URL && config.ANTHROPIC_AUTH_TOKEN) {
+            // 扁平格式
+            baseUrl = config.ANTHROPIC_BASE_URL
+            authToken = config.ANTHROPIC_AUTH_TOKEN
+          }
+
+          // 只处理有效的 claude-code 配置
+          if (baseUrl && authToken) {
             const configName = path.basename(file, '.json')
+
+            // 读取.meta文件获取显示名称
+            let displayName = configName // 默认使用文件名
+            try {
+              const metaPath = path.join(configDir, `${file}.meta`)
+              const metaContent = await fs.readFile(metaPath, 'utf-8')
+              const metaData = JSON.parse(metaContent)
+              if (metaData.name && typeof metaData.name === 'string') {
+                displayName = metaData.name
+                console.log(`从元数据文件读取到配置显示名称: ${displayName} (文件名: ${configName})`)
+              }
+            } catch (metaError) {
+              // .meta文件不存在或读取失败，使用文件名作为fallback
+              console.log(`未找到或无法读取元数据文件 ${file}.meta，使用文件名作为显示名称`)
+            }
 
             // 生成稳定的 provider ID（使用简化的哈希算法）
             const content = `${configName}|${baseUrl}|${authToken}`
@@ -964,7 +1056,7 @@ export class ManagedModeService extends EventEmitter {
             // 创建 provider 对象
             const provider: ApiProvider = {
               id: providerId,
-              name: configName,
+              name: displayName, // 使用从.meta文件读取的显示名称
               type: 'custom' as const,
               apiBaseUrl: baseUrl,
               apiKey: authToken,
@@ -1002,6 +1094,16 @@ export class ManagedModeService extends EventEmitter {
     } catch (error: any) {
       console.error('同步 providers 失败:', error.message)
     }
+  }
+
+  /**
+   * 手动同步providers（供前端调用）
+   * @description 重新扫描配置目录并同步providers列表，供前端动态刷新配置列表使用
+   */
+  async syncProviders(): Promise<void> {
+    // 重新加载配置，确保使用最新的配置状态
+    await this.loadConfig()
+    await this.syncProvidersFromConfigList()
   }
 
   /**

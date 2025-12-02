@@ -17,6 +17,7 @@ import { logStorageService } from './services/log-storage.service';
 import { ruleStorageService } from './services/rule-storage.service';
 import { managedModeLogRotationService } from './services/managed-mode-log-rotation.service'
 import { mcpManagementService } from './services/mcp-management.service'
+import { managedModeService } from './services/managed-mode-service'
 
 
 // 服务实例
@@ -38,11 +39,29 @@ function createSimpleHandler<T extends any[]>(
       return { success: true, data: result }
     } catch (error) {
       logger.error('IPC处理器执行失败:', error)
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : String(error) 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
       }
     }
+  }
+}
+
+/**
+ * 在配置操作后自动同步托管模式 providers
+ * @description 当配置文件发生变化时，自动更新 managed-mode-config.json 中的 providers 列表
+ */
+async function syncProvidersAfterConfigChange(): Promise<void> {
+  try {
+    // 检查托管模式是否已启用
+    if (managedModeService.isManagedModeEnabled()) {
+      logger.info('配置文件已更改，正在同步托管模式 providers...')
+      await managedModeService.syncProviders()
+      logger.info('托管模式 providers 同步完成')
+    }
+  } catch (error) {
+    logger.error('同步托管模式 providers 失败:', error)
+    // 不抛出错误，避免影响配置操作本身
   }
 }
 
@@ -73,11 +92,26 @@ export function setupIpcHandlers(): void {
 function setupConfigHandlers(): void {
   ipcMain.handle('config:list', createSimpleHandler(() => configService.scanConfigs()))
   ipcMain.handle('config:get', createSimpleHandler((path: string) => configService.getConfig(path)))
-  ipcMain.handle('config:save', createSimpleHandler((path: string, content: any, metadata?: any) => configService.saveConfig(path, content, metadata)))
+  ipcMain.handle('config:save', createSimpleHandler(async (path: string, content: any, metadata?: any) => {
+    const result = await configService.saveConfig(path, content, metadata)
+    // 配置保存后，同步托管模式 providers
+    await syncProvidersAfterConfigChange()
+    return result
+  }))
   ipcMain.handle('config:saveMetadata', createSimpleHandler((path: string, metadata: any) => configService.saveConfigMetadata(path, metadata)))
   ipcMain.handle('config:getMetadata', createSimpleHandler((path: string) => configService.getConfigMetadata(path)))
-  ipcMain.handle('config:create', createSimpleHandler(async (name: string, template?: string) => ({ path: await configService.createConfig(name, template) })))
-  ipcMain.handle('config:delete', createSimpleHandler((path: string) => configService.deleteConfig(path)))
+  ipcMain.handle('config:create', createSimpleHandler(async (name: string, template?: string) => {
+    const path = await configService.createConfig(name, template)
+    // 配置创建后，同步托管模式 providers
+    await syncProvidersAfterConfigChange()
+    return { path }
+  }))
+  ipcMain.handle('config:delete', createSimpleHandler(async (path: string) => {
+    const result = await configService.deleteConfig(path)
+    // 配置删除后，同步托管模式 providers
+    await syncProvidersAfterConfigChange()
+    return result
+  }))
   ipcMain.handle('config:validate', createSimpleHandler((content: any) => configService.validateConfig(content)))
   ipcMain.handle('config:createBackup', createSimpleHandler((path: string) => configService.createBackup(path)))
   ipcMain.handle('config:restoreBackup', createSimpleHandler((backupId: string) => configService.restoreBackup(backupId)))
@@ -86,8 +120,18 @@ function setupConfigHandlers(): void {
   ipcMain.handle('config:checkMatch', createSimpleHandler(async (p: string) => ({ isMatch: await configService.checkConfigMatch(p) })))
   ipcMain.handle('config:compareContent', createSimpleHandler(async (p1: string, p2: string) => ({ isSame: await configService.compareConfigContent(p1, p2) })))
   ipcMain.handle('config:activateConfig', createSimpleHandler((p: string) => configService.activateConfig(p)))
-  ipcMain.handle('config:migrateFile', createSimpleHandler(async (p: string) => ({ success: await ConfigMigrationService.migrateConfigFile(p) })))
-  ipcMain.handle('config:migrateFiles', createSimpleHandler((paths: string[]) => ConfigMigrationService.migrateConfigFiles(paths)))
+  ipcMain.handle('config:migrateFile', createSimpleHandler(async (p: string) => {
+    const success = await ConfigMigrationService.migrateConfigFile(p)
+    // 配置迁移后，同步托管模式 providers
+    await syncProvidersAfterConfigChange()
+    return { success }
+  }))
+  ipcMain.handle('config:migrateFiles', createSimpleHandler(async (paths: string[]) => {
+    const result = await ConfigMigrationService.migrateConfigFiles(paths)
+    // 配置迁移后，同步托管模式 providers
+    await syncProvidersAfterConfigChange()
+    return result
+  }))
   ipcMain.handle('config:checkMigration', createSimpleHandler(async (filePath: string) => {
     try {
       const fs = require('fs/promises')
@@ -102,7 +146,12 @@ function setupConfigHandlers(): void {
   ipcMain.handle('config:autoUpdateClaudeCodeStatus', createSimpleHandler(() => configService.autoUpdateClaudeCodeStatus()))
 
   // 从用户目录导入配置（扫描 ~/.claude 目录）
-  ipcMain.handle('config:importFromUserDir', createSimpleHandler(() => configService.importFromUserDir()))
+  ipcMain.handle('config:importFromUserDir', createSimpleHandler(async () => {
+    const result = await configService.importFromUserDir()
+    // 配置导入后，同步托管模式 providers
+    await syncProvidersAfterConfigChange()
+    return result
+  }))
 }
 
 /**

@@ -111,6 +111,7 @@ export const IPC_CHANNELS = {
   MANAGED_MODE_IS_ENABLED: 'managed-mode:is-enabled',
   MANAGED_MODE_CHECK_BACKUP: 'managed-mode:check-backup',
   MANAGED_MODE_UPDATE_SETTINGS_CONFIG: 'managed-mode:update-settings-config',
+  MANAGED_MODE_SYNC_PROVIDERS: 'managed-mode:sync-providers',
 
   // MCP管理
   MCP_LIST_ALL_SERVERS: 'mcp:list-all-servers',

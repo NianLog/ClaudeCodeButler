@@ -275,6 +275,20 @@ export function registerManagedModeHandlers(): void {
       }
     }
   )
+
+  // 同步providers列表
+  ipcMain.handle(
+    IPC_CHANNELS.MANAGED_MODE_SYNC_PROVIDERS,
+    async (): Promise<{ success: boolean; config: ManagedModeConfig | null; error?: string }> => {
+      try {
+        await managedModeService.syncProviders()
+        const config = managedModeService.getConfig()
+        return { success: true, config }
+      } catch (error: any) {
+        return { success: false, config: null, error: error.message }
+      }
+    }
+  )
 }
 
 /**

@@ -307,6 +307,8 @@ interface ManagedModeAPI {
   checkBackup: () => Promise<{ success: boolean; hasBackup: boolean }>
   // 更新系统settings配置
   updateSettingsConfig: (configData: any) => Promise<{ success: boolean; error?: string }>
+  // 同步providers列表
+  syncProviders: () => Promise<{ success: boolean; config: ManagedModeConfig | null; error?: string }>
   // 监听状态变化
   onStatusChanged: (callback: (status: ManagedModeStatus) => void) => () => void
   // 监听配置更新
@@ -634,6 +636,7 @@ const managedModeAPI: ManagedModeAPI = {
   isEnabled: () => ipcRenderer.invoke('managed-mode:is-enabled'),
   checkBackup: () => ipcRenderer.invoke('managed-mode:check-backup'),
   updateSettingsConfig: (configData: any) => ipcRenderer.invoke('managed-mode:update-settings-config', configData),
+  syncProviders: () => ipcRenderer.invoke('managed-mode:sync-providers'),
   onStatusChanged: (callback: (status: ManagedModeStatus) => void) => {
     const listener = (_: any, status: ManagedModeStatus) => callback(status)
     ipcRenderer.on('managed-mode:status-changed', listener)

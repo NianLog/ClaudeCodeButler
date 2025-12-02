@@ -99,12 +99,13 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   const [customFields, setCustomFields] = useState<Array<{ key: string; value: any; type: string }>>([])
   const [networkProxyHost, setNetworkProxyHost] = useState('127.0.0.1')
   const [networkProxyPort, setNetworkProxyPort] = useState(8080)
+  const [localProviders, setLocalProviders] = useState<ApiProvider[]>([]) // 本地providers列表
 
   // 初始化标记：确保只初始化一次，防止无限刷新
   const hasInitialized = React.useRef(false)
 
-  // 从托管模式配置的 providers 列表获取可选配置（而不是从配置管理列表）
-  const availableProviders = managedModeConfig?.providers || []
+  // 从托管模式配置的 providers 列表获取可选配置（优先使用本地状态）
+  const availableProviders = localProviders.length > 0 ? localProviders : (managedModeConfig?.providers || [])
 
   // 监听managedModeConfig变化，初始化表单和JSON编辑器（仅初始化一次，不做实时同步）
   useEffect(() => {
@@ -212,6 +213,26 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       message.error('切换配置失败')
     } finally {
       setLoading(false)
+    }
+  }
+
+  /**
+   * 处理下拉框显示/隐藏
+   * @description 每次打开下拉框时重新同步providers列表
+   */
+  const handleDropdownOpen = async (open: boolean) => {
+    if (open) {
+      try {
+        // 打开下拉框时重新同步providers
+        const result = await window.electronAPI.managedMode.syncProviders()
+        if (result.success && result.config) {
+          // 更新本地providers列表
+          setLocalProviders(result.config.providers || [])
+          console.log('下拉框打开：已同步providers列表', result.config.providers?.length)
+        }
+      } catch (error) {
+        console.error('同步providers失败:', error)
+      }
     }
   }
 
@@ -786,6 +807,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                 <Select
                   value={selectedProviderId}
                   onChange={handleConfigSwitch}
+                  onOpenChange={handleDropdownOpen}
                   placeholder="选择要使用的配置"
                   style={{ width: '100%' }}
                   optionFilterProp="children"
