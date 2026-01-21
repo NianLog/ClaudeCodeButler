@@ -18,6 +18,10 @@ import { ruleStorageService } from './services/rule-storage.service';
 import { managedModeLogRotationService } from './services/managed-mode-log-rotation.service'
 import { mcpManagementService } from './services/mcp-management.service'
 import { managedModeService } from './services/managed-mode-service'
+import { agentsManagementService } from './services/agents-management-service'
+import { skillsManagementService } from './services/skills-management-service'
+import { environmentCheckService } from './services/environment-check-service'
+import { terminalManagementService } from './services/terminal-management-service'
 
 
 // 服务实例
@@ -30,12 +34,12 @@ export { configService, settingsService }
 /**
  * 简化的IPC处理器包装器
  */
-function createSimpleHandler<T extends any[]>(
-  handler: (...args: T) => Promise<any>
+function createSimpleHandler<T extends any[], R>(
+  handler: (...args: T) => Promise<R> | R
 ) {
   return async (_event: Electron.IpcMainInvokeEvent, ...args: T): Promise<any> => {
     try {
-      const result = await handler(...args)
+      const result = await Promise.resolve(handler(...args))
       return { success: true, data: result }
     } catch (error) {
       logger.error('IPC处理器执行失败:', error)
@@ -82,6 +86,10 @@ export function setupIpcHandlers(): void {
   setupSettingsHandlers()
   setupManagedModeLogRotationHandlers()
   setupMCPHandlers()
+  setupAgentsHandlers()
+  setupSkillsHandlers()
+  setupEnvironmentHandlers()
+  setupTerminalHandlers()
 
   logger.info('IPC 处理器设置完成')
 }
@@ -178,11 +186,8 @@ function setupRuleHandlers(): void {
     return stats;
   }))
 
-  // 保留一个空的 execute 处理器以防万一
-  ipcMain.handle('rule:execute', createSimpleHandler((id: string) => { 
-    logger.warn(`Manual execution for rule ${id} not implemented via this handler.`); 
-    return Promise.resolve(); 
-  }))
+  // 手动执行规则
+  ipcMain.handle('rule:execute', createSimpleHandler((id: string) => ruleEngineService.executeRuleManually(id)))
 }
 
 
@@ -217,7 +222,7 @@ function setupSystemHandlers(): void {
   }))
   ipcMain.handle('system:downloadFile', async (event, url: string, fileName?: string) => {
     try {
-      const { BrowserWindow, shell, session } = await import('electron')
+      const { BrowserWindow, shell } = await import('electron')
       const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
       if (!win) {
         return { success: false, error: '未找到活动窗口' }
@@ -274,7 +279,7 @@ function setupSystemHandlers(): void {
         let downloadPath = ''
         let downloadStarted = false
 
-        const downloadHandler = async (downloadEvent: Electron.Event, item: Electron.DownloadItem, webContents: Electron.WebContents) => {
+        const downloadHandler = async (_downloadEvent: Electron.Event, item: Electron.DownloadItem, _webContents: Electron.WebContents) => {
           downloadStarted = true
           logger.info(`========== will-download 事件触发 ==========`)
           logger.info(`文件名: ${item.getFilename()}`)
@@ -293,7 +298,7 @@ function setupSystemHandlers(): void {
           let lastUpdate = Date.now()
           let totalBytes = 0
 
-          item.on('updated', (updateEvent, state) => {
+          item.on('updated', (_updateEvent, state) => {
             const now = Date.now()
             if (now - lastUpdate > 500) { // 每500ms更新一次进度
               lastUpdate = now
@@ -324,7 +329,7 @@ function setupSystemHandlers(): void {
             }
           })
 
-          item.once('done', async (doneEvent, state) => {
+          item.once('done', async (_doneEvent, state) => {
             clearTimeout(timeoutId)
             win.webContents.session.removeListener('will-download', downloadHandler)
             logger.info(`========== 下载完成事件触发 ==========`)
@@ -357,7 +362,9 @@ function setupSystemHandlers(): void {
               logger.error(`已接收 ${receivedBytes} / ${totalBytes} 字节`)
 
               // 获取更详细的错误信息
-              const lastErrorMessage = item.getLastErrorMessage ? item.getLastErrorMessage() : '未知原因'
+              const lastErrorMessage = typeof (item as any).getLastErrorMessage === 'function'
+                ? (item as any).getLastErrorMessage()
+                : '未知原因'
               logger.error(`中断原因: ${lastErrorMessage}`)
               logger.error(`URL: ${item.getURL()}`)
               logger.error(`保存路径: ${downloadPath}`)
@@ -651,4 +658,168 @@ function setupMCPHandlers(): void {
   ipcMain.handle('mcp:save-claude-config', async (_, config: any) => {
     return await mcpManagementService.saveClaudeConfig(config)
   })
+}
+
+/**
+ * 子Agent管理相关的 IPC 处理器
+ */
+function setupAgentsHandlers(): void {
+  // 扫描所有Agent
+  ipcMain.handle('agents:scan', createSimpleHandler(() => agentsManagementService.scanAgents()))
+
+  // 获取单个Agent
+  ipcMain.handle('agents:get', createSimpleHandler((agentId: string) => agentsManagementService.getAgent(agentId)))
+
+  // 添加新Agent
+  ipcMain.handle('agents:add', createSimpleHandler((formData: any) => agentsManagementService.addAgent(formData)))
+
+  // 删除Agent
+  ipcMain.handle('agents:delete', createSimpleHandler((agentId: string) => agentsManagementService.deleteAgent(agentId)))
+
+  // 导入单个Agent
+  ipcMain.handle('agents:import', createSimpleHandler((sourceFilePath: string, options?: any) =>
+    agentsManagementService.importAgent(sourceFilePath, options)
+  ))
+
+  // 导入Agent内容
+  ipcMain.handle('agents:import-content', createSimpleHandler((content: string, options?: any) =>
+    agentsManagementService.importAgentContent(content, options)
+  ))
+
+  // 批量导入Agent
+  ipcMain.handle('agents:batch-import', createSimpleHandler((sourceFilePaths: string[], options?: any) =>
+    agentsManagementService.batchImportAgents(sourceFilePaths, options)
+  ))
+
+  // 批量导入Agent内容
+  ipcMain.handle('agents:batch-import-content', createSimpleHandler((contents: any[], options?: any) =>
+    agentsManagementService.batchImportAgentsContent(contents, options)
+  ))
+}
+
+/**
+ * Skills管理相关的 IPC 处理器
+ */
+function setupSkillsHandlers(): void {
+  // 扫描所有Skill
+  ipcMain.handle('skills:scan', createSimpleHandler(() => skillsManagementService.scanSkills()))
+
+  // 获取单个Skill
+  ipcMain.handle('skills:get', createSimpleHandler((skillId: string) => skillsManagementService.getSkill(skillId)))
+
+  // 添加新Skill
+  ipcMain.handle('skills:add', createSimpleHandler((formData: any) => skillsManagementService.addSkill(formData)))
+
+  // 删除Skill
+  ipcMain.handle('skills:delete', createSimpleHandler((skillId: string) => skillsManagementService.deleteSkill(skillId)))
+
+  // 导入单个Skill
+  ipcMain.handle('skills:import', createSimpleHandler((sourceDirPath: string, options?: any) =>
+    skillsManagementService.importSkill(sourceDirPath, options)
+  ))
+
+  // 导入Skill文件列表
+  ipcMain.handle('skills:import-files', createSimpleHandler((payload: any, options?: any) =>
+    skillsManagementService.importSkillFiles(payload, options)
+  ))
+
+  // 批量导入Skill
+  ipcMain.handle('skills:batch-import', createSimpleHandler((sourceDirPaths: string[], options?: any) =>
+    skillsManagementService.batchImportSkills(sourceDirPaths, options)
+  ))
+
+  // 批量导入Skill文件列表
+  ipcMain.handle('skills:batch-import-files', createSimpleHandler((payloads: any[], options?: any) =>
+    skillsManagementService.batchImportSkillsFiles(payloads, options)
+  ))
+}
+
+/**
+ * 环境检测相关的 IPC 处理器
+ */
+function setupEnvironmentHandlers(): void {
+  // 检查所有预定义环境
+  ipcMain.handle('environment:check-all-predefined', createSimpleHandler(() =>
+    environmentCheckService.checkAllPredefined()
+  ))
+
+  // 检查单个预定义环境
+  ipcMain.handle('environment:check-predefined', createSimpleHandler((checkType: string) =>
+    environmentCheckService.checkPredefined(checkType as any)
+  ))
+
+  // 检查单个自定义环境
+  ipcMain.handle('environment:check-custom', createSimpleHandler((customCheck: any) =>
+    environmentCheckService.checkCustom(customCheck)
+  ))
+
+  // 获取所有自定义检查
+  ipcMain.handle('environment:get-custom-checks', createSimpleHandler(() =>
+    environmentCheckService.getCustomChecks()
+  ))
+
+  // 添加自定义检查
+  ipcMain.handle('environment:add-custom-check', createSimpleHandler((formData: any) =>
+    environmentCheckService.addCustomCheck(formData)
+  ))
+
+  // 更新自定义检查
+  ipcMain.handle('environment:update-custom-check', createSimpleHandler((params: any) =>
+    environmentCheckService.updateCustomCheck(params.checkId, params.formData)
+  ))
+
+  // 删除自定义检查
+  ipcMain.handle('environment:delete-custom-check', createSimpleHandler((checkId: string) =>
+    environmentCheckService.deleteCustomCheck(checkId)
+  ))
+
+  // 获取Claude Code版本信息
+  ipcMain.handle('environment:get-claude-code-version', createSimpleHandler(() =>
+    environmentCheckService.getClaudeCodeVersion()
+  ))
+
+  // 计算检查结果汇总
+  ipcMain.handle('environment:calculate-summary', createSimpleHandler(async (results: any[]) =>
+    environmentCheckService.calculateSummary(results)
+  ))
+}
+
+/**
+ * 终端管理相关的 IPC 处理器
+ */
+function setupTerminalHandlers(): void {
+  // 获取所有终端配置
+  ipcMain.handle('terminal:get-terminals', createSimpleHandler(() =>
+    terminalManagementService.getTerminals()
+  ))
+
+  // 添加或更新终端配置
+  ipcMain.handle('terminal:upsert-terminal', createSimpleHandler((config: any) =>
+    terminalManagementService.upsertTerminal(config)
+  ))
+
+  // 删除终端配置
+  ipcMain.handle('terminal:delete-terminal', createSimpleHandler((type: any) =>
+    terminalManagementService.deleteTerminal(type)
+  ))
+
+  // 设置默认终端
+  ipcMain.handle('terminal:set-default', createSimpleHandler((type: any) =>
+    terminalManagementService.setDefaultTerminal(type)
+  ))
+
+  // 获取执行配置
+  ipcMain.handle('terminal:get-execution-configs', createSimpleHandler(async () =>
+    terminalManagementService.getExecutionConfigs()
+  ))
+
+  // 设置执行配置
+  ipcMain.handle('terminal:set-execution-config', createSimpleHandler((checkId: string, config: any) =>
+    terminalManagementService.setExecutionConfig(checkId, config)
+  ))
+
+  // 执行命令
+  ipcMain.handle('terminal:execute-command', createSimpleHandler(async (command: string, options?: any) =>
+    terminalManagementService.executeCommand(command, options)
+  ))
 }

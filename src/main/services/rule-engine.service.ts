@@ -7,12 +7,13 @@ import * as cron from 'node-cron';
 import { v4 as uuidv4 } from 'uuid';
 import { ruleStorageService } from './rule-storage.service';
 import { ConfigService } from './config-service';
-import { AutomationRule, RuleId, Action, SwitchConfigAction } from '@shared/types/rules';
+import { AutomationRule, RuleId, Action, SwitchConfigAction, CustomCommandAction } from '@shared/types/rules';
 import { logger } from '../utils/logger';
 import { pathManager } from '../utils/path-manager';
 import { logStorageService } from './log-storage.service';
 import { CONFIG_FILES } from '@shared/constants';
 import { BrowserWindow } from 'electron';
+import { terminalManagementService } from './terminal-management-service';
 
 class RuleEngineService {
   private cronJobs = new Map<RuleId, cron.ScheduledTask>();
@@ -68,7 +69,7 @@ class RuleEngineService {
 
       const job = cron.schedule(cronExpression, () => {
         logger.info(`触发规则: "${rule.name}" (ID: ${rule.id})`);
-        this.executeRuleAction(rule);
+        void this.executeRuleAction(rule, 'auto')
       });
 
       this.cronJobs.set(rule.id, job);
@@ -93,37 +94,82 @@ class RuleEngineService {
    * 执行规则定义的动作
    * @param rule 规则对象
    */
-  private async executeRuleAction(rule: AutomationRule): Promise<void> {
-    if (rule.action.type === 'switch-config') {
-      await this.executeSwitchConfigAction(rule);
+  private async executeRuleAction(rule: AutomationRule, trigger: 'auto' | 'manual' = 'auto'): Promise<{ success: boolean; message: string; result?: any }> {
+    try {
+      let message = ''
+      let result: any = undefined
+
+      if (rule.action.type === 'switch-config') {
+        const action = rule.action as SwitchConfigAction
+        result = await this.executeSwitchConfigAction(rule, action)
+        message = `规则 "${rule.name}" 已成功执行，配置已切换。`
+        this.sendNotification('配置自动切换', message)
+      } else if (rule.action.type === 'custom-command') {
+        const action = rule.action as CustomCommandAction
+        result = await this.executeCustomCommandAction(rule, action)
+        message = `规则 "${rule.name}" 命令执行完成。`
+      } else {
+        throw new Error(`未支持的动作类型: ${(rule.action as Action).type}`)
+      }
+
+      await logStorageService.addLog({
+        ruleId: rule.id,
+        ruleName: rule.name,
+        timestamp: new Date().toISOString(),
+        success: true,
+        message
+      })
+
+      return { success: true, message, result }
+    } catch (error) {
+      const errorMessage = `执行规则 "${rule.name}" 失败: ${error instanceof Error ? error.message : '未知错误'}`
+      logger.error(errorMessage)
+      if (trigger === 'manual') {
+        this.sendNotification('规则执行失败', errorMessage)
+      }
+      await logStorageService.addLog({
+        ruleId: rule.id,
+        ruleName: rule.name,
+        timestamp: new Date().toISOString(),
+        success: false,
+        message: errorMessage
+      })
+      return { success: false, message: errorMessage }
     }
-    // 未来可扩展其他动作类型
   }
 
   /**
    * 执行切换配置文件的动作
    * @param rule 规则对象
    */
-  private async executeSwitchConfigAction(rule: AutomationRule): Promise<void> {
-    const { action, id, name } = rule;
-    const successMessage = `规则 "${name}" 已成功执行，配置已切换。`;
-    let errorMessage = `执行规则 "${name}" 失败。`;
-    try {
-      const targetPath = pathManager.getClaudeConfigPath(CONFIG_FILES.SETTINGS);
-      logger.info(`执行切换配置动作: 从 "${action.targetConfigPath}" 到 "${targetPath}"`);
+  private async executeSwitchConfigAction(rule: AutomationRule, action: SwitchConfigAction): Promise<{ targetPath: string }> {
+    const targetPath = pathManager.getClaudeConfigPath(CONFIG_FILES.SETTINGS)
+    logger.info(`执行切换配置动作: 从 "${action.targetConfigPath}" 到 "${targetPath}"`)
 
-      const contentToSwitch = await this.configService.getConfig(action.targetConfigPath);
-      await this.configService.saveConfig(targetPath, contentToSwitch);
+    const contentToSwitch = await this.configService.getConfig(action.targetConfigPath)
+    await this.configService.saveConfig(targetPath, contentToSwitch)
 
-      logger.info(successMessage);
-      this.sendNotification('配置自动切换', successMessage);
-      await logStorageService.addLog({ ruleId: id, ruleName: name, timestamp: new Date().toISOString(), success: true, message: successMessage });
+    return { targetPath }
+  }
 
-    } catch (error) {
-      errorMessage = `执行规则 "${name}" 失败: ${error instanceof Error ? error.message : '未知错误'}`;
-      logger.error(errorMessage);
-      this.sendNotification('配置切换失败', errorMessage);
-      await logStorageService.addLog({ ruleId: id, ruleName: name, timestamp: new Date().toISOString(), success: false, message: errorMessage });
+  /**
+   * 执行自定义命令动作
+   */
+  private async executeCustomCommandAction(rule: AutomationRule, action: CustomCommandAction): Promise<{ stdout: string; stderr: string }> {
+    logger.info(`执行自定义命令动作: ${rule.name} -> ${action.command}`)
+
+    const result = await terminalManagementService.executeCommand(action.command, {
+      workingDirectory: action.workingDirectory,
+      timeout: action.timeout || 10000
+    })
+
+    if (result.error) {
+      throw result.error
+    }
+
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr
     }
   }
 
@@ -143,6 +189,19 @@ class RuleEngineService {
 
   public async getAllRules(): Promise<AutomationRule[]> {
     return await ruleStorageService.readRules();
+  }
+
+  /**
+   * 手动执行规则
+   */
+  public async executeRuleManually(ruleId: RuleId): Promise<{ success: boolean; message: string; result?: any }> {
+    const rules = await this.getAllRules()
+    const rule = rules.find(r => r.id === ruleId)
+    if (!rule) {
+      throw new Error(`规则不存在: ${ruleId}`)
+    }
+
+    return this.executeRuleAction(rule, 'manual')
   }
 
   public async createRule(newRuleData: Omit<AutomationRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<AutomationRule> {

@@ -17,6 +17,9 @@ import SettingsPanel from './components/Settings/SettingsPanel'
 import ProjectManagement from './components/Projects/ProjectManagement'
 import ManagedModePanel from './components/ManagedMode/ManagedModePanel'
 import MCPManagementPanel from './components/MCP/MCPManagementPanel'
+import AgentsManagementPanel from './components/AgentsManagement/AgentsManagementPanel'
+import SkillsManagementPanel from './components/SkillsManagement/SkillsManagementPanel'
+import EnvironmentCheckPanel from './components/EnvironmentCheck/EnvironmentCheckPanel'
 import LoadingScreen from './components/Common/LoadingScreen'
 import ErrorBoundary from './components/Common/ErrorBoundary'
 import NotificationContainer from './components/Common/NotificationContainer'
@@ -159,10 +162,16 @@ const AppContent: React.FC = () => {
         return <StatisticsPanel />
       case 'projects':
         return <ProjectManagement />
-      case 'managed-mode':
-        return <ManagedModePanel />
       case 'mcp-management':
         return <MCPManagementPanel />
+      case 'agents-management':
+        return <AgentsManagementPanel />
+      case 'skills-management':
+        return <SkillsManagementPanel />
+      case 'environment-check':
+        return <EnvironmentCheckPanel />
+      case 'managed-mode':
+        return <ManagedModePanel />
       case 'settings':
         return <SettingsPanel />
       default:

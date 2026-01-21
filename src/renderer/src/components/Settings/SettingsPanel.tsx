@@ -17,7 +17,8 @@ import {
   InfoCircleOutlined,
   CloudDownloadOutlined,
   GlobalOutlined,
-  GithubOutlined
+  GithubOutlined,
+  DesktopOutlined
 } from '@ant-design/icons'
 import { useSettingsStore, useBasicSettings, useEditorSettings, useNotificationSettings, useAdvancedSettings, useWindowSettings, useSettingsActions, useUnsavedChanges } from '../../store/settings-store'
 import { useAppStore } from '../../store/app-store'
@@ -25,6 +26,7 @@ import { useTranslation } from '../../locales/useTranslation'
 import { versionService } from '../../services/version-service'
 import UpdateModal from '../Common/UpdateModal'
 import Logo from '../Common/Logo'
+import TerminalManagement from './TerminalManagement'
 import type { VersionInfo } from '../../services/version-service'
 
 const { Title, Text } = Typography
@@ -811,6 +813,16 @@ const SettingsPanel: React.FC = () => {
                   </span>
                 ),
                 children: advancedSettingsContent
+              },
+              {
+                key: 'terminal',
+                label: (
+                  <span>
+                    <DesktopOutlined />
+                    终端管理
+                  </span>
+                ),
+                children: <TerminalManagement />
               },
               {
                 key: 'about',

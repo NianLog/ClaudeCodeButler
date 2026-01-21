@@ -11,10 +11,13 @@ interface AppStore {
   platform: string
 
   // UI 状态
-  activeMainTab: 'configs' | 'automation' | 'statistics' | 'projects' | 'managed-mode' | 'mcp-management' | 'settings'
+  activeMainTab: 'configs' | 'automation' | 'statistics' | 'projects' | 'mcp-management' | 'agents-management' | 'skills-management' | 'environment-check' | 'managed-mode' | 'settings'
   sidebarCollapsed: boolean
   theme: 'light' | 'dark' | 'auto'
   language: 'zh-CN' | 'en-US'
+  expandedMenuGroups: {
+    advanced: boolean  // 高级功能分组
+  }
 
   // 通知
   notifications: Array<{
@@ -26,8 +29,9 @@ interface AppStore {
   }>
 
   // 操作
-  setActiveMainTab: (tab: 'configs' | 'automation' | 'statistics' | 'projects' | 'managed-mode' | 'mcp-management' | 'settings') => void
+  setActiveMainTab: (tab: 'configs' | 'automation' | 'statistics' | 'projects' | 'mcp-management' | 'agents-management' | 'skills-management' | 'environment-check' | 'managed-mode' | 'settings') => void
   toggleSidebar: () => void
+  toggleMenuGroup: (group: 'advanced') => void
   setTheme: (theme: 'light' | 'dark' | 'auto') => void
   setLanguage: (language: 'zh-CN' | 'en-US') => void
   addNotification: (notification: {
@@ -50,11 +54,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
   sidebarCollapsed: false,
   theme: 'auto',
   language: 'zh-CN',
+  expandedMenuGroups: { advanced: true },
   notifications: [],
 
   // 操作
   setActiveMainTab: (tab) => set({ activeMainTab: tab }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  toggleMenuGroup: (group) => set((state) => ({
+    expandedMenuGroups: {
+      ...state.expandedMenuGroups,
+      [group]: !state.expandedMenuGroups[group]
+    }
+  })),
   setTheme: (theme) => set({ theme }),
   setLanguage: (language) => set({ language }),
 

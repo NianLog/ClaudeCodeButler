@@ -123,6 +123,7 @@ class ClaudeCodeAnalyticsService {
   private cache: ClaudeCodeAnalytics | null = null
   private cacheExpiry: number = 5 * 60 * 1000 // 5分钟缓存
   private lastCacheTime: number = 0
+  private analysisConcurrency: number = 4
 
   constructor() {
     // 获取Claude项目目录路径
@@ -201,8 +202,7 @@ class ClaudeCodeAnalyticsService {
         const jsonlFiles = await this.getJsonlFiles(projectDir)
         logger.info(`项目 ${path.basename(projectDir)} 有 ${jsonlFiles.length} 个JSONL文件`)
 
-        // 分析每个JSONL文件
-        for (const jsonlFile of jsonlFiles) {
+        await this.processFilesWithConcurrency(jsonlFiles, async (jsonlFile) => {
           try {
             await this.analyzeJsonlFile(
               jsonlFile,
@@ -214,7 +214,7 @@ class ClaudeCodeAnalyticsService {
             // 单个文件失败不影响整体分析
             logger.warn(`分析文件失败: ${jsonlFile}`, error)
           }
-        }
+        })
       } catch (error) {
         logger.warn(`分析项目目录失败: ${projectDir}`, error)
       }
@@ -314,12 +314,17 @@ class ClaudeCodeAnalyticsService {
     projectStatsMap: Map<string, ProjectUsageStats>,
     sessionStatsMap: Map<string, SessionStats>
   ): Promise<void> {
+    const safePath = await this.createTemporaryCopy(filePath)
+    if (!safePath) {
+      return
+    }
+
     return new Promise((resolve, reject) => {
       let fileStream: fs.ReadStream | null = null
 
       try {
         // 创建只读文件流
-        fileStream = fs.createReadStream(filePath, {
+        fileStream = fs.createReadStream(safePath, {
           encoding: 'utf8',
           flags: 'r', // 只读模式
           autoClose: true
@@ -383,7 +388,59 @@ class ClaudeCodeAnalyticsService {
         logger.error(`创建文件流失败: ${filePath}`, error)
         reject(error)
       }
+    }).finally(async () => {
+      await this.removeTemporaryCopy(safePath)
     })
+  }
+
+  /**
+   * 创建临时拷贝，避免占用主文件
+   */
+  private async createTemporaryCopy(filePath: string): Promise<string | null> {
+    try {
+      const tempDir = path.join(os.tmpdir(), 'claude-codebutler', 'analytics')
+      await fs.promises.mkdir(tempDir, { recursive: true })
+      const tempPath = path.join(
+        tempDir,
+        `analytics-${Date.now()}-${Math.random().toString(16).slice(2)}.jsonl`
+      )
+      await fs.promises.copyFile(filePath, tempPath)
+      return tempPath
+    } catch (error) {
+      logger.warn(`创建临时拷贝失败，跳过文件: ${filePath}`, error)
+      return null
+    }
+  }
+
+  /**
+   * 清理临时拷贝
+   */
+  private async removeTemporaryCopy(tempPath: string | null): Promise<void> {
+    if (!tempPath) return
+    try {
+      await fs.promises.rm(tempPath, { force: true })
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * 并发处理文件
+   */
+  private async processFilesWithConcurrency(
+    files: string[],
+    handler: (file: string) => Promise<void>
+  ): Promise<void> {
+    const queue = [...files]
+    const workers = Array.from({ length: this.analysisConcurrency }).map(async () => {
+      while (queue.length > 0) {
+        const file = queue.shift()
+        if (!file) return
+        await handler(file)
+      }
+    })
+
+    await Promise.all(workers)
   }
 
   /**

@@ -22,6 +22,30 @@ import type {
   MCPServerFormData,
   ClaudeConfig
 } from '@shared/types/mcp'
+import type {
+  AgentFile,
+  AgentFormData,
+  AgentImportOptions
+} from '@shared/types/agents'
+import type {
+  SkillDirectory,
+  SkillFormData,
+  SkillImportOptions
+} from '@shared/types/skills'
+import type {
+  EnvironmentCheckResult,
+  CustomEnvironmentCheck,
+  CustomCheckFormData,
+  EnvironmentCheckSummary,
+  PredefinedCheckType,
+  ClaudeCodeVersionInfo
+} from '@shared/types/environment'
+import type {
+  TerminalConfig,
+  TerminalSettings,
+  TerminalExecutionConfig,
+  TerminalType
+} from '@shared/types/terminal'
 
 /**
  * 配置管理 API
@@ -433,6 +457,184 @@ interface MCPAPI {
   }>
 }
 
+/**
+ * 子Agent管理 API
+ */
+interface AgentsAPI {
+  scan: () => Promise<{
+    success: boolean
+    data?: AgentFile[]
+    error?: string
+  }>
+  get: (agentId: string) => Promise<{
+    success: boolean
+    data?: AgentFile
+    error?: string
+  }>
+  add: (formData: AgentFormData) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  delete: (agentId: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  import: (sourceFilePath: string, options?: AgentImportOptions) => Promise<{
+    success: boolean
+    agentId?: string
+    error?: string
+  }>
+  importContent: (content: string, options?: AgentImportOptions) => Promise<{
+    success: boolean
+    agentId?: string
+    error?: string
+  }>
+  batchImport: (sourceFilePaths: string[], options?: AgentImportOptions) => Promise<{
+    success: boolean
+    imported?: string[]
+    errors?: Array<{ path: string; error: string }>
+  }>
+  batchImportContent: (contents: Array<{ name?: string; content: string }>, options?: AgentImportOptions) => Promise<{
+    success: boolean
+    imported?: string[]
+    errors?: Array<{ path: string; error: string }>
+  }>
+}
+
+/**
+ * Skills管理 API
+ */
+interface SkillsAPI {
+  scan: () => Promise<{
+    success: boolean
+    data?: SkillDirectory[]
+    error?: string
+  }>
+  get: (skillId: string) => Promise<{
+    success: boolean
+    data?: SkillDirectory
+    error?: string
+  }>
+  add: (formData: SkillFormData) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  delete: (skillId: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  import: (sourceDirPath: string, options?: SkillImportOptions) => Promise<{
+    success: boolean
+    skillId?: string
+    error?: string
+  }>
+  importFiles: (payload: { rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> }, options?: SkillImportOptions) => Promise<{
+    success: boolean
+    skillId?: string
+    error?: string
+  }>
+  batchImport: (sourceDirPaths: string[], options?: SkillImportOptions) => Promise<{
+    success: boolean
+    imported?: string[]
+    errors?: Array<{ path: string; error: string }>
+  }>
+  batchImportFiles: (payloads: Array<{ rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> }>, options?: SkillImportOptions) => Promise<{
+    success: boolean
+    imported?: string[]
+    errors?: Array<{ path: string; error: string }>
+  }>
+}
+
+/**
+ * 环境检测 API
+ */
+interface EnvironmentAPI {
+  checkAllPredefined: () => Promise<{
+    success: boolean
+    data?: EnvironmentCheckResult[]
+    error?: string
+  }>
+  checkPredefined: (checkType: PredefinedCheckType) => Promise<{
+    success: boolean
+    data?: EnvironmentCheckResult
+    error?: string
+  }>
+  checkCustom: (customCheck: CustomEnvironmentCheck) => Promise<{
+    success: boolean
+    data?: EnvironmentCheckResult
+    error?: string
+  }>
+  getCustomChecks: () => Promise<{
+    success: boolean
+    data?: CustomEnvironmentCheck[]
+    error?: string
+  }>
+  addCustomCheck: (formData: CustomCheckFormData) => Promise<{
+    success: boolean
+    checkId?: string
+    error?: string
+  }>
+  updateCustomCheck: (checkId: string, formData: CustomCheckFormData) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  deleteCustomCheck: (checkId: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  getClaudeCodeVersion: () => Promise<{
+    success: boolean
+    data?: ClaudeCodeVersionInfo
+    error?: string
+  }>
+  calculateSummary: (results: EnvironmentCheckResult[]) => Promise<{
+    success: boolean
+    data?: EnvironmentCheckSummary
+    error?: string
+  }>
+}
+
+/**
+ * 终端管理 API
+ */
+interface TerminalAPI {
+  getTerminals: () => Promise<{
+    success: boolean
+    data?: TerminalConfig[]
+    error?: string
+  }>
+  upsertTerminal: (config: TerminalConfig) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  deleteTerminal: (type: TerminalType) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  setDefault: (type: TerminalType) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  getExecutionConfigs: () => Promise<{
+    success: boolean
+    data?: TerminalExecutionConfig[]
+    error?: string
+  }>
+  setExecutionConfig: (checkId: string, config: Omit<TerminalExecutionConfig, 'id'>) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  executeCommand: (command: string, options?: {
+    terminalType?: TerminalType
+    workingDirectory?: string
+    timeout?: number
+  }) => Promise<{
+    success: boolean
+    data?: { stdout: string; stderr: string }
+    error?: string
+  }>
+}
+
 // 移除安全管理API
 
 /**
@@ -454,6 +656,10 @@ export interface ElectronAPI {
   settings: SettingsAPI
   managedMode: ManagedModeAPI
   mcp: MCPAPI
+  agents: AgentsAPI
+  skills: SkillsAPI
+  environment: EnvironmentAPI
+  terminal: TerminalAPI
   // 移除安全API
 }
 
@@ -693,6 +899,81 @@ const mcpAPI: MCPAPI = {
   saveClaudeConfig: (config: ClaudeConfig) => ipcRenderer.invoke('mcp:save-claude-config', config)
 }
 
+/**
+ * 创建Agents API对象
+ */
+const agentsAPI: AgentsAPI = {
+  scan: () => ipcRenderer.invoke('agents:scan'),
+  get: (agentId: string) => ipcRenderer.invoke('agents:get', agentId),
+  add: (formData: AgentFormData) => ipcRenderer.invoke('agents:add', formData),
+  delete: (agentId: string) => ipcRenderer.invoke('agents:delete', agentId),
+  import: (sourceFilePath: string, options?: AgentImportOptions) =>
+    ipcRenderer.invoke('agents:import', sourceFilePath, options),
+  importContent: (content: string, options?: AgentImportOptions) =>
+    ipcRenderer.invoke('agents:import-content', content, options),
+  batchImport: (sourceFilePaths: string[], options?: AgentImportOptions) =>
+    ipcRenderer.invoke('agents:batch-import', sourceFilePaths, options),
+  batchImportContent: (contents: Array<{ name?: string; content: string }>, options?: AgentImportOptions) =>
+    ipcRenderer.invoke('agents:batch-import-content', contents, options)
+}
+
+/**
+ * 创建Skills API对象
+ */
+const skillsAPI: SkillsAPI = {
+  scan: () => ipcRenderer.invoke('skills:scan'),
+  get: (skillId: string) => ipcRenderer.invoke('skills:get', skillId),
+  add: (formData: SkillFormData) => ipcRenderer.invoke('skills:add', formData),
+  delete: (skillId: string) => ipcRenderer.invoke('skills:delete', skillId),
+  import: (sourceDirPath: string, options?: SkillImportOptions) =>
+    ipcRenderer.invoke('skills:import', sourceDirPath, options),
+  importFiles: (payload: { rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> }, options?: SkillImportOptions) =>
+    ipcRenderer.invoke('skills:import-files', payload, options),
+  batchImport: (sourceDirPaths: string[], options?: SkillImportOptions) =>
+    ipcRenderer.invoke('skills:batch-import', sourceDirPaths, options),
+  batchImportFiles: (payloads: Array<{ rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> }>, options?: SkillImportOptions) =>
+    ipcRenderer.invoke('skills:batch-import-files', payloads, options)
+}
+
+/**
+ * 创建Environment API对象
+ */
+const environmentAPI: EnvironmentAPI = {
+  checkAllPredefined: () => ipcRenderer.invoke('environment:check-all-predefined'),
+  checkPredefined: (checkType: PredefinedCheckType) =>
+    ipcRenderer.invoke('environment:check-predefined', checkType),
+  checkCustom: (customCheck: CustomEnvironmentCheck) =>
+    ipcRenderer.invoke('environment:check-custom', customCheck),
+  getCustomChecks: () => ipcRenderer.invoke('environment:get-custom-checks'),
+  addCustomCheck: (formData: CustomCheckFormData) =>
+    ipcRenderer.invoke('environment:add-custom-check', formData),
+  updateCustomCheck: (checkId: string, formData: CustomCheckFormData) =>
+    ipcRenderer.invoke('environment:update-custom-check', { checkId, formData }),
+  deleteCustomCheck: (checkId: string) =>
+    ipcRenderer.invoke('environment:delete-custom-check', checkId),
+  getClaudeCodeVersion: () => ipcRenderer.invoke('environment:get-claude-code-version'),
+  calculateSummary: (results: EnvironmentCheckResult[]) =>
+    ipcRenderer.invoke('environment:calculate-summary', results)
+}
+
+/**
+ * 创建Terminal API对象
+ */
+const terminalAPI: TerminalAPI = {
+  getTerminals: () => ipcRenderer.invoke('terminal:get-terminals'),
+  upsertTerminal: (config: TerminalConfig) => ipcRenderer.invoke('terminal:upsert-terminal', config),
+  deleteTerminal: (type: TerminalType) => ipcRenderer.invoke('terminal:delete-terminal', type),
+  setDefault: (type: TerminalType) => ipcRenderer.invoke('terminal:set-default', type),
+  getExecutionConfigs: () => ipcRenderer.invoke('terminal:get-execution-configs'),
+  setExecutionConfig: (checkId: string, config: Omit<TerminalExecutionConfig, 'id'>) =>
+    ipcRenderer.invoke('terminal:set-execution-config', checkId, config),
+  executeCommand: (command: string, options?: {
+    terminalType?: TerminalType
+    workingDirectory?: string
+    timeout?: number
+  }) => ipcRenderer.invoke('terminal:execute-command', command, options)
+}
+
 // 移除安全API实现
 
 // 暴露安全的 API 到渲染进程
@@ -711,7 +992,11 @@ const electronAPI: ElectronAPI = {
   projectManagement: projectManagementAPI,
   settings: settingsAPI,
   managedMode: managedModeAPI,
-  mcp: mcpAPI
+  mcp: mcpAPI,
+  agents: agentsAPI,
+  skills: skillsAPI,
+  environment: environmentAPI,
+  terminal: terminalAPI
   // 移除安全API
 }
 

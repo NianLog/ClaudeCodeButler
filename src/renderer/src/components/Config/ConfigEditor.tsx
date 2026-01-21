@@ -38,8 +38,7 @@ import { useConfigValidationStore } from '../../store/config-validation-store'
 import { useMessage } from '../../hooks/useMessage'
 import type { ConfigFile, ConfigType } from '@shared/types'
 import CodeEditor from '../Common/CodeEditor'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 
 const { TextArea } = Input
 const { Option } = Select
@@ -552,9 +551,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           <div className="config-preview">
             {editorLanguage === 'markdown' ? (
               <div className="markdown-preview-modal">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {content || '内容为空'}
-                </ReactMarkdown>
+                <MarkdownRenderer content={content || '内容为空'} />
               </div>
             ) : (
               (() => {

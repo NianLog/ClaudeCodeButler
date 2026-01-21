@@ -1,0 +1,97 @@
+/**
+ * 终端管理组件样式
+ */
+
+.terminal-management-container {
+  padding: 32px;
+  height: 100%;
+  overflow: auto;
+  background: #fafafa;
+}
+
+.terminal-management-card {
+  height: 100%;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03),
+              0 1px 6px -1px rgba(0, 0, 0, 0.02),
+              0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #ffffff;
+}
+
+.terminal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.terminal-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.terminal-table thead {
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.terminal-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+}
+
+.terminal-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.terminal-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+/* 默认终端行高亮 */
+.terminal-table tr.terminal-row-default {
+  background: linear-gradient(90deg, #f6ffed 0%, #ffffff 100%);
+  border-left: 3px solid #52c41a;
+}
+
+.terminal-table tr.terminal-row-default:hover {
+  background: linear-gradient(90deg, #f6ffed 0%, #fafafa 100%);
+}
+
+/* 普通终端行 */
+.terminal-table tr.terminal-row {
+  border-left: 3px solid transparent;
+}
+
+/* 表格单元格边框优化 */
+.terminal-table td {
+  transition: background-color 0.2s ease;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .terminal-management-container {
+    padding: 16px;
+  }
+
+  .terminal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .terminal-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

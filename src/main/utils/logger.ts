@@ -56,11 +56,63 @@ class Logger {
   }
 
   /**
+   * 安全地序列化数据
+   * 处理循环引用、BigInt、特殊对象等
+   */
+  private safeStringify(data: any): string {
+    const seen = new WeakSet()
+
+    const stringify = (obj: any): string => {
+      try {
+        // 处理Error对象
+        if (obj instanceof Error) {
+          return JSON.stringify({
+            name: obj.name,
+            message: obj.message,
+            stack: obj.stack
+          })
+        }
+
+        // 处理null/undefined
+        if (obj === null || obj === undefined) {
+          return ''
+        }
+
+        // 处理基本类型
+        if (typeof obj !== 'object') {
+          return String(obj)
+        }
+
+        // 处理对象，使用reducer处理循环引用
+        return JSON.stringify(obj, (key, value) => {
+          // 处理BigInt
+          if (typeof value === 'bigint') {
+            return value.toString()
+          }
+          // 处理循环引用
+          if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+              return '[Circular]'
+            }
+            seen.add(value)
+          }
+          return value
+        })
+      } catch (error) {
+        // 序列化完全失败，返回对象toString
+        return String(obj)
+      }
+    }
+
+    return stringify(data)
+  }
+
+  /**
    * 格式化日志消息
    */
   private formatMessage(level: string, message: string, data?: any): string {
     const timestamp = new Date().toISOString()
-    const dataStr = data ? ` ${JSON.stringify(data)}` : ''
+    const dataStr = data ? ` ${this.safeStringify(data)}` : ''
     return `[${timestamp}] [${level}] ${message}${dataStr}`
   }
 
@@ -86,24 +138,43 @@ class Logger {
 
     const formattedMessage = this.formatMessage(levelName, message, data)
 
-    // 控制台输出
+    // 控制台输出（Windows下使用英文级别标识避免乱码）
+    const consoleLevelName = process.platform === 'win32'
+      ? this.getEnglishLevelName(levelName)
+      : levelName
+
+    const consoleMessage = this.formatMessage(consoleLevelName, message, data)
+
     switch (level) {
       case LogLevel.DEBUG:
-        console.debug(formattedMessage, data || '')
+        console.debug(consoleMessage, data || '')
         break
       case LogLevel.INFO:
-        console.info(formattedMessage, data || '')
+        console.info(consoleMessage, data || '')
         break
       case LogLevel.WARN:
-        console.warn(formattedMessage, data || '')
+        console.warn(consoleMessage, data || '')
         break
       case LogLevel.ERROR:
-        console.error(formattedMessage, data || '')
+        console.error(consoleMessage, data || '')
         break
     }
 
-    // 文件输出
+    // 文件输出（保持中文）
     this.writeToFile(levelName, message, data)
+  }
+
+  /**
+   * 获取英文日志级别名称（Windows控制台使用）
+   */
+  private getEnglishLevelName(levelName: string): string {
+    const levelMap: Record<string, string> = {
+      'DEBUG': 'DEBUG',
+      'INFO': 'INFO',
+      'WARN': 'WARNING',
+      'ERROR': 'ERROR'
+    }
+    return levelMap[levelName] || levelName
   }
 
   /**

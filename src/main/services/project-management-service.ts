@@ -15,6 +15,8 @@ import { logger } from '../utils/logger'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { readJsonlFile, getJsonlStats, readFirstJsonlLine } from '../utils/jsonl-reader'
+import { terminalManagementService } from './terminal-management-service'
+import type { TerminalConfig, TerminalType } from '@shared/types/terminal'
 
 const execAsync = promisify(exec)
 
@@ -84,6 +86,7 @@ export interface SessionConversation {
  */
 class ProjectManagementService {
   private claudeProjectsDir: string
+  private scanConcurrency: number = 4
 
   constructor() {
     this.claudeProjectsDir = path.join(os.homedir(), '.claude', 'projects')
@@ -113,7 +116,7 @@ class ProjectManagementService {
 
       // 解析每个项目
       const projects: ClaudeProject[] = []
-      for (const projectDir of projectDirs) {
+      await this.processWithConcurrency(projectDirs, async (projectDir) => {
         try {
           const project = await this.parseProject(projectDir)
           if (project) {
@@ -122,7 +125,7 @@ class ProjectManagementService {
         } catch (error) {
           logger.warn(`解析项目失败: ${projectDir}`, error)
         }
-      }
+      })
 
       // 按最后使用时间排序
       projects.sort((a, b) => {
@@ -224,9 +227,10 @@ class ProjectManagementService {
       lastTimestamp: string | null
     }
 
-    const result = await getJsonlStats<any, Stats>(
-      filePath,
-      (message, stats) => {
+    const result = await this.withTemporaryCopy(filePath, (safePath) =>
+      getJsonlStats<any, Stats>(
+        safePath,
+        (message, stats) => {
         stats.messageCount++
 
         if (message.timestamp) {
@@ -241,15 +245,26 @@ class ProjectManagementService {
           stats.totalTokens += (usage.input_tokens || 0) + (usage.output_tokens || 0)
         }
 
-        return stats
-      },
-      {
+          return stats
+        },
+        {
+          messageCount: 0,
+          totalTokens: 0,
+          firstTimestamp: null,
+          lastTimestamp: null
+        }
+      )
+    )
+
+    if (!result) {
+      const now = new Date().toISOString()
+      return {
         messageCount: 0,
         totalTokens: 0,
-        firstTimestamp: null,
-        lastTimestamp: null
+        firstTimestamp: now,
+        lastTimestamp: now
       }
-    )
+    }
 
     const now = new Date().toISOString()
     return {
@@ -269,7 +284,9 @@ class ProjectManagementService {
       if (jsonlFiles.length === 0) return null
 
       // 读取第一个文件的第一行获取cwd
-      const firstLine = await readFirstJsonlLine<any>(jsonlFiles[0])
+      const firstLine = await this.withTemporaryCopy(jsonlFiles[0], (safePath) =>
+        readFirstJsonlLine<any>(safePath)
+      )
       return firstLine?.cwd || null
     } catch (error) {
       return null
@@ -292,7 +309,7 @@ class ProjectManagementService {
       const jsonlFiles = await this.getJsonlFiles(projectDir)
       const sessions: ProjectSession[] = []
 
-      for (const jsonlFile of jsonlFiles) {
+      await this.processWithConcurrency(jsonlFiles, async (jsonlFile) => {
         try {
           const session = await this.parseSession(projectId, jsonlFile)
           if (session) {
@@ -301,7 +318,7 @@ class ProjectManagementService {
         } catch (error) {
           logger.warn(`解析会话失败: ${jsonlFile}`, error)
         }
-      }
+      })
 
       // 按开始时间倒序排序
       sessions.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
@@ -329,9 +346,10 @@ class ProjectManagementService {
       summary: string | null
     }
 
-    const result = await getJsonlStats<any, SessionInfo>(
-      jsonlFile,
-      (message, info) => {
+    const result = await this.withTemporaryCopy(jsonlFile, (safePath) =>
+      getJsonlStats<any, SessionInfo>(
+        safePath,
+        (message, info) => {
         info.messageCount++
 
         // 提取会话信息
@@ -362,19 +380,24 @@ class ProjectManagementService {
           info.totalTokens += (usage.input_tokens || 0) + (usage.output_tokens || 0)
         }
 
-        return info
-      },
-      {
-        sessionId: null,
-        projectPath: null,
-        startTime: null,
-        endTime: null,
-        messageCount: 0,
-        totalTokens: 0,
-        model: null,
-        summary: null
-      }
+          return info
+        },
+        {
+          sessionId: null,
+          projectPath: null,
+          startTime: null,
+          endTime: null,
+          messageCount: 0,
+          totalTokens: 0,
+          model: null,
+          summary: null
+        }
+      )
     )
+
+    if (!result) {
+      return null
+    }
 
     // 从文件名生成sessionId(如果没有找到)
     const sessionId = result.sessionId || path.basename(jsonlFile, '.jsonl')
@@ -434,11 +457,23 @@ class ProjectManagementService {
     jsonlFile: string,
     limit?: number
   ): Promise<SessionConversation | null> {
-    const result = await readJsonlFile<any>(
-      jsonlFile,
-      undefined,
-      { limit, skipErrors: true }
+    const result = await this.withTemporaryCopy(jsonlFile, (safePath) =>
+      readJsonlFile<any>(
+        safePath,
+        undefined,
+        { limit, skipErrors: true }
+      )
     )
+
+    if (!result) {
+      logger.error(`读取会话文件失败: ${jsonlFile}`)
+      return {
+        sessionId,
+        messages: [],
+        totalMessages: 0,
+        totalTokens: 0
+      }
+    }
 
     if (!result.success) {
       logger.error(`读取会话文件失败: ${jsonlFile}`, result.error)
@@ -482,6 +517,56 @@ class ProjectManagementService {
   }
 
   /**
+   * 临时拷贝读取，避免占用主文件
+   */
+  private async withTemporaryCopy<T>(
+    filePath: string,
+    reader: (safePath: string) => Promise<T>
+  ): Promise<T | null> {
+    let tempPath: string | null = null
+    try {
+      const tempDir = path.join(os.tmpdir(), 'claude-codebutler', 'projects')
+      await fs.promises.mkdir(tempDir, { recursive: true })
+      tempPath = path.join(
+        tempDir,
+        `project-${Date.now()}-${Math.random().toString(16).slice(2)}.jsonl`
+      )
+      await fs.promises.copyFile(filePath, tempPath)
+      return await reader(tempPath)
+    } catch (error) {
+      logger.warn(`创建临时拷贝失败，跳过文件: ${filePath}`, error)
+      return null
+    } finally {
+      if (tempPath) {
+        try {
+          await fs.promises.rm(tempPath, { force: true })
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  /**
+   * 并发处理
+   */
+  private async processWithConcurrency<T>(
+    items: T[],
+    handler: (item: T) => Promise<void>
+  ): Promise<void> {
+    const queue = [...items]
+    const workers = Array.from({ length: this.scanConcurrency }).map(async () => {
+      while (queue.length > 0) {
+        const item = queue.shift()
+        if (!item) return
+        await handler(item)
+      }
+    })
+
+    await Promise.all(workers)
+  }
+
+  /**
    * 在终端中继续指定会话
    * @param projectId 项目ID
    * @param sessionId 会话ID
@@ -493,11 +578,18 @@ class ProjectManagementService {
     projectId: string,
     sessionId: string,
     projectPath?: string,
-    terminal: string = 'gitbash',
+    terminal?: string,
     asAdmin: boolean = false
   ): Promise<{ success: boolean; message: string; command?: string }> {
     try {
-      logger.info(`尝试继续会话: ${projectId}/${sessionId}, 终端: ${terminal}, 管理员模式: ${asAdmin}`)
+      const resolvedTerminalType = this.normalizeTerminalType(terminal)
+      const defaultTerminal = await terminalManagementService.getDefaultTerminalType()
+      const terminalType = resolvedTerminalType || defaultTerminal
+      const terminalConfig = terminalType !== 'auto'
+        ? await terminalManagementService.getTerminalConfig(terminalType)
+        : null
+
+      logger.info(`尝试继续会话: ${projectId}/${sessionId}, 终端: ${terminalType}, 管理员模式: ${asAdmin}`)
 
       // 检查claude命令是否可用
       const claudeAvailable = await this.checkClaudeAvailable()
@@ -509,12 +601,8 @@ class ProjectManagementService {
       }
 
       // 构建Claude命令
-      let claudeCommand = `claude --resume ${sessionId}`
-
-      // 如果有项目路径,切换到项目目录
-      if (projectPath && fs.existsSync(projectPath)) {
-        claudeCommand = `cd "${projectPath}" && ${claudeCommand}`
-      }
+      const claudeCommand = `claude --resume ${sessionId}`
+      const workingDirectory = projectPath && fs.existsSync(projectPath) ? projectPath : undefined
 
       logger.info(`Claude命令: ${claudeCommand}`)
 
@@ -524,13 +612,21 @@ class ProjectManagementService {
 
       if (platform === 'win32') {
         // Windows平台
-        terminalCommand = await this.buildWindowsTerminalCommand(claudeCommand, terminal, asAdmin)
+        terminalCommand = await this.buildWindowsTerminalCommand(
+          claudeCommand,
+          terminalType,
+          terminalConfig,
+          workingDirectory,
+          asAdmin
+        )
       } else if (platform === 'darwin') {
         // macOS: 使用 osascript 打开新的 Terminal 窗口
-        terminalCommand = `osascript -e 'tell application "Terminal" to do script "${claudeCommand}"'`
+        const cdPrefix = workingDirectory ? `cd \"${workingDirectory.replace(/"/g, '\\"')}\"; ` : ''
+        terminalCommand = `osascript -e 'tell application "Terminal" to do script "${cdPrefix}${claudeCommand}"'`
       } else {
         // Linux: 使用 gnome-terminal 或 xterm
-        terminalCommand = `gnome-terminal -- bash -c "${claudeCommand}; exec bash" || xterm -e "${claudeCommand}"`
+        const cdPrefix = workingDirectory ? `cd \"${workingDirectory.replace(/"/g, '\\"')}\"; ` : ''
+        terminalCommand = `gnome-terminal -- bash -c "${cdPrefix}${claudeCommand}; exec bash" || xterm -e "${cdPrefix}${claudeCommand}"`
       }
 
       logger.info(`终端命令: ${terminalCommand}`)
@@ -538,7 +634,7 @@ class ProjectManagementService {
 
       return {
         success: true,
-        message: `已在新${this.getTerminalDisplayName(terminal)}窗口中打开会话${asAdmin ? '(管理员模式)' : ''}`,
+        message: `已在新${this.getTerminalDisplayName(terminalType)}窗口中打开会话${asAdmin ? '(管理员模式)' : ''}`,
         command: claudeCommand
       }
     } catch (error) {
@@ -555,53 +651,37 @@ class ProjectManagementService {
    */
   private async buildWindowsTerminalCommand(
     claudeCommand: string,
-    terminal: string,
+    terminalType: TerminalType,
+    terminalConfig: TerminalConfig | null,
+    workingDirectory: string | undefined,
     asAdmin: boolean
   ): Promise<string> {
     let terminalCommand: string
+    const safeWorkingDir = workingDirectory ? workingDirectory.replace(/"/g, '\\"') : ''
 
-    switch (terminal) {
-      case 'gitbash': {
-        // Git Bash路径检测
-        const gitBashPaths = [
-          'C:\\Program Files\\Git\\bin\\bash.exe',
-          'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
-          path.join(os.homedir(), 'scoop', 'apps', 'git', 'current', 'bin', 'bash.exe')
-        ]
-
-        let gitBashPath = gitBashPaths.find(p => fs.existsSync(p))
-
+    switch (terminalType) {
+      case 'git-bash': {
+        const gitBashPath = terminalConfig?.path
         if (!gitBashPath) {
-          // 尝试从PATH环境变量中查找
-          try {
-            const result = await execAsync('where bash.exe', { timeout: 3000 })
-            const paths = result.stdout.trim().split('\n')
-            gitBashPath = paths.find(p => p.includes('Git'))
-          } catch (error) {
-            logger.warn('未找到Git Bash,回退到CMD')
-            terminal = 'cmd'
-          }
+          logger.warn('未配置Git Bash路径,回退到CMD')
+          return await this.buildWindowsTerminalCommand(claudeCommand, 'cmd', null, workingDirectory, asAdmin)
         }
-
-        if (gitBashPath) {
-          // Git Bash需要转换命令格式
-          const bashCommand = claudeCommand.replace(/\\/g, '/').replace(/^cd "([^"]+)"/, 'cd "$1"')
-
-          if (asAdmin) {
-            // 管理员模式: 使用PowerShell Start-Process
-            terminalCommand = `powershell -Command "Start-Process -FilePath '${gitBashPath}' -ArgumentList '-c','${bashCommand.replace(/'/g, "''")}' -Verb RunAs"`
-          } else {
-            terminalCommand = `start "" "${gitBashPath}" -c "${bashCommand}"`
-          }
-          break
+        const bashCwd = workingDirectory ? this.toGitBashPath(workingDirectory) : null
+        const bashCd = bashCwd ? `cd '${bashCwd}' && ` : ''
+        const bashCommand = `${bashCd}${claudeCommand}`
+        if (asAdmin) {
+          terminalCommand = `powershell -Command "Start-Process -FilePath '${gitBashPath}' -ArgumentList '-c','${bashCommand.replace(/'/g, "''")}' -Verb RunAs"`
+        } else {
+          terminalCommand = `start "" "${gitBashPath}" -c "${bashCommand}"`
         }
-        // 如果找不到Git Bash,继续执行下面的CMD逻辑
+        break
       }
 
       case 'powershell': {
-        // PowerShell
-        const psCommand = claudeCommand.replace(/&&/g, ';')
-
+        const cdPrefix = workingDirectory
+          ? `Set-Location -LiteralPath '${workingDirectory.replace(/'/g, "''")}'; `
+          : ''
+        const psCommand = `${cdPrefix}${claudeCommand}`.replace(/&&/g, ';')
         if (asAdmin) {
           terminalCommand = `powershell -Command "Start-Process powershell -ArgumentList '-NoExit','-Command','${psCommand.replace(/'/g, "''")}' -Verb RunAs"`
         } else {
@@ -610,14 +690,34 @@ class ProjectManagementService {
         break
       }
 
+      case 'wsl': {
+        const cdPrefix = workingDirectory ? `--cd "${safeWorkingDir}" ` : ''
+        const wslArgs = terminalConfig?.args?.join(' ') || ''
+        const wslCommand = `wsl.exe ${wslArgs} ${cdPrefix}-- bash -lc "${claudeCommand.replace(/"/g, '\\"')}"`
+        terminalCommand = asAdmin
+          ? `powershell -Command "Start-Process -FilePath 'wsl.exe' -ArgumentList '${wslArgs} ${cdPrefix}-- bash -lc \'${claudeCommand.replace(/'/g, "''")}\'' -Verb RunAs"`
+          : `start "" ${wslCommand}`
+        break
+      }
+
       case 'cmd':
       default: {
-        // CMD (默认)
+        if (terminalConfig?.path && terminalType !== 'cmd' && terminalType !== 'auto') {
+          const args = terminalConfig?.args?.join(' ') || ''
+          const startPrefix = workingDirectory ? `/D "${safeWorkingDir}" ` : ''
+          if (asAdmin) {
+            terminalCommand = `powershell -Command "Start-Process -FilePath '${terminalConfig.path}' -ArgumentList '${args} ${claudeCommand.replace(/'/g, "''")}' -Verb RunAs"`
+          } else {
+            terminalCommand = `start "" ${startPrefix}"${terminalConfig.path}" ${args} ${claudeCommand}`
+          }
+          break
+        }
+
+        const startPrefix = workingDirectory ? `/D "${safeWorkingDir}" ` : ''
         if (asAdmin) {
-          // 管理员模式: 使用PowerShell Start-Process
           terminalCommand = `powershell -Command "Start-Process cmd -ArgumentList '/K','${claudeCommand.replace(/'/g, "''")}' -Verb RunAs"`
         } else {
-          terminalCommand = `start cmd /K "${claudeCommand}"`
+          terminalCommand = `start "" ${startPrefix}cmd /K "${claudeCommand}"`
         }
         break
       }
@@ -629,17 +729,40 @@ class ProjectManagementService {
   /**
    * 获取终端类型的显示名称
    */
-  private getTerminalDisplayName(terminal: string): string {
+  private getTerminalDisplayName(terminal: TerminalType): string {
     switch (terminal) {
-      case 'gitbash':
+      case 'git-bash':
         return 'Git Bash'
       case 'powershell':
         return 'PowerShell'
       case 'cmd':
         return 'CMD'
+      case 'wsl':
+        return 'WSL'
+      case 'auto':
+        return '系统默认终端'
       default:
         return terminal
     }
+  }
+
+  private normalizeTerminalType(terminal?: string): TerminalType | null {
+    if (!terminal) return null
+    if (terminal === 'gitbash') return 'git-bash'
+    return terminal as TerminalType
+  }
+
+  private toGitBashPath(inputPath: string): string {
+    const normalized = inputPath.replace(/\\/g, '/')
+    if (/^[A-Za-z]:\//.test(normalized)) {
+      const driveLetter = normalized[0].toLowerCase()
+      const rest = normalized.slice(2)
+      return `/${driveLetter}${rest}`
+    }
+    if (normalized.startsWith('//')) {
+      return normalized
+    }
+    return normalized
   }
 
   /**

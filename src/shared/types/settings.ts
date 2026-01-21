@@ -60,7 +60,7 @@ export interface AppSettings {
 }
 
 // 设置标签页类型
-export type SettingsTab = 'basic' | 'editor' | 'notifications' | 'advanced' | 'about'
+export type SettingsTab = 'basic' | 'editor' | 'notifications' | 'advanced' | 'window' | 'about'
 
 // 设置保存选项
 export interface SettingsSaveOptions {

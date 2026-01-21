@@ -18,7 +18,7 @@ export type TriggerType = 'time';
  * 动作类型
  * - switch-config: 切换配置文件
  */
-export type ActionType = 'switch-config';
+export type ActionType = 'switch-config' | 'custom-command';
 
 /**
  * 基于时间的触发器配置
@@ -54,13 +54,32 @@ export interface SwitchConfigAction {
   targetConfigPath: string;
 }
 
+/**
+ * 执行自定义命令的动作
+ */
+export interface CustomCommandAction {
+  type: 'custom-command';
+  /**
+   * 要执行的命令
+   */
+  command: string;
+  /**
+   * 可选工作目录
+   */
+  workingDirectory?: string;
+  /**
+   * 超时时间（毫秒）
+   */
+  timeout?: number;
+}
+
 // 未来可扩展更多动作类型
 // export interface SendNotificationAction {
 //   type: 'send-notification';
 //   message: string;
 // }
 
-export type Action = SwitchConfigAction; // | SendNotificationAction;
+export type Action = SwitchConfigAction | CustomCommandAction; // | SendNotificationAction;
 
 /**
  * 自动化规则的完整定义
@@ -73,4 +92,16 @@ export interface AutomationRule {
   action: Action;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * 规则执行日志（用于展示）
+ */
+export interface RuleExecutionLog {
+  id: string;
+  ruleId: RuleId;
+  ruleName: string;
+  timestamp: string;
+  success: boolean;
+  message: string;
 }

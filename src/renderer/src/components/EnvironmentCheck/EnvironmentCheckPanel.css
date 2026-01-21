@@ -1,0 +1,168 @@
+/**
+ * 环境检测面板样式
+ */
+
+/* 页面容器 */
+.environment-check-panel {
+  padding: 24px;
+  background: #fafafa;
+  min-height: 100vh;
+}
+
+/* 页面头部 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+/* 统计卡片 */
+.stat-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(124, 58, 237, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+  transform: translateY(-2px);
+}
+
+/* 成功统计卡片 */
+.success-stat {
+  border-color: rgba(82, 196, 26, 0.2);
+  background: linear-gradient(135deg, rgba(82, 196, 26, 0.05) 0%, transparent 100%);
+}
+
+/* 警告统计卡片 */
+.warning-stat {
+  border-color: rgba(250, 173, 20, 0.2);
+  background: linear-gradient(135deg, rgba(250, 173, 20, 0.05) 0%, transparent 100%);
+}
+
+/* 错误统计卡片 */
+.error-stat {
+  border-color: rgba(255, 77, 79, 0.2);
+  background: linear-gradient(135deg, rgba(255, 77, 79, 0.05) 0%, transparent 100%);
+}
+
+/* 未找到统计卡片 */
+.notfound-stat {
+  border-color: rgba(140, 140, 140, 0.2);
+  background: linear-gradient(135deg, rgba(140, 140, 140, 0.05) 0%, transparent 100%);
+}
+
+/* Claude Code版本卡片（置顶突出） */
+.claude-code-version-card {
+  border: 2px solid #7C3AED;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.08) 0%, rgba(124, 58, 237, 0.02) 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.2);
+  transition: all 0.2s ease;
+}
+
+.claude-code-version-card:hover {
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.3);
+}
+
+/* 环境检查卡片 */
+.env-check-card {
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  min-height: 140px;
+}
+
+/* 状态样式 */
+.env-check-card.status-ok {
+  border-color: rgba(82, 196, 26, 0.3);
+  background: linear-gradient(135deg, rgba(82, 196, 26, 0.05) 0%, transparent 100%);
+}
+
+.env-check-card.status-warning {
+  border-color: rgba(250, 173, 20, 0.3);
+  background: linear-gradient(135deg, rgba(250, 173, 20, 0.05) 0%, transparent 100%);
+}
+
+.env-check-card.status-error {
+  border-color: rgba(255, 77, 79, 0.3);
+  background: linear-gradient(135deg, rgba(255, 77, 79, 0.05) 0%, transparent 100%);
+}
+
+.env-check-card.status-not_found {
+  border-color: rgba(140, 140, 140, 0.3);
+  background: linear-gradient(135deg, rgba(140, 140, 140, 0.05) 0%, transparent 100%);
+}
+
+.env-check-card.status-checking {
+  border-color: rgba(24, 144, 255, 0.3);
+  background: linear-gradient(135deg, rgba(24, 144, 255, 0.05) 0%, transparent 100%);
+}
+
+/* 动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.environment-check-panel .stat-card,
+.environment-check-panel .claude-code-version-card,
+.environment-check-panel .env-check-card {
+  animation: fadeIn 0.3s ease;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .environment-check-panel {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .stat-card .ant-statistic-title {
+    font-size: 12px;
+  }
+
+  .env-check-grid .ant-col {
+    width: 100% !important;
+    max-width: 100%;
+  }
+}
+
+/* 表格样式优化 */
+.environment-check-panel .ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.environment-check-panel .ant-table-thead > tr > th {
+  background: rgba(124, 58, 237, 0.05);
+  color: #4C1D95;
+  font-weight: 600;
+}
+
+/* Modal样式优化 */
+.environment-check-panel .ant-modal-content {
+  borderRadius: 8px;
+}
+
+.environment-check-panel .ant-modal-header {
+  border-radius: 8px 8px 0 0;
+}
+
+.environment-check-panel .ant-modal-footer {
+  border-radius: 0 0 8px 8px;
+}

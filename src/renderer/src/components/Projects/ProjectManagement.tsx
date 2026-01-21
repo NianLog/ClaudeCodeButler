@@ -52,6 +52,8 @@ import {
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { useTerminalStore } from '@/store/terminal-store'
+import type { TerminalConfig, TerminalType } from '@shared/types/terminal'
 import './ProjectManagement.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -124,10 +126,25 @@ interface SessionConversation {
 const TerminalConfigModal: React.FC<{
   visible: boolean
   onCancel: () => void
-  onConfirm: (config: { terminal: string; asAdmin: boolean }) => void
-}> = ({ visible, onCancel, onConfirm }) => {
-  const [terminal, setTerminal] = useState('gitbash')
+  onConfirm: (config: { terminal: TerminalType; asAdmin: boolean }) => void
+  terminals: TerminalConfig[]
+  defaultTerminal: TerminalType
+}> = ({ visible, onCancel, onConfirm, terminals, defaultTerminal }) => {
+  const [terminal, setTerminal] = useState<TerminalType>(defaultTerminal)
   const [asAdmin, setAsAdmin] = useState(false)
+
+  useEffect(() => {
+    if (visible) {
+      setTerminal(defaultTerminal)
+    }
+  }, [visible, defaultTerminal])
+
+  const terminalOptions = terminals.length > 0
+    ? terminals.map(item => ({
+      label: item.name || item.type,
+      value: item.type
+    }))
+    : [{ label: '自动检测', value: 'auto' }]
 
   const handleConfirm = () => {
     onConfirm({ terminal, asAdmin })
@@ -154,11 +171,7 @@ const TerminalConfigModal: React.FC<{
             value={terminal}
             onChange={setTerminal}
             style={{ width: '100%', marginTop: 8 }}
-            options={[
-              { label: 'Git Bash (推荐)', value: 'gitbash' },
-              { label: 'Windows CMD', value: 'cmd' },
-              { label: 'PowerShell', value: 'powershell' }
-            ]}
+            options={terminalOptions}
           />
         </div>
         <div>
@@ -176,6 +189,7 @@ const TerminalConfigModal: React.FC<{
  */
 const ProjectManagement: React.FC = () => {
   const { message } = App.useApp()
+  const { terminals, defaultTerminal, loadTerminals } = useTerminalStore()
 
   // 状态管理
   const [projects, setProjects] = useState<ClaudeProject[]>([])
@@ -206,6 +220,17 @@ const ProjectManagement: React.FC = () => {
   const [debouncedSearchText, setDebouncedSearchText] = useState('')
   const [loadingAbortController, setLoadingAbortController] = useState<AbortController | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const getTerminalDisplayName = (type: TerminalType) => {
+    const matched = terminals.find(item => item.type === type)
+    if (matched?.name) return matched.name
+    if (type === 'git-bash') return 'Git Bash'
+    if (type === 'powershell') return 'PowerShell'
+    if (type === 'cmd') return 'CMD'
+    if (type === 'wsl') return 'WSL'
+    if (type === 'auto') return '系统默认终端'
+    return type
+  }
 
   // 使用 useDeferredValue 延迟JSON渲染,避免阻塞UI
   const deferredConversation = useDeferredValue(conversation)
@@ -310,7 +335,7 @@ const ProjectManagement: React.FC = () => {
   }
 
   // 继续会话
-  const continueSession = async (config: { terminal: string; asAdmin: boolean }) => {
+  const continueSession = async (config: { terminal: TerminalType; asAdmin: boolean }) => {
     if (!pendingSessionInfo) return
 
     try {
@@ -323,7 +348,7 @@ const ProjectManagement: React.FC = () => {
       )
 
       if (result.success) {
-        message.success(`已在新${config.terminal === 'gitbash' ? 'Git Bash' : config.terminal === 'powershell' ? 'PowerShell' : 'CMD'}窗口中打开会话${config.asAdmin ? '(管理员模式)' : ''}`)
+        message.success(`已在新${getTerminalDisplayName(config.terminal)}窗口中打开会话${config.asAdmin ? '(管理员模式)' : ''}`)
       } else {
         message.error(`继续会话失败: ${result.error}`)
       }
@@ -355,6 +380,10 @@ const ProjectManagement: React.FC = () => {
   useEffect(() => {
     loadProjects()
   }, [])
+
+  useEffect(() => {
+    loadTerminals()
+  }, [loadTerminals])
 
   // 搜索文本防抖处理
   useEffect(() => {
@@ -1292,6 +1321,8 @@ const ProjectManagement: React.FC = () => {
           setPendingSessionInfo(null)
         }}
         onConfirm={continueSession}
+        terminals={terminals}
+        defaultTerminal={defaultTerminal}
       />
     </div>
   )

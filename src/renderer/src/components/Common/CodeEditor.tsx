@@ -14,8 +14,7 @@ import {
   BgColorsOutlined,
   FileTextOutlined
 } from '@ant-design/icons'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 import * as monaco from 'monaco-editor'
 
 // 配置Monaco Editor使用本地资源,避免CDN依赖
@@ -257,9 +256,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     if (language === 'markdown' && previewMode === 'rendered') {
       return (
         <div className="markdown-preview">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {value}
-          </ReactMarkdown>
+          <MarkdownRenderer content={value} />
         </div>
       )
     }

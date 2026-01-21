@@ -28,7 +28,12 @@ import {
   ProjectOutlined,
   CloudDownloadOutlined,
   ApiOutlined,
-  ToolOutlined
+  ToolOutlined,
+  CheckCircleOutlined,
+  RobotOutlined as AgentOutlined,
+  AppstoreOutlined as SkillsOutlined,
+  DownOutlined,
+  UpOutlined
 } from '@ant-design/icons'
 import { useAppStore } from '../../store/app-store'
 import { useBasicSettings } from '../../store/settings-store'
@@ -58,8 +63,10 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     notifications,
     theme,
     sidebarCollapsed,
+    expandedMenuGroups,
     activeMainTab,
     toggleSidebar,
+    toggleMenuGroup,
     setActiveMainTab,
     setTheme,
     addNotification,
@@ -377,24 +384,71 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 </div>
                 {!sidebarCollapsed && <span className="nav-label">项目管理</span>}
               </div>
+            </div>
+
+            <div className="nav-section">
               <div
-                className={`nav-item ${activeMainTab === 'managed-mode' ? 'active' : ''}`}
-                onClick={() => setActiveMainTab('managed-mode')}
+                className="nav-section-title"
+                onClick={() => !sidebarCollapsed && toggleMenuGroup('advanced')}
+                style={{ cursor: sidebarCollapsed ? 'default' : 'pointer' }}
               >
-                <div className="nav-icon">
-                  <ApiOutlined />
-                </div>
-                {!sidebarCollapsed && <span className="nav-label">托管模式</span>}
+                {!sidebarCollapsed && (
+                  <>
+                    <span>高级功能</span>
+                    {expandedMenuGroups.advanced ? <UpOutlined /> : <DownOutlined />}
+                  </>
+                )}
               </div>
-              <div
-                className={`nav-item ${activeMainTab === 'mcp-management' ? 'active' : ''}`}
-                onClick={() => setActiveMainTab('mcp-management')}
-              >
-                <div className="nav-icon">
-                  <ToolOutlined />
-                </div>
-                {!sidebarCollapsed && <span className="nav-label">MCP管理</span>}
-              </div>
+              {/* 侧边栏收起时也显示高级功能菜单项 */}
+              {(expandedMenuGroups.advanced || sidebarCollapsed) && (
+                <>
+                  <div
+                    className={`nav-item ${activeMainTab === 'mcp-management' ? 'active' : ''}`}
+                    onClick={() => setActiveMainTab('mcp-management')}
+                  >
+                    <div className="nav-icon">
+                      <ToolOutlined />
+                    </div>
+                    {!sidebarCollapsed && <span className="nav-label">MCP管理</span>}
+                  </div>
+                  <div
+                    className={`nav-item ${activeMainTab === 'agents-management' ? 'active' : ''}`}
+                    onClick={() => setActiveMainTab('agents-management')}
+                  >
+                    <div className="nav-icon">
+                      <AgentOutlined />
+                    </div>
+                    {!sidebarCollapsed && <span className="nav-label">子Agent管理</span>}
+                  </div>
+                  <div
+                    className={`nav-item ${activeMainTab === 'skills-management' ? 'active' : ''}`}
+                    onClick={() => setActiveMainTab('skills-management')}
+                  >
+                    <div className="nav-icon">
+                      <SkillsOutlined />
+                    </div>
+                    {!sidebarCollapsed && <span className="nav-label">Skills管理</span>}
+                  </div>
+                  <div
+                    className={`nav-item ${activeMainTab === 'environment-check' ? 'active' : ''}`}
+                    onClick={() => setActiveMainTab('environment-check')}
+                  >
+                    <div className="nav-icon">
+                      <CheckCircleOutlined />
+                    </div>
+                    {!sidebarCollapsed && <span className="nav-label">环境排查</span>}
+                  </div>
+                  <div
+                    className={`nav-item ${activeMainTab === 'managed-mode' ? 'active' : ''}`}
+                    onClick={() => setActiveMainTab('managed-mode')}
+                  >
+                    <div className="nav-icon">
+                      <ApiOutlined />
+                    </div>
+                    {!sidebarCollapsed && <span className="nav-label">托管模式</span>}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="nav-section">
@@ -431,8 +485,11 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 {activeMainTab === 'automation' && '自动化规则'}
                 {activeMainTab === 'statistics' && '统计信息'}
                 {activeMainTab === 'projects' && '项目管理'}
-                {activeMainTab === 'managed-mode' && '托管模式'}
                 {activeMainTab === 'mcp-management' && 'MCP管理'}
+                {activeMainTab === 'agents-management' && '子Agent管理'}
+                {activeMainTab === 'skills-management' && 'Skills管理'}
+                {activeMainTab === 'environment-check' && '环境排查'}
+                {activeMainTab === 'managed-mode' && '托管模式'}
                 {activeMainTab === 'settings' && '设置'}
               </Text>
               <Text className="breadcrumb-separator">/</Text>
@@ -441,8 +498,11 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 {activeMainTab === 'automation' && '规则列表'}
                 {activeMainTab === 'statistics' && '数据概览'}
                 {activeMainTab === 'projects' && 'Claude Code 项目'}
-                {activeMainTab === 'managed-mode' && 'API服务管理'}
                 {activeMainTab === 'mcp-management' && 'MCP服务器管理'}
+                {activeMainTab === 'agents-management' && 'Agent文件管理'}
+                {activeMainTab === 'skills-management' && 'Skill目录管理'}
+                {activeMainTab === 'environment-check' && '环境检查'}
+                {activeMainTab === 'managed-mode' && 'API服务管理'}
                 {activeMainTab === 'settings' && '应用设置'}
               </Text>
             </div>
