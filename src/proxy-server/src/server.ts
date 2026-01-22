@@ -10,7 +10,7 @@ import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import type { Request, Response, NextFunction } from 'express'
-import type { ProxyServerConfig, ClaudeRequest, ApiProvider } from './types.js'
+import type { ProxyServerConfig, ClaudeRequest } from './types.js'
 import { getLogger } from './logger.js'
 import { getTransformer } from './transformers/index.js'
 
@@ -33,7 +33,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
   app.use(express.json({ limit: '50mb' }))
 
   // 请求日志中间件
-  app.use((req: Request, res: Response, next: NextFunction) => {
+  app.use((req: Request, _res: Response, next: NextFunction) => {
     logger.info(`${req.method} ${req.path}`, {
       ip: req.ip,
       userAgent: req.get('user-agent')
@@ -42,7 +42,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
   })
 
   // 健康检查端点
-  app.get('/health', (req: Request, res: Response) => {
+  app.get('/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
       version: packageJson.version,
@@ -165,7 +165,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
   })
 
   // 404处理
-  app.use((req: Request, res: Response) => {
+  app.use((_req: Request, res: Response) => {
     res.status(404).json({
       error: {
         type: 'not_found',
@@ -175,7 +175,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
   })
 
   // 错误处理中间件
-  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     logger.error('未捕获的错误', {
       error: err.message,
       stack: err.stack

@@ -95,16 +95,18 @@ class RuleEngineService {
    * @param rule 规则对象
    */
   private async executeRuleAction(rule: AutomationRule, trigger: 'auto' | 'manual' = 'auto'): Promise<{ success: boolean; message: string; result?: any }> {
+    const actionType = rule.action.type
+
     try {
       let message = ''
       let result: any = undefined
 
-      if (rule.action.type === 'switch-config') {
+      if (actionType === 'switch-config') {
         const action = rule.action as SwitchConfigAction
         result = await this.executeSwitchConfigAction(rule, action)
         message = `规则 "${rule.name}" 已成功执行，配置已切换。`
         this.sendNotification('配置自动切换', message)
-      } else if (rule.action.type === 'custom-command') {
+      } else if (actionType === 'custom-command') {
         const action = rule.action as CustomCommandAction
         result = await this.executeCustomCommandAction(rule, action)
         message = `规则 "${rule.name}" 命令执行完成。`
@@ -124,7 +126,7 @@ class RuleEngineService {
     } catch (error) {
       const errorMessage = `执行规则 "${rule.name}" 失败: ${error instanceof Error ? error.message : '未知错误'}`
       logger.error(errorMessage)
-      if (trigger === 'manual') {
+      if (actionType === 'switch-config' || trigger === 'manual') {
         this.sendNotification('规则执行失败', errorMessage)
       }
       await logStorageService.addLog({
@@ -142,7 +144,7 @@ class RuleEngineService {
    * 执行切换配置文件的动作
    * @param rule 规则对象
    */
-  private async executeSwitchConfigAction(rule: AutomationRule, action: SwitchConfigAction): Promise<{ targetPath: string }> {
+  private async executeSwitchConfigAction(_rule: AutomationRule, action: SwitchConfigAction): Promise<{ targetPath: string }> {
     const targetPath = pathManager.getClaudeConfigPath(CONFIG_FILES.SETTINGS)
     logger.info(`执行切换配置动作: 从 "${action.targetConfigPath}" 到 "${targetPath}"`)
 
@@ -201,7 +203,11 @@ class RuleEngineService {
       throw new Error(`规则不存在: ${ruleId}`)
     }
 
-    return this.executeRuleAction(rule, 'manual')
+    const result = await this.executeRuleAction(rule, 'manual')
+    if (!result.success) {
+      throw new Error(result.message)
+    }
+    return result
   }
 
   public async createRule(newRuleData: Omit<AutomationRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<AutomationRule> {

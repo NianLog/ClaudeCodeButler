@@ -8,7 +8,6 @@ import { useSettingsStore } from '../store/settings-store'
 import {
   SupportedLanguage,
   TranslationKey,
-  TranslationValue,
   TranslationDict,
   languageResources,
   getCurrentLanguage,

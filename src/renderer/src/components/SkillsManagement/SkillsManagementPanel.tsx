@@ -28,8 +28,7 @@ import {
   Typography,
   Popconfirm,
   Tooltip,
-  Descriptions,
-  Tag
+  Descriptions
 } from 'antd'
 import {
   PlusOutlined,
@@ -47,10 +46,11 @@ import {
 import { useSkillsManagementStore } from '@/store/skills-management-store'
 import { getUploadFilePath, getUploadRelativePath, readUploadFileBase64 } from '@/utils/upload'
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
+import { useTranslation } from '@/locales/useTranslation'
 import type { SkillDirectory, SkillFormData } from '@shared/types/skills'
 import './SkillsManagementPanel.css'
 
-const { Title, Text, Paragraph } = Typography
+const { Title, Text } = Typography
 const { TextArea } = Input
 
 /**
@@ -58,10 +58,10 @@ const { TextArea } = Input
  */
 const SkillsManagementPanel: React.FC = () => {
   const messageApi = message
+  const { t } = useTranslation()
   const {
     skills,
     isLoading,
-    error,
     selectedSkill,
     isDetailDrawerOpen,
     isFormModalOpen,
@@ -123,13 +123,13 @@ const SkillsManagementPanel: React.FC = () => {
     try {
       const values = await form.validateFields()
       await addSkill(values as SkillFormData)
-      messageApi.success('Skill已添加')
+      messageApi.success(t('skills.message.added'))
       form.resetFields()
     } catch (error: any) {
       if (error?.errorFields) {
         return
       }
-      messageApi.error('添加失败: ' + (error.message || '未知错误'))
+      messageApi.error(t('skills.message.addFailed', { error: error.message || t('common.unknownError') }))
     }
   }
 
@@ -139,13 +139,13 @@ const SkillsManagementPanel: React.FC = () => {
       const values = await form.validateFields()
       if (editingSkill) {
         await updateSkill(editingSkill.id, values as SkillFormData)
-        messageApi.success('Skill已更新')
+        messageApi.success(t('skills.message.updated'))
       }
     } catch (error: any) {
       if (error?.errorFields) {
         return
       }
-      messageApi.error('更新失败: ' + (error.message || '未知错误'))
+      messageApi.error(t('skills.message.updateFailed', { error: error.message || t('common.unknownError') }))
     }
   }
 
@@ -153,9 +153,9 @@ const SkillsManagementPanel: React.FC = () => {
   const handleDelete = async (skillId: string) => {
     try {
       await deleteSkill(skillId)
-      messageApi.success('Skill已删除')
+      messageApi.success(t('skills.message.deleted'))
     } catch (error: any) {
-      messageApi.error('删除失败: ' + (error?.message || '未知错误'))
+      messageApi.error(t('skills.message.deleteFailed', { error: error?.message || t('common.unknownError') }))
     }
   }
 
@@ -198,31 +198,31 @@ const SkillsManagementPanel: React.FC = () => {
 
       if (dirPath && result) {
         if (result.success) {
-          messageApi.success(`Skill "${result.skillId}" 导入成功`)
+          messageApi.success(t('skills.message.importSuccess', { name: result.skillId ?? t('common.unknown') }))
         } else {
-          messageApi.error(`导入失败: ${result.error || '未知错误'}`)
+          messageApi.error(t('skills.message.importFailed', { error: result.error || t('common.unknownError') }))
         }
         return
       }
 
       const groups = await buildSkillImportGroups(files)
       if (groups.length !== 1) {
-        messageApi.error('导入失败: 请一次选择一个Skill目录')
+        messageApi.error(t('skills.message.importSingleDir'))
         return
       }
 
       const contentResult = await importSkillFiles(groups[0], { overwrite: false })
       if (!contentResult) {
-        messageApi.error('导入失败: 未知错误')
+        messageApi.error(t('skills.message.importFailed', { error: t('common.unknownError') }))
         return
       }
       if (contentResult.success) {
-        messageApi.success(`Skill "${contentResult.skillId}" 导入成功`)
+        messageApi.success(t('skills.message.importSuccess', { name: contentResult.skillId ?? t('common.unknown') }))
       } else {
-        messageApi.error(`导入失败: ${contentResult.error || '未知错误'}`)
+        messageApi.error(t('skills.message.importFailed', { error: contentResult.error || t('common.unknownError') }))
       }
     } catch (error: any) {
-      messageApi.error('导入失败: ' + (error.message || '未知错误'))
+      messageApi.error(t('skills.message.importFailed', { error: error.message || t('common.unknownError') }))
     } finally {
       setIsSingleImporting(false)
     }
@@ -231,7 +231,7 @@ const SkillsManagementPanel: React.FC = () => {
   // 处理批量导入
   const handleBatchImport = async () => {
     if (fileList.length === 0) {
-      messageApi.warning('请先选择要导入的目录')
+      messageApi.warning(t('skills.message.batchImportSelect'))
       return
     }
 
@@ -246,7 +246,7 @@ const SkillsManagementPanel: React.FC = () => {
       )
 
       if (dirPaths.length === 0 && contentGroups.length === 0) {
-        messageApi.error('批量导入失败: 未获取到目录内容')
+        messageApi.error(t('skills.message.batchImportNoContent'))
         return
       }
 
@@ -263,7 +263,11 @@ const SkillsManagementPanel: React.FC = () => {
         results.push(await batchImportSkillsFiles(contentGroups, { overwrite: false }))
       }
 
-      const merged = results.reduce(
+      const merged = results.reduce<{
+        success: boolean
+        imported: string[]
+        errors: Array<{ path: string; error: string }>
+      }>(
         (acc, cur) => {
           acc.imported = acc.imported.concat(cur.imported || [])
           acc.errors = acc.errors.concat(cur.errors || [])
@@ -275,28 +279,28 @@ const SkillsManagementPanel: React.FC = () => {
 
       const result = merged
       if (!result) {
-        messageApi.error('批量导入失败: 未知错误')
+        messageApi.error(t('skills.message.batchImportFailed', { error: t('common.unknownError') }))
         return
       }
       if (result.success) {
-        messageApi.success(`成功导入 ${result.imported?.length || 0} 个Skill`)
+        messageApi.success(t('skills.message.batchImportSuccess', { count: result.imported?.length || 0 }))
         if (result.errors && result.errors.length > 0) {
-          messageApi.warning(`${result.errors.length} 个目录导入失败`)
+          messageApi.warning(t('skills.message.batchImportFailedCount', { count: result.errors.length }))
         }
         setFileList([])
         closeImportModal()
       } else {
-        messageApi.error('批量导入失败')
+        messageApi.error(t('skills.message.batchImportFailed', { error: '' }))
       }
     } catch (error: any) {
-      messageApi.error('批量导入失败: ' + (error.message || '未知错误'))
+      messageApi.error(t('skills.message.batchImportFailed', { error: error.message || t('common.unknownError') }))
     }
   }
 
   // 表格列定义
   const columns = [
     {
-      title: 'Skill名称',
+      title: t('skills.table.name'),
       dataIndex: ['metadata', 'name'],
       key: 'name',
       render: (name: string, record: SkillDirectory) => (
@@ -318,17 +322,16 @@ const SkillsManagementPanel: React.FC = () => {
       )
     },
     {
-      title: '目录结构',
+      title: t('skills.table.structure'),
       key: 'structure',
       render: (_: any, record: SkillDirectory) => {
-        const fileCount = record.structure.additionalFiles.length + 1 // +1 for SKILL.md
         return (
           <Space>
             <FileTextOutlined />
             <Text>SKILL.md</Text>
             {record.structure.additionalFiles.length > 0 && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                + {record.structure.additionalFiles.length} 个文件
+                {t('skills.table.extraFiles', { count: record.structure.additionalFiles.length })}
               </Text>
             )}
           </Space>
@@ -336,7 +339,7 @@ const SkillsManagementPanel: React.FC = () => {
       }
     },
     {
-      title: '更新时间',
+      title: t('skills.table.updatedAt'),
       dataIndex: 'updatedAt',
       key: 'updatedAt',
       render: (date: string) => (
@@ -346,39 +349,39 @@ const SkillsManagementPanel: React.FC = () => {
       )
     },
     {
-      title: '操作',
+      title: t('skills.table.actions'),
       key: 'actions',
       width: 200,
       render: (_: any, record: SkillDirectory) => (
         <Space size="small">
-          <Tooltip title="查看详情">
+          <Tooltip title={t('skills.table.viewDetail')}>
             <Button
               type="primary"
               size="small"
               icon={<EyeOutlined />}
               onClick={() => openDetailDrawer(record)}
             >
-              查看
+              {t('skills.table.view')}
             </Button>
           </Tooltip>
-          <Tooltip title="编辑">
+          <Tooltip title={t('skills.table.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}
               onClick={() => openEditModal(record)}
             >
-              编辑
+              {t('skills.table.edit')}
             </Button>
           </Tooltip>
           <Popconfirm
-            title="确认删除"
-            description="确定要删除这个Skill吗？这将删除整个目录及其所有文件。"
+            title={t('skills.confirm.deleteTitle')}
+            description={t('skills.confirm.deleteDescription')}
             onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
+              {t('skills.table.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -390,10 +393,10 @@ const SkillsManagementPanel: React.FC = () => {
     <div className="skills-management-panel">
       {/* 标题栏 */}
       <div className="page-header">
-        <Title level={3}>Skills管理</Title>
+        <Title level={3}>{t('skills.title')}</Title>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={loadSkills} loading={isLoading}>
-            刷新
+            {t('common.refresh')}
           </Button>
           <Upload
             directory
@@ -406,17 +409,17 @@ const SkillsManagementPanel: React.FC = () => {
               }
             }}
           >
-            <Button icon={<UploadOutlined />}>导入目录</Button>
+            <Button icon={<UploadOutlined />}>{t('skills.importDirectory')}</Button>
           </Upload>
           <Button
             type="primary"
             icon={<InboxOutlined />}
             onClick={openImportModal}
           >
-            批量导入
+            {t('skills.batchImport')}
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openAddModal}>
-            新建Skill
+            {t('skills.create')}
           </Button>
         </Space>
       </div>
@@ -424,9 +427,9 @@ const SkillsManagementPanel: React.FC = () => {
       {/* 统计卡片行 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}>
-          <Card bordered={false} className="stat-card">
+          <Card variant="borderless" className="stat-card">
             <Statistic
-              title="总Skill数"
+              title={t('skills.stats.totalSkills')}
               value={totalSkills}
               prefix={<AppstoreOutlined />}
               valueStyle={{ color: '#7C3AED' }}
@@ -434,9 +437,9 @@ const SkillsManagementPanel: React.FC = () => {
           </Card>
         </Col>
         <Col span={6}>
-          <Card bordered={false} className="stat-card">
+          <Card variant="borderless" className="stat-card">
             <Statistic
-              title="文件总数"
+              title={t('skills.stats.totalFiles')}
               value={totalFiles}
               prefix={<FileOutlined />}
               valueStyle={{ color: '#52C41A' }}
@@ -444,22 +447,22 @@ const SkillsManagementPanel: React.FC = () => {
           </Card>
         </Col>
         <Col span={6}>
-          <Card bordered={false} className="stat-card">
+          <Card variant="borderless" className="stat-card">
             <Statistic
-              title="平均文件数"
+              title={t('skills.stats.avgFiles')}
               value={avgFiles}
-              suffix=" 个/Skill"
+              suffix={t('skills.stats.avgFilesSuffix')}
               prefix={<FileTextOutlined />}
               valueStyle={{ color: '#1890FF' }}
             />
           </Card>
         </Col>
         <Col span={6}>
-          <Card bordered={false} className="stat-card">
+          <Card variant="borderless" className="stat-card">
             <Statistic
-              title="最近更新"
+              title={t('skills.stats.recentUpdates')}
               value={recentUpdates}
-              suffix="个"
+              suffix={t('skills.stats.recentUpdatesSuffix')}
               prefix={<ReloadOutlined />}
               valueStyle={{ color: '#FAAD14' }}
             />
@@ -468,7 +471,7 @@ const SkillsManagementPanel: React.FC = () => {
       </Row>
 
       {/* Skill列表表格 */}
-      <Card bordered={false} className="skill-list-card">
+      <Card variant="borderless" className="skill-list-card">
         <Table
           dataSource={skills}
           columns={columns}
@@ -477,17 +480,17 @@ const SkillsManagementPanel: React.FC = () => {
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 个Skill`
+            showTotal: (total) => t('skills.table.total', { total })
           }}
           locale={{
             emptyText: (
               <div style={{ padding: '40px 0' }}>
                 <AppstoreOutlined style={{ fontSize: 48, color: '#ccc' }} />
                 <div style={{ marginTop: 16 }}>
-                  <Text type="secondary">暂无Skill</Text>
+                  <Text type="secondary">{t('skills.empty.title')}</Text>
                   <br />
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    点击"新建Skill"或"批量导入"开始使用
+                    {t('skills.empty.subtitle')}
                   </Text>
                 </div>
               </div>
@@ -513,25 +516,25 @@ const SkillsManagementPanel: React.FC = () => {
           <>
             <Divider orientation="left">元数据</Divider>
             <Descriptions column={2} bordered size="small">
-              <Descriptions.Item label="名称" span={2}>
+              <Descriptions.Item label={t('skills.detail.name')} span={2}>
                 {selectedSkill.metadata.name}
               </Descriptions.Item>
-              <Descriptions.Item label="描述" span={2}>
+              <Descriptions.Item label={t('skills.detail.description')} span={2}>
                 {selectedSkill.metadata.description}
               </Descriptions.Item>
-              <Descriptions.Item label="目录名" span={1}>
+              <Descriptions.Item label={t('skills.detail.directoryName')} span={1}>
                 {selectedSkill.directoryName}
               </Descriptions.Item>
-              <Descriptions.Item label="文件数" span={1}>
+              <Descriptions.Item label={t('skills.detail.fileCount')} span={1}>
                 {selectedSkill.structure.additionalFiles.length + 1}
               </Descriptions.Item>
-              <Descriptions.Item label="创建时间" span={1}>
+              <Descriptions.Item label={t('skills.detail.createdAt')} span={1}>
                 {new Date(selectedSkill.createdAt).toLocaleString()}
               </Descriptions.Item>
-              <Descriptions.Item label="修改时间" span={1}>
+              <Descriptions.Item label={t('skills.detail.updatedAt')} span={1}>
                 {new Date(selectedSkill.updatedAt).toLocaleString()}
               </Descriptions.Item>
-              <Descriptions.Item label="目录路径" span={2}>
+              <Descriptions.Item label={t('skills.detail.directoryPath')} span={2}>
                 <Text
                   code
                   ellipsis={{ tooltip: selectedSkill.directoryPath }}
@@ -542,7 +545,7 @@ const SkillsManagementPanel: React.FC = () => {
               </Descriptions.Item>
             </Descriptions>
 
-            <Divider orientation="left">文件结构</Divider>
+            <Divider orientation="left">{t('skills.detail.structure')}</Divider>
             <div style={{ marginBottom: 16 }}>
               <Text strong>SKILL.md</Text>
               <br />
@@ -553,7 +556,7 @@ const SkillsManagementPanel: React.FC = () => {
 
             {selectedSkill.structure.additionalFiles.length > 0 && (
               <div>
-                <Text strong>其他文件</Text>
+                <Text strong>{t('skills.detail.otherFiles')}</Text>
                 <ul style={{ marginTop: 8, paddingLeft: 20 }}>
                   {selectedSkill.structure.additionalFiles.map((filePath, index) => (
                     <li key={index} style={{ marginBottom: 4 }}>
@@ -566,7 +569,7 @@ const SkillsManagementPanel: React.FC = () => {
               </div>
             )}
 
-            <Divider orientation="left">SKILL.md内容</Divider>
+            <Divider orientation="left">{t('skills.detail.content')}</Divider>
             <MarkdownRenderer
               className="skill-content-markdown"
               content={selectedSkill.skillMdContent}
@@ -577,7 +580,7 @@ const SkillsManagementPanel: React.FC = () => {
 
       {/* 添加/编辑Modal */}
       <Modal
-        title={formMode === 'add' ? '新建Skill' : '编辑Skill'}
+        title={formMode === 'add' ? t('skills.form.createTitle') : t('skills.form.editTitle')}
         open={isFormModalOpen}
         onOk={formMode === 'add' ? handleAdd : handleEdit}
         onCancel={closeFormModal}
@@ -590,28 +593,28 @@ const SkillsManagementPanel: React.FC = () => {
         >
           <Form.Item
             name="name"
-            label="Skill名称"
-            rules={[{ required: true, message: '请输入Skill名称' }]}
+            label={t('skills.form.name')}
+            rules={[{ required: true, message: t('skills.form.nameRequired') }]}
           >
-            <Input placeholder="例如: web-search" />
+            <Input placeholder={t('skills.form.namePlaceholder')} />
           </Form.Item>
 
           <Form.Item
             name="description"
-            label="描述"
-            rules={[{ required: true, message: '请输入描述' }]}
+            label={t('skills.form.description')}
+            rules={[{ required: true, message: t('skills.form.descriptionRequired') }]}
           >
-            <TextArea rows={2} placeholder="简要描述这个Skill的功能" />
+            <TextArea rows={2} placeholder={t('skills.form.descriptionPlaceholder')} />
           </Form.Item>
 
           <Form.Item
             name="content"
-            label="SKILL.md内容"
-            rules={[{ required: true, message: '请输入Skill内容' }]}
+            label={t('skills.form.content')}
+            rules={[{ required: true, message: t('skills.form.contentRequired') }]}
           >
             <TextArea
               rows={10}
-              placeholder="输入SKILL.md的内容，支持Markdown格式..."
+              placeholder={t('skills.form.contentPlaceholder')}
               style={{ fontFamily: 'monospace' }}
             />
           </Form.Item>
@@ -620,7 +623,7 @@ const SkillsManagementPanel: React.FC = () => {
 
       {/* 批量导入Modal */}
       <Modal
-        title="批量导入Skill"
+        title={t('skills.import.title')}
         open={isImportModalOpen}
         onOk={handleBatchImport}
         onCancel={() => {
@@ -640,9 +643,9 @@ const SkillsManagementPanel: React.FC = () => {
           <p className="ant-upload-drag-icon">
             <InboxOutlined />
           </p>
-          <p className="ant-upload-text">点击或拖拽Skill文件夹到此区域上传</p>
+          <p className="ant-upload-text">{t('skills.import.tip')}</p>
           <p className="ant-upload-hint">
-            支持批量上传。每个文件夹必须包含SKILL.md文件（含name和description元数据）。
+            {t('skills.import.hint')}
           </p>
         </Upload.Dragger>
       </Modal>

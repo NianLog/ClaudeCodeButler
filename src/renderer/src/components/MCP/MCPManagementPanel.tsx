@@ -4,9 +4,8 @@
  * 使用卡片式设计+JSON编辑器的简洁模式
  */
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, Suspense } from 'react'
 import {
-  Card,
   Button,
   Empty,
   Spin,
@@ -37,7 +36,8 @@ import {
   ApiOutlined
 } from '@ant-design/icons'
 import { useMCPManagementStore } from '../../store/mcp-management-store'
-import CodeEditor from '../Common/CodeEditor'
+import { useTranslation } from '../../locales/useTranslation'
+const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 import type { MCPServerListItem } from '@shared/types/mcp'
 import './MCPManagementPanel.css'
 
@@ -49,6 +49,7 @@ const { Option } = Select
  * MCP管理面板组件
  */
 const MCPManagementPanel: React.FC = () => {
+  const { t } = useTranslation()
   // Zustand状态 - 使用selector避免类型错误,确保所有数组类型都有类型检查
   const servers = useMCPManagementStore(state => Array.isArray(state.servers) ? state.servers : [])
   const projectPaths = useMCPManagementStore(state => Array.isArray(state.projectPaths) ? state.projectPaths : [])
@@ -100,7 +101,7 @@ const MCPManagementPanel: React.FC = () => {
   // 刷新数据
   const handleRefresh = async () => {
     await loadInitialData()
-    message.success('数据已刷新')
+    message.success(t('mcp.messages.refreshed'))
   }
 
   // 打开编辑模态框
@@ -118,12 +119,12 @@ const MCPManagementPanel: React.FC = () => {
     try {
       // 验证服务器ID
       if (isAddMode && !editingServerId.trim()) {
-        message.error('请输入服务器ID')
+        message.error(t('mcp.validation.serverIdRequired'))
         return
       }
 
       if (!/^[a-zA-Z0-9_-]+$/.test(editingServerId)) {
-        message.error('服务器ID只能包含字母、数字、下划线和连字符')
+        message.error(t('mcp.validation.serverIdInvalid'))
         return
       }
 
@@ -132,7 +133,7 @@ const MCPManagementPanel: React.FC = () => {
 
       // 验证必填字段
       if (!newConfig.command || !newConfig.command.trim()) {
-        message.error('命令字段不能为空')
+        message.error(t('mcp.validation.commandRequired'))
         return
       }
 
@@ -150,7 +151,7 @@ const MCPManagementPanel: React.FC = () => {
         targetScope: editingServer?.scope || (selectedScope === 'all' ? 'global' : selectedScope)
       })
 
-      message.success(isAddMode ? '服务器添加成功' : '服务器更新成功')
+      message.success(isAddMode ? t('mcp.messages.addSuccess') : t('mcp.messages.updateSuccess'))
       setIsEditModalVisible(false)
       setEditingServer(null)
       setEditingServerId('')
@@ -158,9 +159,9 @@ const MCPManagementPanel: React.FC = () => {
       await loadAllServers()
     } catch (error) {
       if (error instanceof SyntaxError) {
-        message.error('JSON格式错误,请检查')
+        message.error(t('mcp.errors.jsonInvalid'))
       } else {
-        message.error('保存失败: ' + (error as Error).message)
+        message.error(t('mcp.errors.saveFailed', { error: (error as Error).message }))
       }
     }
   }
@@ -168,17 +169,17 @@ const MCPManagementPanel: React.FC = () => {
   // 删除服务器
   const handleDeleteServer = async (server: MCPServerListItem) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除MCP服务器 "${server.id}" 吗?`,
-      okText: '删除',
-      cancelText: '取消',
+      title: t('mcp.confirm.deleteTitle'),
+      content: t('mcp.confirm.deleteContent', { id: server.id }),
+      okText: t('common.delete'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
           await deleteServer(server.id, server.scope)
-          message.success(`服务器 "${server.id}" 已删除`)
+          message.success(t('mcp.messages.deleteSuccess', { id: server.id }))
         } catch (error) {
-          message.error('删除失败: ' + (error as Error).message)
+          message.error(t('mcp.errors.deleteFailed', { error: (error as Error).message }))
         }
       }
     })
@@ -190,9 +191,9 @@ const MCPManagementPanel: React.FC = () => {
       // toggleServer 会自动重新加载服务器列表
       await toggleServer(server.id, server.scope)
       // 根据当前状态显示切换后的状态
-      message.success(`服务器已${server.config.disabled ? '启用' : '禁用'}`)
+      message.success(server.config.disabled ? t('mcp.messages.enabled') : t('mcp.messages.disabled'))
     } catch (error) {
-      message.error('切换状态失败: ' + (error as Error).message)
+      message.error(t('mcp.errors.toggleFailed', { error: (error as Error).message }))
     }
   }
 
@@ -201,9 +202,9 @@ const MCPManagementPanel: React.FC = () => {
     const newServerId = `${server.id}-copy`
     try {
       await duplicateServer(server.id, server.scope, newServerId, server.scope)
-      message.success(`服务器已复制为 "${newServerId}"`)
+      message.success(t('mcp.messages.duplicateSuccess', { id: newServerId }))
     } catch (error) {
-      message.error('复制失败: ' + (error as Error).message)
+      message.error(t('mcp.errors.duplicateFailed', { error: (error as Error).message }))
     }
   }
 
@@ -243,13 +244,13 @@ const MCPManagementPanel: React.FC = () => {
       {
         key: 'edit',
         icon: <EditOutlined />,
-        label: '编辑配置',
+        label: t('mcp.menu.editConfig'),
         onClick: () => handleEditServer(server)
       },
       {
         key: 'duplicate',
         icon: <CopyOutlined />,
-        label: '复制服务器',
+        label: t('mcp.menu.duplicateServer'),
         onClick: () => handleDuplicateServer(server)
       },
       {
@@ -258,12 +259,12 @@ const MCPManagementPanel: React.FC = () => {
       {
         key: 'delete',
         icon: <DeleteOutlined />,
-        label: isEnabled ? '删除服务器' : '删除服务器 (需先启用)',
+        label: isEnabled ? t('mcp.menu.deleteServer') : t('mcp.menu.deleteServerDisabled'),
         danger: true,
         disabled: !isEnabled,
         onClick: () => {
           if (!isEnabled) {
-            message.warning('请先启用服务器后再进行删除操作')
+            message.warning(t('mcp.messages.deleteDisabled'))
             return
           }
           handleDeleteServer(server)
@@ -285,15 +286,15 @@ const MCPManagementPanel: React.FC = () => {
               <Space size="small">
                 {server.isGlobal ? (
                   <Tag icon={<GlobalOutlined />} color="blue">
-                    全局
+                    {t('mcp.tags.global')}
                   </Tag>
                 ) : (
                   <Tag icon={<FolderOutlined />} color="purple">
-                    项目: {server.scope.split(/[\\/\\]/).pop()}
+                    {t('mcp.tags.project', { name: server.scope.split(/[\/\\]/).pop() || '' })}
                   </Tag>
                 )}
                 <Tag color={isEnabled ? 'success' : 'error'}>
-                  {isEnabled ? '已启用' : '已禁用'}
+                  {isEnabled ? t('mcp.tags.enabled') : t('mcp.tags.disabled')}
                 </Tag>
                 <Tag color="default">
                   {server.config.type?.toUpperCase() || 'STDIO'}
@@ -307,14 +308,14 @@ const MCPManagementPanel: React.FC = () => {
               size="small"
               icon={isEnabled ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <CloseCircleOutlined style={{ color: '#ff4d4f' }} />}
               onClick={() => handleToggleServer(server)}
-              title={isEnabled ? '禁用' : '启用'}
+              title={isEnabled ? t('mcp.actions.disable') : t('mcp.actions.enable')}
             />
             <Button
               type="text"
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEditServer(server)}
-              title="编辑"
+              title={t('mcp.actions.edit')}
             />
             <Dropdown
               menu={{ items: menuItems }}
@@ -327,7 +328,7 @@ const MCPManagementPanel: React.FC = () => {
         </div>
         <div className="server-item-content">
           <div className="server-command">
-            <Text type="secondary" style={{ fontSize: 12 }}>命令:</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('mcp.labels.command')}</Text>
             <Text code style={{ fontSize: 12, marginLeft: 8 }}>
               {server.config.command}
               {server.config.args && server.config.args.length > 0 && ` ${server.config.args.join(' ')}`}
@@ -335,8 +336,8 @@ const MCPManagementPanel: React.FC = () => {
           </div>
           {server.config.env && Object.keys(server.config.env).length > 0 && (
             <div className="server-env">
-              <Tag color="orange" size="small">
-                {Object.keys(server.config.env).length} 个环境变量
+              <Tag color="orange">
+                {t('mcp.labels.envVars', { count: Object.keys(server.config.env).length })}
               </Tag>
             </div>
           )}
@@ -350,7 +351,7 @@ const MCPManagementPanel: React.FC = () => {
       {/* 错误提示 */}
       {error && (
         <Alert
-          message="错误"
+          message={t('common.error')}
           description={error}
           type="error"
           closable
@@ -363,10 +364,10 @@ const MCPManagementPanel: React.FC = () => {
       <div className="mcp-panel-header">
         <div className="header-left">
           <Title level={3} className="panel-title">
-            MCP服务器管理
+            {t('mcp.title')}
           </Title>
           <Text type="secondary">
-            共 {servers.length} 个服务器
+            {t('mcp.subtitle.totalServers', { count: servers.length })}
           </Text>
         </div>
 
@@ -377,14 +378,14 @@ const MCPManagementPanel: React.FC = () => {
               onClick={handleRefresh}
               loading={isLoading}
             >
-              刷新
+              {t('mcp.actions.refresh')}
             </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={handleAddServer}
             >
-              添加服务器
+              {t('mcp.actions.addServer')}
             </Button>
           </Space>
         </div>
@@ -397,11 +398,11 @@ const MCPManagementPanel: React.FC = () => {
             value={selectedScope}
             onChange={setSelectedScope}
             style={{ width: 200 }}
-            placeholder="选择范围"
+            placeholder={t('mcp.filters.scopePlaceholder')}
           >
-            <Option value="all">全部</Option>
+            <Option value="all">{t('mcp.filters.scopeAll')}</Option>
             <Option value="global">
-              <GlobalOutlined /> 全局
+              <GlobalOutlined /> {t('mcp.filters.scopeGlobal')}
             </Option>
             {projectPaths.map(path => {
               const folderName = path.split(/[\\/\\]/).pop() || path
@@ -418,7 +419,7 @@ const MCPManagementPanel: React.FC = () => {
           </Select>
 
           <Search
-            placeholder="搜索服务器名称或命令"
+            placeholder={t('mcp.search.placeholder')}
             value={searchKeyword}
             onChange={e => setSearchKeyword(e.target.value)}
             onSearch={setSearchKeyword}
@@ -432,7 +433,7 @@ const MCPManagementPanel: React.FC = () => {
       <div className="mcp-panel-content">
         {isLoading ? (
           <div className="mcp-panel-loading">
-            <Spin size="large" tip="加载中...">
+            <Spin size="large" tip={t('common.loading')}>
               <div style={{ minHeight: 100 }} />
             </Spin>
           </div>
@@ -440,8 +441,8 @@ const MCPManagementPanel: React.FC = () => {
           <Empty
             description={
               searchKeyword
-                ? `未找到匹配 "${searchKeyword}" 的服务器`
-                : '暂无MCP服务器配置'
+                ? t('mcp.empty.noResults', { keyword: searchKeyword })
+                : t('mcp.empty.noServers')
             }
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           >
@@ -450,7 +451,7 @@ const MCPManagementPanel: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={handleAddServer}
             >
-              添加第一个服务器
+              {t('mcp.actions.addFirstServer')}
             </Button>
           </Empty>
         ) : (
@@ -464,9 +465,9 @@ const MCPManagementPanel: React.FC = () => {
       <Modal
         title={
           <Space>
-            {isAddMode ? '添加新服务器' : `编辑服务器: ${editingServerId}`}
+            {isAddMode ? t('mcp.modal.addTitle') : t('mcp.modal.editTitle', { id: editingServerId })}
             <Text type="secondary" style={{ fontSize: 12 }}>
-              直接编辑JSON配置
+              {t('mcp.modal.subtitle')}
             </Text>
           </Space>
         }
@@ -479,23 +480,23 @@ const MCPManagementPanel: React.FC = () => {
           setIsAddMode(false)
         }}
         width={800}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
         destroyOnHidden
       >
         {isAddMode && (
           <>
             <Alert
-              message="输入服务器信息"
-              description="服务器ID是唯一标识符,只能包含字母、数字、下划线和连字符"
+              message={t('mcp.alert.inputInfoTitle')}
+              description={t('mcp.alert.inputInfoDesc')}
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
             />
             <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
-              <Text strong>服务器ID</Text>
+              <Text strong>{t('mcp.labels.serverId')}</Text>
               <Input
-                placeholder="例如: my-mcp-server"
+                placeholder={t('mcp.placeholders.serverId')}
                 value={editingServerId}
                 onChange={(e) => setEditingServerId(e.target.value)}
                 autoFocus
@@ -505,19 +506,19 @@ const MCPManagementPanel: React.FC = () => {
         )}
 
         <Alert
-          message="JSON配置格式"
+          message={t('mcp.alert.jsonTitle')}
           description={
             <div>
-              <p>配置对象应包含以下字段:</p>
+              <p>{t('mcp.alert.jsonDesc')}</p>
               <ul style={{ marginTop: 8, fontSize: 12 }}>
-                <li><code>command</code> (必填): 执行命令,如 "npx", "node", "python"</li>
-                <li><code>args</code> (可选): 命令参数数组</li>
-                <li><code>type</code> (可选): 传输类型,默认 "stdio"</li>
-                <li><code>env</code> (可选): 环境变量对象</li>
-                <li><code>disabled</code> (可选): 是否禁用</li>
-                <li><code>timeout</code> (可选): 超时时间(ms)</li>
-                <li><code>autoApprove</code> (可选): 自动批准工具列表</li>
-                <li><code>fromGalleryId</code> (可选): Gallery ID</li>
+                <li><code>command</code> {t('mcp.jsonFields.required')}: {t('mcp.jsonFields.commandDesc')}</li>
+                <li><code>args</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.argsDesc')}</li>
+                <li><code>type</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.typeDesc')}</li>
+                <li><code>env</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.envDesc')}</li>
+                <li><code>disabled</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.disabledDesc')}</li>
+                <li><code>timeout</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.timeoutDesc')}</li>
+                <li><code>autoApprove</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.autoApproveDesc')}</li>
+                <li><code>fromGalleryId</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.fromGalleryIdDesc')}</li>
               </ul>
             </div>
           }
@@ -526,19 +527,21 @@ const MCPManagementPanel: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
 
-        <CodeEditor
-          value={editingJson}
-          onChange={setEditingJson}
-          language="json"
-          height="400px"
-          options={{
-            minimap: { enabled: false },
-            lineNumbers: 'on',
-            formatOnPaste: true,
-            formatOnType: true,
-            scrollBeyondLastLine: false
-          }}
-        />
+        <Suspense fallback={<Spin size="large" />}>
+          <CodeEditor
+            value={editingJson}
+            onChange={setEditingJson}
+            language="json"
+            height="400px"
+            options={{
+              minimap: { enabled: false },
+              lineNumbers: 'on',
+              formatOnPaste: true,
+              formatOnType: true,
+              scrollBeyondLastLine: false
+            }}
+          />
+        </Suspense>
       </Modal>
     </div>
   )

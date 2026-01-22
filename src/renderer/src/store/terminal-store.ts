@@ -5,7 +5,6 @@
 import { create } from 'zustand'
 import type {
   TerminalConfig,
-  TerminalSettings,
   TerminalType
 } from '@shared/types/terminal'
 

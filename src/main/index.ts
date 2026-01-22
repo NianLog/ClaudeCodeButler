@@ -4,6 +4,7 @@
  */
 
 import { app, BrowserWindow, ipcMain, Menu } from 'electron'
+import { execSync } from 'child_process'
 import { WindowManager } from './window-manager'
 import { TrayManager } from './tray-manager'
 import { FileWatcher } from './file-watcher'
@@ -13,9 +14,10 @@ import { privilegeManager } from './utils/privilege-manager'
 import { statisticsService } from './services/statistics-service'
 import { ruleEngineService } from './services/rule-engine.service' // 导入规则引擎
 import { registerManagedModeHandlers, initializeManagedMode, disposeManagedMode } from './ipc/managed-mode-handlers' // 导入托管模式处理程序
-import { APP_INFO, PATHS } from '@shared/constants'
-import { logger } from './utils/logger'
+import { APP_INFO } from '@shared/constants'
+import { logger, LogLevel } from './utils/logger'
 import { updateService } from './services/update-service';
+import { pathManager } from './utils/path-manager'
 
 /**
  * 主窗口管理器
@@ -37,7 +39,11 @@ class CCBApp {
     this.ruleEngine = ruleEngineService // 实例化
 
     // 检查命令行参数是否启用开发者工具
-    this.enableDevTools = process.argv.includes('--dev-tools') || process.env.NODE_ENV === 'development'
+    this.enableDevTools =
+      process.argv.includes('--dev-tools') ||
+      process.argv.includes('--debug') ||
+      process.argv.includes('-debug') ||
+      process.env.NODE_ENV === 'development'
 
     this.setupAppEvents()
     this.setupIpcHandlers()
@@ -68,7 +74,7 @@ class CCBApp {
       }
     })
 
-    app.on('before-quit', async (event) => {
+    app.on('before-quit', async () => {
       // 允许真正退出
       const mainWindow = this.windowManager.getMainWindow()
       if (mainWindow) {
@@ -162,12 +168,12 @@ class CCBApp {
       app.name = APP_INFO.FULL_NAME
 
       logger.info(`应用启动: ${APP_INFO.FULL_NAME} v${APP_INFO.VERSION}`)
+      logger.info(`进程: ${process.pid}, 平台: ${process.platform}, 版本: ${process.versions.electron}`)
+      logger.info(`启动参数: ${process.argv.join(' ')}`)
 
       await this.checkAndElevatePrivileges()
       await this.ensureDirectories()
 
-      // 动态导入 pathManager 并初始化 FileWatcher
-      const { pathManager } = await import('./utils/path-manager')
       this.fileWatcher = new FileWatcher(pathManager.claudeConfigsDir)
 
       await this.windowManager.createMainWindow()
@@ -196,7 +202,6 @@ class CCBApp {
    */
   private async ensureDirectories(): Promise<void> {
     const fs = await import('fs/promises')
-    const { pathManager } = await import('./utils/path-manager')
 
     const directories = [
       pathManager.appDataDir,      // 主目录 ~/.ccb
@@ -256,8 +261,7 @@ class CCBApp {
             label: '打开配置目录',
             click: async () => {
               const { shell } = await import('electron')
-              const { pathManager } = await import('./utils/path-manager')
-              await shell.openPath(pathManager.claudeDir)
+              await shell.openPath(pathManager.claudeConfigsDir)
             }
           },
           { type: 'separator' },
@@ -354,7 +358,6 @@ class CCBApp {
   private async clearCache(): Promise<void> {
     try {
       const fs = await import('fs/promises')
-      const { pathManager } = await import('./utils/path-manager')
       await fs.rm(pathManager.cacheDir, { recursive: true, force: true })
       await fs.mkdir(pathManager.cacheDir, { recursive: true })
 
@@ -455,6 +458,30 @@ class CCBApp {
       logger.error('清理资源失败:', error)
     }
   }
+}
+
+/**
+ * 调试模式配置（用于生产包调试）
+ */
+const isDebugMode = process.argv.includes('--debug') || process.argv.includes('-debug')
+
+if (isDebugMode) {
+  if (process.platform === 'win32' && process.stdout?.isTTY) {
+    try {
+      execSync('chcp 65001', { stdio: 'ignore' })
+    } catch (error) {
+      // 忽略设置失败
+    }
+  }
+  // 启用 Electron 级别日志输出
+  process.env.ELECTRON_ENABLE_LOGGING = 'true'
+  process.env.ELECTRON_ENABLE_STACK_DUMPING = 'true'
+  app.commandLine.appendSwitch('enable-logging')
+  app.commandLine.appendSwitch('v', '1')
+
+  // 提升应用日志级别
+  logger.setLogLevel(LogLevel.DEBUG)
+  logger.info('调试模式已启用（-debug）')
 }
 
 // 创建应用实例

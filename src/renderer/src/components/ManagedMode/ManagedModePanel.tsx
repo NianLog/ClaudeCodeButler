@@ -10,16 +10,13 @@ import {
   Switch,
   Table,
   Modal,
-  Form,
   Input,
-  InputNumber,
   Select,
   Space,
   Tag,
   Tooltip,
   message,
   Tabs,
-  Descriptions,
   Alert,
   Typography,
   Badge,
@@ -57,34 +54,28 @@ import {
   DatabaseOutlined,
   MonitorOutlined,
   BugOutlined,
-  KeyOutlined,
   GlobalOutlined,
-  LockOutlined,
-  UnlockOutlined,
-  EllipsisOutlined,
-  WarningOutlined,
   CloudServerOutlined,
   DashboardOutlined
 } from '@ant-design/icons'
 import type {
   ManagedModeStatus,
-  ManagedModeConfig,
-  ApiProvider
-} from '../../../shared/types/managed-mode'
+  ManagedModeConfig
+} from '@shared/types/managed-mode'
 import type { ConfigFile } from '@shared/types'
 import ManagedModeConfigEditor from './ManagedModeConfigEditor'
 import TerminalLogViewer from './TerminalLogViewer'
 import { useManagedModeLogStore } from '../../store/managed-mode-log-store'
+import { useTranslation } from '../../locales/useTranslation'
 import './ManagedModePanel.css'
 
 const { Text, Title, Paragraph } = Typography
-const { Search } = Input
-const { Option } = Select
 
 /**
  * 托管模式管理面板组件
  */
 const ManagedModePanel: React.FC = () => {
+  const { t } = useTranslation()
   // 从全局store读取日志统计数据（用于动态计算健康度）
   const { normalLogCount, errorLogCount } = useManagedModeLogStore()
 
@@ -94,11 +85,8 @@ const ManagedModePanel: React.FC = () => {
   const [configs, setConfigs] = useState<ConfigFile[]>([])
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
-  const [providerModalVisible, setProviderModalVisible] = useState(false)
-  const [editingProvider, setEditingProvider] = useState<ApiProvider | null>(null)
-  const [form] = Form.useForm()
   const [activeTab, setActiveTab] = useState<string>('overview')
-  const [uptime, setUptime] = useState<string>('0分钟')
+  const [uptime, setUptime] = useState<string>(t('managedMode.time.zero'))
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // 加载数据
@@ -111,9 +99,10 @@ const ManagedModePanel: React.FC = () => {
       ])
       setStatus(statusData)
       setConfig(configData)
-      setConfigs(configsData?.data || [])
+      const resolvedConfigs = (configsData as any)?.data || configsData || []
+      setConfigs(Array.isArray(resolvedConfigs) ? resolvedConfigs : [])
     } catch (error: any) {
-      message.error(`加载数据失败: ${error.message}`)
+      message.error(t('managedMode.messages.loadFailed', { error: error.message }))
     } finally {
       setInitialLoading(false)
     }
@@ -152,14 +141,14 @@ const ManagedModePanel: React.FC = () => {
       if (status?.startTime && status.enabled) {
         const minutes = Math.floor((Date.now() - status.startTime) / 1000 / 60)
         if (minutes < 60) {
-          setUptime(`${minutes}分钟`)
+          setUptime(t('managedMode.time.minutes', { minutes }))
         } else {
           const hours = Math.floor(minutes / 60)
           const remainingMinutes = minutes % 60
-          setUptime(`${hours}小时${remainingMinutes}分钟`)
+          setUptime(t('managedMode.time.hoursMinutes', { hours, minutes: remainingMinutes }))
         }
       } else {
-        setUptime('0分钟')
+        setUptime(t('managedMode.time.zero'))
       }
     }
 
@@ -187,13 +176,13 @@ const ManagedModePanel: React.FC = () => {
     try {
       const result = await window.electronAPI.managedMode.enable()
       if (result.success) {
-        message.success(result.message || '托管模式已启用')
+        message.success(result.message || t('managedMode.messages.enabled'))
         await loadData()
       } else {
-        message.error(result.error || '启用托管模式失败')
+        message.error(result.error || t('managedMode.messages.enableFailed'))
       }
     } catch (error: any) {
-      message.error(`启用托管模式失败: ${error.message}`)
+      message.error(t('managedMode.messages.enableFailedWithError', { error: error.message }))
     } finally {
       setLoading(false)
     }
@@ -207,13 +196,13 @@ const ManagedModePanel: React.FC = () => {
     try {
       const result = await window.electronAPI.managedMode.disable()
       if (result.success) {
-        message.success(result.message || '托管模式已禁用')
+        message.success(result.message || t('managedMode.messages.disabled'))
         await loadData()
       } else {
-        message.error(result.error || '禁用托管模式失败')
+        message.error(result.error || t('managedMode.messages.disableFailed'))
       }
     } catch (error: any) {
-      message.error(`禁用托管模式失败: ${error.message}`)
+      message.error(t('managedMode.messages.disableFailedWithError', { error: error.message }))
     } finally {
       setLoading(false)
     }
@@ -225,10 +214,10 @@ const ManagedModePanel: React.FC = () => {
   const handleRestartService = async () => {
     setLoading(true)
     try {
-      message.success('托管服务已重启')
+      message.success(t('managedMode.messages.restartSuccess'))
       await loadData()
     } catch (error: any) {
-      message.error(`重启托管服务失败: ${error.message}`)
+      message.error(t('managedMode.messages.restartFailed', { error: error.message }))
     } finally {
       setLoading(false)
     }
@@ -260,7 +249,7 @@ const ManagedModePanel: React.FC = () => {
         console.log('更新托管模式配置:', managedConfig)
         const updateResult = await window.electronAPI.managedMode.updateConfig(managedConfig)
         if (!updateResult.success) {
-          throw new Error(updateResult.error || '更新托管模式配置失败')
+          throw new Error(updateResult.error || t('managedMode.messages.updateConfigFailed'))
         }
       }
 
@@ -271,7 +260,7 @@ const ManagedModePanel: React.FC = () => {
       const result = await window.electronAPI.managedMode.updateSettingsConfig(configData)
 
       if (!result.success) {
-        throw new Error(result.error || '写入系统配置失败')
+        throw new Error(result.error || t('managedMode.messages.writeSystemConfigFailed'))
       }
 
       // 4. 等待一小段时间确保文件写入完成
@@ -280,36 +269,15 @@ const ManagedModePanel: React.FC = () => {
       // 5. 重新加载托管模式状态和配置
       await loadData()
 
-      // 6. 强制刷新配置列表（如果有变更）
-      if (typeof window.electronAPI.config !== 'undefined') {
-        try {
-          await window.electronAPI.config.refreshConfigs?.()
-        } catch (error) {
-          // 忽略刷新配置列表的错误，不影响主流程
-          console.log('刷新配置列表失败:', error)
-        }
-      }
-
-      message.success('托管服务配置已更新并重启')
+      message.success(t('managedMode.messages.updateSuccess'))
 
     } catch (error: any) {
       console.error('更新配置失败:', error)
-      message.error(`更新配置失败: ${error.message}`)
+      message.error(t('managedMode.messages.updateFailed', { error: error.message }))
     } finally {
       setLoading(false)
     }
   }
-
-  /**
-   * 计算运行时长
-   */
-  const calculateUptime = useCallback((startTime: number) => {
-    const minutes = Math.floor((Date.now() - startTime) / 1000 / 60)
-    if (minutes < 60) return `${minutes}分钟`
-    const hours = Math.floor(minutes / 60)
-    const remainingMinutes = minutes % 60
-    return `${hours}小时${remainingMinutes}分钟`
-  }, [])
 
   /**
    * 获取当前服务信息
@@ -328,7 +296,7 @@ const ManagedModePanel: React.FC = () => {
       proxyUrl,
       proxyToken,
       // 上游服务信息
-      providerName: providerInfo?.name || '未配置',
+        providerName: providerInfo?.name || t('managedMode.provider.unconfigured'),
       providerUrl: providerInfo?.apiBaseUrl || '',
       providerKey: providerInfo?.apiKey || '', // 已经是格式化后的
       providerRawKey: providerInfo?.rawApiKey || '',
@@ -342,14 +310,6 @@ const ManagedModePanel: React.FC = () => {
   }, [status, config])
 
   /**
-   * 格式化访问令牌显示(已废弃,保留以防兼容性问题)
-   */
-  const formatToken = (token: string) => {
-    if (!token || token.length < 7) return token
-    return `${token.substring(0, 3)}***${token.substring(token.length - 3)}`
-  }
-
-  /**
    * 获取增强的服务状态显示信息(简化版)
    */
   const getEnhancedServiceInfo = useCallback(() => {
@@ -360,7 +320,7 @@ const ManagedModePanel: React.FC = () => {
       // 网络代理显示地址
       networkProxyDisplay: serviceInfo.networkProxy.enabled
         ? `${serviceInfo.networkProxy.host}:${serviceInfo.networkProxy.port}`
-        : '未启用'
+        : t('managedMode.network.notEnabled')
     }
   }, [getCurrentServiceInfo])
 
@@ -405,7 +365,7 @@ const ManagedModePanel: React.FC = () => {
       label: (
         <Space>
           <MonitorOutlined />
-          <span>概览</span>
+          <span>{t('managedMode.tabs.overview')}</span>
           {status?.running && (
             <Badge status="processing" />
           )}
@@ -418,7 +378,7 @@ const ManagedModePanel: React.FC = () => {
       label: (
         <Space>
           <SettingOutlined />
-          <span>配置</span>
+          <span>{t('managedMode.tabs.config')}</span>
           {config?.enabled && (
             <Badge status="processing" />
           )}
@@ -431,7 +391,7 @@ const ManagedModePanel: React.FC = () => {
       label: (
         <Space>
           <BugOutlined />
-          <span>运行日志</span>
+          <span>{t('managedMode.tabs.logs')}</span>
           {config?.logging?.enabled && (
             <Badge dot />
           )}
@@ -450,7 +410,7 @@ const ManagedModePanel: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
           <Spin size="large">
             <div style={{ padding: '20px', textAlign: 'center' }}>
-              <div>加载托管模式状态...</div>
+              <div>{t('managedMode.loading.status')}</div>
             </div>
           </Spin>
         </div>
@@ -464,8 +424,8 @@ const ManagedModePanel: React.FC = () => {
           <Col xs={24} sm={12} md={6}>
             <Card style={{ borderRadius: '12px', textAlign: 'center' }}>
               <Statistic
-                title="运行状态"
-                value={status?.running ? "运行中" : "已停止"}
+                title={t('managedMode.stats.status')}
+                value={status?.running ? t('managedMode.status.running') : t('managedMode.status.stopped')}
                 prefix={status?.running ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
                 valueStyle={{
                   color: getStatusColor(),
@@ -478,7 +438,7 @@ const ManagedModePanel: React.FC = () => {
           <Col xs={24} sm={12} md={6}>
             <Card style={{ borderRadius: '12px', textAlign: 'center' }}>
               <Statistic
-                title="监听端口"
+                title={t('managedMode.stats.port')}
                 value={status?.port || 8487}
                 prefix={<ApiOutlined />}
                 valueStyle={{ fontSize: '18px', fontWeight: 'bold' }}
@@ -488,7 +448,7 @@ const ManagedModePanel: React.FC = () => {
           <Col xs={24} sm={12} md={6}>
             <Card style={{ borderRadius: '12px', textAlign: 'center' }}>
               <Statistic
-                title="进程ID"
+                title={t('managedMode.stats.pid')}
                 value={status?.pid || '-'}
                 prefix={<DatabaseOutlined />}
                 valueStyle={{ fontSize: '18px', fontWeight: 'bold' }}
@@ -498,7 +458,7 @@ const ManagedModePanel: React.FC = () => {
           <Col xs={24} sm={12} md={6}>
             <Card style={{ borderRadius: '12px', textAlign: 'center' }}>
               <Statistic
-                title="运行时长"
+                title={t('managedMode.stats.uptime')}
                 value={uptime}
                 prefix={<ClockCircleOutlined />}
                 valueStyle={{ fontSize: '18px', fontWeight: 'bold' }}
@@ -514,7 +474,7 @@ const ManagedModePanel: React.FC = () => {
               title={
                 <Space>
                   <MonitorOutlined />
-                  <span>服务状态</span>
+                  <span>{t('managedMode.service.title')}</span>
                 </Space>
               }
               extra={
@@ -527,7 +487,7 @@ const ManagedModePanel: React.FC = () => {
                       onClick={handleDisableManagedMode}
                       loading={loading}
                     >
-                      停用托管模式
+                      {t('managedMode.buttons.disable')}
                     </Button>
                   ) : (
                     <Button
@@ -536,7 +496,7 @@ const ManagedModePanel: React.FC = () => {
                       onClick={handleEnableManagedMode}
                       loading={loading}
                     >
-                      启用托管模式
+                      {t('managedMode.buttons.enable')}
                     </Button>
                   )}
                   {status?.running && (
@@ -545,7 +505,7 @@ const ManagedModePanel: React.FC = () => {
                       onClick={handleRestartService}
                       loading={loading}
                     >
-                      重启服务
+                      {t('managedMode.buttons.restart')}
                     </Button>
                   )}
                 </Space>
@@ -554,7 +514,7 @@ const ManagedModePanel: React.FC = () => {
             >
               {status?.running && (
                 <div style={{ marginBottom: '16px' }}>
-                  <Text strong>服务健康度</Text>
+                  <Text strong>{t('managedMode.health.title')}</Text>
                   <Progress
                     percent={getHealthScore()}
                     status={getHealthScore() >= 90 ? 'success' : getHealthScore() >= 70 ? 'normal' : 'exception'}
@@ -570,7 +530,7 @@ const ManagedModePanel: React.FC = () => {
                   {normalLogCount + errorLogCount > 0 && (
                     <div style={{ marginTop: '4px', fontSize: '12px', color: '#666' }}>
                       <Text type="secondary">
-                        日志统计: 正常 {normalLogCount} / 错误 {errorLogCount}
+                        {t('managedMode.health.logStats', { normal: normalLogCount, error: errorLogCount })}
                       </Text>
                     </div>
                   )}
@@ -579,23 +539,23 @@ const ManagedModePanel: React.FC = () => {
 
               <Alert
                 type={status?.running ? 'success' : 'info'}
-                message={status?.running ? '托管模式正在运行' : '托管模式已停止'}
+                message={status?.running ? t('managedMode.alert.running') : t('managedMode.alert.stopped')}
                 description={
                   status?.running ? (
                     <Space direction="vertical" size="small" style={{ width: '100%' }}>
                       <div style={{ marginBottom: '12px' }}>
                         <Space>
                           <ApiOutlined style={{ color: '#1890ff' }} />
-                          <Text strong>托管代理服务</Text>
+                          <Text strong>{t('managedMode.proxy.title')}</Text>
                         </Space>
                         <Divider style={{ margin: '8px 0' }} />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Text>代理地址:</Text>
+                            <Text>{t('managedMode.proxy.address')}</Text>
                             <Text code copyable>{getEnhancedServiceInfo().proxyUrl}</Text>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Text>访问密钥:</Text>
+                            <Text>{t('managedMode.proxy.token')}</Text>
                             <Text code copyable>{getEnhancedServiceInfo().proxyToken}</Text>
                           </div>
                         </div>
@@ -604,23 +564,23 @@ const ManagedModePanel: React.FC = () => {
                       <div style={{ marginBottom: '12px' }}>
                         <Space>
                           <CloudServerOutlined style={{ color: '#52c41a' }} />
-                          <Text strong>上游服务</Text>
+                          <Text strong>{t('managedMode.upstream.title')}</Text>
                         </Space>
                         <Divider style={{ margin: '8px 0' }} />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Text>服务名称:</Text>
+                            <Text>{t('managedMode.upstream.name')}</Text>
                             <Text code>{getEnhancedServiceInfo().providerName}</Text>
                           </div>
                           {getEnhancedServiceInfo().providerUrl && (
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Text>上游地址:</Text>
+                              <Text>{t('managedMode.upstream.address')}</Text>
                               <Text code copyable>{getEnhancedServiceInfo().providerUrl}</Text>
                             </div>
                           )}
                           {getEnhancedServiceInfo().providerKey && (
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Text>上游密钥:</Text>
+                              <Text>{t('managedMode.upstream.key')}</Text>
                               <Text code copyable={{ text: getEnhancedServiceInfo().providerRawKey }}>
                                 {getEnhancedServiceInfo().providerKey}
                               </Text>
@@ -632,19 +592,19 @@ const ManagedModePanel: React.FC = () => {
                       <div style={{ marginBottom: '12px' }}>
                         <Space>
                           <GlobalOutlined style={{ color: '#722ed1' }} />
-                          <Text strong>网络代理</Text>
+                          <Text strong>{t('managedMode.network.title')}</Text>
                         </Space>
                         <Divider style={{ margin: '8px 0' }} />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Text>代理状态:</Text>
+                            <Text>{t('managedMode.network.status')}</Text>
                             <Tag color={getEnhancedServiceInfo().networkProxy.enabled ? 'green' : 'default'}>
-                              {getEnhancedServiceInfo().networkProxy.enabled ? '已启用' : '未启用'}
+                              {getEnhancedServiceInfo().networkProxy.enabled ? t('managedMode.status.enabled') : t('managedMode.status.disabled')}
                             </Tag>
                           </div>
                           {getEnhancedServiceInfo().networkProxy.enabled && (
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Text>代理地址:</Text>
+                              <Text>{t('managedMode.network.address')}</Text>
                               <Text code>{getEnhancedServiceInfo().networkProxyDisplay}</Text>
                             </div>
                           )}
@@ -654,23 +614,23 @@ const ManagedModePanel: React.FC = () => {
                       <div>
                         <Space>
                           <DashboardOutlined style={{ color: '#fa8c16' }} />
-                          <Text strong>运行状态</Text>
+                          <Text strong>{t('managedMode.runtime.title')}</Text>
                         </Space>
                         <Divider style={{ margin: '8px 0' }} />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Text>运行时长:</Text>
+                            <Text>{t('managedMode.runtime.uptime')}</Text>
                             <Text code>{uptime}</Text>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Text>健康评分:</Text>
+                            <Text>{t('managedMode.runtime.health')}</Text>
                             <Text strong>{getHealthScore()}%</Text>
                           </div>
                         </div>
                       </div>
                     </Space>
                   ) : (
-                    <Text>点击"启用托管模式"按钮启动托管服务</Text>
+                    <Text>{t('managedMode.hint.enable')}</Text>
                   )
                 }
                 showIcon
@@ -685,7 +645,7 @@ const ManagedModePanel: React.FC = () => {
                   title={
                     <Space>
                       <GlobalOutlined />
-                      <span>网络代理</span>
+                      <span>{t('managedMode.cards.network.title')}</span>
                     </Space>
                   }
                   size="small"
@@ -693,23 +653,23 @@ const ManagedModePanel: React.FC = () => {
                 >
                   <Space direction="vertical" style={{ width: '100%' }} size="middle">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text>网络代理状态</Text>
+                      <Text>{t('managedMode.cards.network.status')}</Text>
                       <Tag color={getEnhancedServiceInfo().networkProxy.enabled ? 'green' : 'default'}>
-                        {getEnhancedServiceInfo().networkProxy.enabled ? '已启用' : '已禁用'}
+                        {getEnhancedServiceInfo().networkProxy.enabled ? t('managedMode.status.enabled') : t('managedMode.status.disabled')}
                       </Tag>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text>代理地址</Text>
+                      <Text>{t('managedMode.cards.network.address')}</Text>
                       <Text code>{getEnhancedServiceInfo().networkProxyDisplay}</Text>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text>监听端口</Text>
+                      <Text>{t('managedMode.cards.network.port')}</Text>
                       <Text code>{config?.port || 8487}</Text>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text>连接状态</Text>
+                      <Text>{t('managedMode.cards.network.connection')}</Text>
                       <Tag color={status?.running ? 'green' : 'default'}>
-                        {status?.running ? '正常' : '断开'}
+                        {status?.running ? t('managedMode.connection.normal') : t('managedMode.connection.disconnected')}
                       </Tag>
                     </div>
                   </Space>
@@ -721,7 +681,7 @@ const ManagedModePanel: React.FC = () => {
                   title={
                     <Space>
                       <SafetyCertificateOutlined />
-                      <span>安全状态</span>
+                      <span>{t('managedMode.cards.security.title')}</span>
                     </Space>
                   }
                   size="small"
@@ -729,18 +689,18 @@ const ManagedModePanel: React.FC = () => {
                 >
                   <Space direction="vertical" style={{ width: '100%' }} size="middle">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text>访问令牌</Text>
+                      <Text>{t('managedMode.cards.security.accessToken')}</Text>
                       <Tag color={config?.accessToken ? 'green' : 'orange'}>
-                        {config?.accessToken ? '已设置' : '未设置'}
+                        {config?.accessToken ? t('managedMode.status.set') : t('managedMode.status.unset')}
                       </Tag>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text>加密状态</Text>
-                      <Tag color="green">已启用</Tag>
+                      <Text>{t('managedMode.cards.security.encryption')}</Text>
+                      <Tag color="green">{t('managedMode.status.enabled')}</Tag>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text>访问控制</Text>
-                      <Tag color="green">已启用</Tag>
+                      <Text>{t('managedMode.cards.security.accessControl')}</Text>
+                      <Tag color="green">{t('managedMode.status.enabled')}</Tag>
                     </div>
                   </Space>
                 </Card>
@@ -754,7 +714,7 @@ const ManagedModePanel: React.FC = () => {
           title={
             <Space>
               <BugOutlined />
-              <span>实时日志</span>
+              <span>{t('managedMode.logs.realtime')}</span>
               <Badge dot={config?.logging?.enabled} />
             </Space>
           }
@@ -797,7 +757,7 @@ const ManagedModePanel: React.FC = () => {
           title={
             <Space>
               <BugOutlined />
-              <span>运行日志</span>
+              <span>{t('managedMode.logs.title')}</span>
             </Space>
           }
           style={{ borderRadius: '12px' }}
@@ -835,10 +795,10 @@ const ManagedModePanel: React.FC = () => {
 
       <div style={{ marginBottom: '24px' }}>
         <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
-          托管模式
+          {t('managedMode.title')}
         </Title>
         <Paragraph style={{ color: '#666', fontSize: '14px', margin: 0 }}>
-          通过本地托管服务统一管理API服务商，实现配置热切换和请求转发
+          {t('managedMode.subtitle')}
         </Paragraph>
       </div>
 

@@ -4,7 +4,7 @@
  */
 
 import { app, BrowserWindow } from 'electron'
-import { ChildProcess, spawn, utilityProcess } from 'child_process'
+import { ChildProcess, spawn } from 'child_process'
 import path from 'path'
 import fs from 'fs/promises'
 import os from 'os'
@@ -16,7 +16,7 @@ import type {
   ManagedModeStatus,
   ApiProvider,
   EnvCommand
-} from '../shared/types/managed-mode'
+} from '@shared/types/managed-mode'
 import { managedModeLogRotationService } from './managed-mode-log-rotation.service'
 
 /**
@@ -253,8 +253,6 @@ export class ManagedModeService extends EventEmitter {
       // 如果集成模式失败，尝试传统模式
     }
 
-    // 代理服务入口文件路径
-    const proxyServerPath = path.join(__dirname, '../../proxy-server/src/index.ts')
     const proxyServerDir = path.join(__dirname, '../../proxy-server')
 
     // 尝试多种启动方式
@@ -537,7 +535,7 @@ export class ManagedModeService extends EventEmitter {
     // 获取当前provider的详细信息
     let currentProviderInfo = undefined
     if (this.config?.currentProvider && this.config?.providers) {
-      const provider = this.config.providers.find(p => p.id === this.config?.currentProvider)
+      const provider = this.config.providers.find((p: ApiProvider) => p.id === this.config?.currentProvider)
       if (provider) {
         // 格式化API Key显示(前3后3,中间用***代替)
         const formatApiKey = (key: string): string => {
@@ -718,7 +716,7 @@ export class ManagedModeService extends EventEmitter {
     }
 
     // 检查服务商是否存在
-    const provider = this.config.providers.find((p) => p.id === providerId)
+    const provider = this.config.providers.find((p: ApiProvider) => p.id === providerId)
     if (!provider) {
       throw new Error(`服务商 ${providerId} 不存在`)
     }
@@ -746,7 +744,7 @@ export class ManagedModeService extends EventEmitter {
     }
 
     // 检查ID是否重复
-    if (this.config.providers.some((p) => p.id === provider.id)) {
+    if (this.config.providers.some((p: ApiProvider) => p.id === provider.id)) {
       throw new Error(`服务商ID ${provider.id} 已存在`)
     }
 
@@ -773,7 +771,7 @@ export class ManagedModeService extends EventEmitter {
     }
 
     // 查找并更新服务商
-    const index = this.config.providers.findIndex((p) => p.id === provider.id)
+    const index = this.config.providers.findIndex((p: ApiProvider) => p.id === provider.id)
     if (index === -1) {
       throw new Error(`服务商 ${provider.id} 不存在`)
     }
@@ -943,7 +941,7 @@ export class ManagedModeService extends EventEmitter {
     }
 
     // 删除服务商
-    this.config.providers = this.config.providers.filter((p) => p.id !== providerId)
+    this.config.providers = this.config.providers.filter((p: ApiProvider) => p.id !== providerId)
 
     // 保存配置
     await this.saveConfig(this.config)
@@ -983,6 +981,7 @@ export class ManagedModeService extends EventEmitter {
   private async syncProvidersFromConfigList(): Promise<void> {
     try {
       if (!this.config) return
+      const managedConfig = this.config
 
       const configDir = path.join(os.homedir(), '.ccb', 'claude-configs')
 
@@ -999,7 +998,7 @@ export class ManagedModeService extends EventEmitter {
       const configFiles = files.filter(file => file.endsWith('.json') && file !== 'settings.json')
 
       const newProviders: ApiProvider[] = []
-      const currentProviderId = this.config.currentProvider
+      const currentProviderId = managedConfig.currentProvider
 
       for (const file of configFiles) {
         try {
@@ -1069,8 +1068,8 @@ export class ManagedModeService extends EventEmitter {
             newProviders.push(provider)
 
             // 如果当前 provider 被删除了，清空 currentProvider
-            if (currentProviderId && !newProviders.find(p => p.id === currentProviderId)) {
-              this.config.currentProvider = ''
+            if (currentProviderId && !newProviders.find((p: ApiProvider) => p.id === currentProviderId)) {
+              managedConfig.currentProvider = ''
             }
           }
         } catch (error) {
@@ -1079,16 +1078,16 @@ export class ManagedModeService extends EventEmitter {
       }
 
       // 覆盖 providers
-      this.config.providers = newProviders
+      managedConfig.providers = newProviders
 
       // 如果 currentProvider 不在新的 providers 列表中，清空它
-      if (this.config.currentProvider && !newProviders.find(p => p.id === this.config.currentProvider)) {
-        console.log(`当前 provider ${this.config.currentProvider} 不在新的 providers 列表中，已清空`)
-        this.config.currentProvider = ''
+      if (managedConfig.currentProvider && !newProviders.find((p: ApiProvider) => p.id === managedConfig.currentProvider)) {
+        console.log(`当前 provider ${managedConfig.currentProvider} 不在新的 providers 列表中，已清空`)
+        managedConfig.currentProvider = ''
       }
 
       // 保存配置
-      await this.saveConfig(this.config)
+      await this.saveConfig(managedConfig)
 
       console.log(`已从配置列表同步 ${newProviders.length} 个 providers`)
     } catch (error: any) {
@@ -1112,12 +1111,14 @@ export class ManagedModeService extends EventEmitter {
   private async loadConfig(): Promise<void> {
     try {
       const data = await fs.readFile(this.configPath, 'utf-8')
-      this.config = JSON.parse(data)
+      const parsed = JSON.parse(data) as ManagedModeConfig
+      this.config = parsed
 
       // 兼容旧配置：如果accessToken不存在，生成一个
-      if (!this.config.accessToken) {
-        this.config.accessToken = this.generateAccessToken()
-        await this.saveConfig(this.config)
+      if (!parsed.accessToken) {
+        parsed.accessToken = this.generateAccessToken()
+        await this.saveConfig(parsed)
+        this.config = parsed
       }
     } catch (error: any) {
       if (error.code === 'ENOENT') {
@@ -1556,10 +1557,9 @@ export class ManagedModeService extends EventEmitter {
    * 集成模式启动代理服务（在主进程中运行）
    */
   private async startIntegratedProxy(): Promise<void> {
-    // 动态导入 express、cors 和 axios
+    // 动态导入 express、cors 和 https-proxy-agent
     const express = await import('express')
     const cors = await import('cors')
-    const axios = (await import('axios')).default
     const { HttpsProxyAgent } = await import('https-proxy-agent')
 
     const expressApp = express.default()
@@ -1597,9 +1597,9 @@ export class ManagedModeService extends EventEmitter {
     }
 
     // 健康检查端点（不需要认证）
-    expressApp.get('/health', (req, res) => {
+    expressApp.get('/health', (_req: any, res: any) => {
       const currentProvider = this.config?.providers.find(
-        p => p.id === this.config?.currentProvider
+        (p: ApiProvider) => p.id === this.config?.currentProvider
       )
       res.json({
         status: 'ok',
@@ -1616,7 +1616,7 @@ export class ManagedModeService extends EventEmitter {
     })
 
     // 代理端点 - Anthropic Messages API
-    expressApp.post('/v1/messages', authMiddleware, async (req, res) => {
+    expressApp.post('/v1/messages', authMiddleware, async (req: any, res: any) => {
       const requestTime = new Date().toISOString()
       const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`
       const isStreamRequest = req.body.stream === true
@@ -1625,7 +1625,7 @@ export class ManagedModeService extends EventEmitter {
       try {
         // 获取当前服务提供商配置
         const currentProvider = this.config?.providers.find(
-          p => p.id === this.config?.currentProvider
+          (p: ApiProvider) => p.id === this.config?.currentProvider
         )
 
         if (!currentProvider) {

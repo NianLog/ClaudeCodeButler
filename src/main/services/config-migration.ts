@@ -3,7 +3,6 @@
  * 负责将旧格式的配置文件迁移到新的_metadata格式
  */
 
-import { join } from 'path'
 import { readFile, writeFile } from 'fs/promises'
 import { logger } from '../utils/logger'
 

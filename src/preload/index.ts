@@ -6,11 +6,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   ConfigFile,
-  Rule,
-  RuleExecution,
   BackupInfo,
   ValidationResult
 } from '@shared/types'
+import type { AutomationRule, RuleExecutionLog, RuleExecutionResult } from '@shared/types/rules'
 import type {
   ManagedModeStatus,
   ManagedModeConfig,
@@ -42,7 +41,6 @@ import type {
 } from '@shared/types/environment'
 import type {
   TerminalConfig,
-  TerminalSettings,
   TerminalExecutionConfig,
   TerminalType
 } from '@shared/types/terminal'
@@ -52,45 +50,45 @@ import type {
  */
 interface ConfigAPI {
   // 获取配置文件列表
-  list: () => Promise<ConfigFile[]>
+  list: () => Promise<{ success: boolean; data?: ConfigFile[]; error?: string }>
   // 获取单个配置文件内容
-  get: (path: string) => Promise<any>
+  get: (path: string) => Promise<{ success: boolean; data?: any; error?: string }>
   // 保存配置文件
-  save: (path: string, content: any, metadata?: any) => Promise<void>
+  save: (path: string, content: any, metadata?: any) => Promise<{ success: boolean; data?: void; error?: string }>
   // 保存配置元数据
-  saveMetadata: (path: string, metadata: any) => Promise<void>
+  saveMetadata: (path: string, metadata: any) => Promise<{ success: boolean; data?: void; error?: string }>
   // 获取配置元数据
-  getMetadata: (path: string) => Promise<any>
+  getMetadata: (path: string) => Promise<{ success: boolean; data?: any; error?: string }>
   // 创建新配置文件
-  create: (name: string, template?: string) => Promise<{ path: string }>
+  create: (name: string, template?: string) => Promise<{ success: boolean; data?: { path: string }; error?: string }>
   // 删除配置文件
-  delete: (path: string) => Promise<void>
+  delete: (path: string) => Promise<{ success: boolean; data?: void; error?: string }>
   // 验证配置
-  validate: (content: any) => Promise<ValidationResult>
+  validate: (content: any) => Promise<{ success: boolean; data?: ValidationResult; error?: string }>
   // 创建备份
-  createBackup: (path: string) => Promise<BackupInfo>
+  createBackup: (path: string) => Promise<{ success: boolean; data?: BackupInfo; error?: string }>
   // 恢复备份
-  restoreBackup: (backupId: string) => Promise<void>
+  restoreBackup: (backupId: string) => Promise<{ success: boolean; data?: void; error?: string }>
   // 获取备份列表
-  listBackups: (configPath: string) => Promise<BackupInfo[]>
+  listBackups: (configPath: string) => Promise<{ success: boolean; data?: BackupInfo[]; error?: string }>
   // 从用户目录导入配置
-  importFromUserDir: () => Promise<any[]>
+  importFromUserDir: () => Promise<{ success: boolean; data?: any[]; error?: string }>
   // 比较配置文件
-  compare: (config1Path: string, config2Path: string) => Promise<{ isSame: boolean }>
+  compare: (config1Path: string, config2Path: string) => Promise<{ success: boolean; data?: { isSame: boolean }; error?: string }>
   // 自动更新Claude Code配置状态
-  autoUpdateClaudeCodeStatus: () => Promise<{ updatedConfigs: number, totalConfigs: number }>
+  autoUpdateClaudeCodeStatus: () => Promise<{ success: boolean; data?: { updatedConfigs: number; totalConfigs: number }; error?: string }>
   // 检查配置匹配状态
-  checkMatch: (configPath: string) => Promise<{ isMatch: boolean }>
+  checkMatch: (configPath: string) => Promise<{ success: boolean; data?: { isMatch: boolean }; error?: string }>
   // 比较配置内容
-  compareContent: (config1Path: string, config2Path: string) => Promise<{ isSame: boolean }>
+  compareContent: (config1Path: string, config2Path: string) => Promise<{ success: boolean; data?: { isSame: boolean }; error?: string }>
   // 手动激活配置
-  activateConfig: (configPath: string) => Promise<{ success: boolean }>
+  activateConfig: (configPath: string) => Promise<{ success: boolean; data?: { success: boolean }; error?: string }>
   // 迁移单个配置文件
-  migrateFile: (filePath: string) => Promise<{ success: boolean }>
+  migrateFile: (filePath: string) => Promise<{ success: boolean; data?: { success: boolean }; error?: string }>
   // 批量迁移配置文件
-  migrateFiles: (filePaths: string[]) => Promise<{ success: string[], failed: string[], skipped: string[] }>
+  migrateFiles: (filePaths: string[]) => Promise<{ success: boolean; data?: { success: string[]; failed: string[]; skipped: string[] }; error?: string }>
   // 检查配置文件是否需要迁移
-  checkMigration: (filePath: string) => Promise<{ needsMigration: boolean, error?: string }>
+  checkMigration: (filePath: string) => Promise<{ success: boolean; data?: { needsMigration: boolean; error?: string }; error?: string }>
   // 监听配置变化
   watch: (callback: (event: any) => void) => void
 }
@@ -100,27 +98,27 @@ interface ConfigAPI {
  */
 interface RuleAPI {
   // 获取规则列表
-  list: () => Promise<Rule[]>
+  list: () => Promise<AutomationRule[]>
   // 获取单个规则
-  get: (id: string) => Promise<Rule | null>
+  get: (id: string) => Promise<AutomationRule | null>
   // 创建规则
-  create: (rule: Partial<Rule>) => Promise<{ id: string }>
+  create: (rule: Partial<AutomationRule>) => Promise<{ id: string }>
   // 更新规则
-  update: (id: string, updates: Partial<Rule>) => Promise<void>
+  update: (id: string, updates: Partial<AutomationRule>) => Promise<void>
   // 删除规则
   delete: (id: string) => Promise<void>
   // 启用/禁用规则
   toggle: (id: string, enabled: boolean) => Promise<void>
   // 手动执行规则
-  execute: (id: string) => Promise<RuleExecution>
+  execute: (id: string) => Promise<RuleExecutionResult>
   // 获取执行日志
-  getExecutionLog: (limit?: number) => Promise<RuleExecution[]>
+  getExecutionLog: (limit?: number) => Promise<RuleExecutionLog[]>
   // 获取规则统计
   getStats: (ruleId?: string) => Promise<any>
   // 监听规则执行事件
-  onExecuted: (callback: (execution: RuleExecution) => void) => void
+  onExecuted: (callback: (execution: RuleExecutionResult) => void) => void
   // 监听规则执行失败事件
-  onExecutionFailed: (callback: (execution: RuleExecution) => void) => void
+  onExecutionFailed: (callback: (execution: RuleExecutionResult) => void) => void
 }
 
 /**
@@ -481,23 +479,23 @@ interface AgentsAPI {
   }>
   import: (sourceFilePath: string, options?: AgentImportOptions) => Promise<{
     success: boolean
-    agentId?: string
+    data?: string
     error?: string
   }>
   importContent: (content: string, options?: AgentImportOptions) => Promise<{
     success: boolean
-    agentId?: string
+    data?: string
     error?: string
   }>
   batchImport: (sourceFilePaths: string[], options?: AgentImportOptions) => Promise<{
     success: boolean
-    imported?: string[]
-    errors?: Array<{ path: string; error: string }>
+    data?: { imported?: string[]; errors?: Array<{ path: string; error: string }> }
+    error?: string
   }>
   batchImportContent: (contents: Array<{ name?: string; content: string }>, options?: AgentImportOptions) => Promise<{
     success: boolean
-    imported?: string[]
-    errors?: Array<{ path: string; error: string }>
+    data?: { imported?: string[]; errors?: Array<{ path: string; error: string }> }
+    error?: string
   }>
 }
 
@@ -525,23 +523,23 @@ interface SkillsAPI {
   }>
   import: (sourceDirPath: string, options?: SkillImportOptions) => Promise<{
     success: boolean
-    skillId?: string
+    data?: string
     error?: string
   }>
   importFiles: (payload: { rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> }, options?: SkillImportOptions) => Promise<{
     success: boolean
-    skillId?: string
+    data?: string
     error?: string
   }>
   batchImport: (sourceDirPaths: string[], options?: SkillImportOptions) => Promise<{
     success: boolean
-    imported?: string[]
-    errors?: Array<{ path: string; error: string }>
+    data?: { imported?: string[]; errors?: Array<{ path: string; error: string }> }
+    error?: string
   }>
   batchImportFiles: (payloads: Array<{ rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> }>, options?: SkillImportOptions) => Promise<{
     success: boolean
-    imported?: string[]
-    errors?: Array<{ path: string; error: string }>
+    data?: { imported?: string[]; errors?: Array<{ path: string; error: string }> }
+    error?: string
   }>
 }
 
@@ -694,17 +692,17 @@ const configAPI: ConfigAPI = {
 const ruleAPI: RuleAPI = {
   list: () => ipcRenderer.invoke('rule:list'),
   get: (id: string) => ipcRenderer.invoke('rule:get', id),
-  create: (rule: Partial<Rule>) => ipcRenderer.invoke('rule:create', rule),
-  update: (id: string, updates: Partial<Rule>) => ipcRenderer.invoke('rule:update', id, updates),
+  create: (rule: Partial<AutomationRule>) => ipcRenderer.invoke('rule:create', rule),
+  update: (id: string, updates: Partial<AutomationRule>) => ipcRenderer.invoke('rule:update', id, updates),
   delete: (id: string) => ipcRenderer.invoke('rule:delete', id),
   toggle: (id: string, enabled: boolean) => ipcRenderer.invoke('rule:toggle', id, enabled),
   execute: (id: string) => ipcRenderer.invoke('rule:execute', id),
   getExecutionLog: (limit?: number) => ipcRenderer.invoke('rule:getExecutionLog', limit),
   getStats: (ruleId?: string) => ipcRenderer.invoke('rule:getStats', ruleId),
-  onExecuted: (callback: (execution: RuleExecution) => void) => {
+  onExecuted: (callback: (execution: RuleExecutionResult) => void) => {
     ipcRenderer.on('rule:executed', (_, execution) => callback(execution))
   },
-  onExecutionFailed: (callback: (execution: RuleExecution) => void) => {
+  onExecutionFailed: (callback: (execution: RuleExecutionResult) => void) => {
     ipcRenderer.on('rule:execution-failed', (_, execution) => callback(execution))
   }
 }

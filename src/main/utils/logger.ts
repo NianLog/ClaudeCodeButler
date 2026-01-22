@@ -5,7 +5,7 @@
 
 import { join } from 'path'
 import { writeFileSync, existsSync, mkdirSync } from 'fs'
-import { PATHS, LOG_LEVELS } from '@shared/constants'
+import { PATHS } from '@shared/constants'
 
 export enum LogLevel {
   DEBUG = 0,
@@ -17,11 +17,14 @@ export enum LogLevel {
 class Logger {
   private logLevel: LogLevel = LogLevel.INFO
   private logFile: string
+  private logEncoding: 'utf8'
 
   constructor() {
     this.logFile = join(PATHS.LOG_DIR, 'ccb.log')
+    this.logEncoding = this.resolveLogEncoding()
     this.ensureLogDirectory()
     this.setupLogRotation()
+    this.setupStdEncoding()
   }
 
   /**
@@ -84,7 +87,7 @@ class Logger {
         }
 
         // 处理对象，使用reducer处理循环引用
-        return JSON.stringify(obj, (key, value) => {
+        return JSON.stringify(obj, (_key, value) => {
           // 处理BigInt
           if (typeof value === 'bigint') {
             return value.toString()
@@ -136,8 +139,6 @@ class Logger {
       return
     }
 
-    const formattedMessage = this.formatMessage(levelName, message, data)
-
     // 控制台输出（Windows下使用英文级别标识避免乱码）
     const consoleLevelName = process.platform === 'win32'
       ? this.getEnglishLevelName(levelName)
@@ -175,6 +176,24 @@ class Logger {
       'ERROR': 'ERROR'
     }
     return levelMap[levelName] || levelName
+  }
+
+  /**
+   * 判断是否需要输出为 GBK 编码（避免 Windows 终端中文乱码）
+   */
+  private resolveLogEncoding(): 'utf8' {
+    return 'utf8'
+  }
+
+  private setupStdEncoding(): void {
+    if (process.platform !== 'win32') return
+    if (this.logEncoding !== 'utf8') return
+    try {
+      process.stdout?.setDefaultEncoding?.('utf8')
+      process.stderr?.setDefaultEncoding?.('utf8')
+    } catch (error) {
+      // 忽略设置失败
+    }
   }
 
   /**
@@ -269,7 +288,7 @@ class Logger {
       }
 
       const content = fs.readFileSync(this.logFile, 'utf8')
-      const allLines = content.split('\n').filter(line => line.trim())
+      const allLines = content.split('\n').filter((line: string) => line.trim())
       return allLines.slice(-lines)
     } catch (error) {
       this.error('读取日志文件失败', error)

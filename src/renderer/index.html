@@ -167,98 +167,31 @@
     <div id="root"></div>
   </div>
 
-  <script type="module">
-    // 应用启动脚本
-    (function() {
-      let retryCount = 0;
-      const maxRetries = 3;
-      const retryDelay = 1000;
+  <script>
+    (function () {
+      const loadingDiv = document.getElementById('loading')
+      const errorDiv = document.getElementById('error')
+      const errorMessage = document.getElementById('errorMessage')
 
-      function hideLoading() {
-        const loading = document.getElementById('loading');
-        if (loading) {
-          loading.style.opacity = '0';
-          setTimeout(() => {
-            loading.style.display = 'none';
-          }, 300);
+      const showError = (message) => {
+        if (loadingDiv) loadingDiv.style.display = 'none'
+        if (errorDiv) {
+          errorDiv.style.display = 'flex'
+          if (errorMessage) errorMessage.textContent = message || '应用启动失败，请重试或联系技术支持。'
         }
       }
 
-      function showError(message) {
-        const loading = document.getElementById('loading');
-        const error = document.getElementById('error');
-        const errorMessage = document.getElementById('errorMessage');
+      window.__APP_BOOTSTRAPPED__ = false
+      window.__APP_BOOT_ERROR__ = (message) => showError(message)
 
-        if (loading) loading.style.display = 'none';
-        if (error) {
-          error.style.display = 'flex';
-          if (errorMessage) errorMessage.textContent = message;
+      window.__APP_BOOT_TIMEOUT__ = setTimeout(() => {
+        if (!window.__APP_BOOTSTRAPPED__) {
+          showError('应用加载超时，请重试或联系技术支持。')
         }
-      }
-
-      function showApp() {
-        const app = document.getElementById('app');
-        if (app) {
-          app.style.display = 'block';
-        }
-      }
-
-      function startApp() {
-        try {
-          // 检查预加载脚本是否已加载
-          if (typeof window.electronAPI === 'undefined') {
-            throw new Error('Electron API 未加载，请重启应用');
-          }
-
-          // 检查是否在 Electron 环境中
-          if (!window.electronAPI) {
-            throw new Error('应用未在 Electron 环境中运行');
-          }
-
-          console.log('Starting CCB application...');
-
-          // 显示主应用
-          hideLoading();
-          showApp();
-
-          // 动态加载 React 应用
-          import('./src/main.tsx').catch(error => {
-            console.error('Failed to load React app:', error);
-            showError(`加载应用失败: ${error.message}`);
-          });
-
-        } catch (error) {
-          console.error('App startup error:', error);
-
-          if (retryCount < maxRetries) {
-            retryCount++;
-            console.log(`Retrying app startup (${retryCount}/${maxRetries})...`);
-            setTimeout(startApp, retryDelay * retryCount);
-          } else {
-            showError(`应用启动失败: ${error.message}`);
-          }
-        }
-      }
-
-      // 等待 DOM 加载完成
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startApp);
-      } else {
-        startApp();
-      }
-
-      // 监听未捕获的错误
-      window.addEventListener('error', (event) => {
-        console.error('Global error:', event.error);
-        showError(`应用运行时错误: ${event.error.message}`);
-      });
-
-      window.addEventListener('unhandledrejection', (event) => {
-        console.error('Unhandled promise rejection:', event.reason);
-        showError(`未处理的 Promise 错误: ${event.reason}`);
-      });
-
-    })();
+      }, 15000)
+    })()
   </script>
+
+  <script type="module" src="/src/main.tsx" onerror="window.__APP_BOOT_ERROR__ && window.__APP_BOOT_ERROR__('应用脚本加载失败，请重试或联系技术支持。')"></script>
 </body>
 </html>

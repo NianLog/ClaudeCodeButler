@@ -14,7 +14,6 @@ import {
   SettingsValidationRule
 } from '@shared/types/settings'
 import { logger } from '../utils/logger'
-import { DEFAULT_SETTINGS } from '@shared/constants'
 
 export class SettingsService {
   private settingsPath: string
@@ -67,7 +66,8 @@ export class SettingsService {
         minWidth: 800,
         minHeight: 600,
         rememberPosition: true
-      }
+      },
+      about: {}
     }
   }
 
@@ -143,7 +143,7 @@ export class SettingsService {
       if (!validation.isValid) {
         logger.warn('加载的设置存在验证错误:', validation.errors)
         // 修复无效设置
-        this.settings = this.fixInvalidSettings(this.settings, validation)
+        this.settings = this.fixInvalidSettings(this.settings)
       }
 
       logger.info('设置加载成功')
@@ -168,7 +168,8 @@ export class SettingsService {
       editor: { ...defaults.editor, ...loadedSettings.editor },
       notifications: { ...defaults.notifications, ...loadedSettings.notifications },
       advanced: { ...defaults.advanced, ...loadedSettings.advanced },
-      window: { ...defaults.window, ...loadedSettings.window }
+      window: { ...defaults.window, ...loadedSettings.window },
+      about: { ...defaults.about, ...loadedSettings.about }
     }
   }
 
@@ -327,15 +328,19 @@ export class SettingsService {
   /**
    * 修复无效设置
    */
-  private fixInvalidSettings(settings: AppSettings, validation: { isValid: boolean; errors: string[] }): AppSettings {
+  private fixInvalidSettings(settings: AppSettings): AppSettings {
     const defaults = this.getDefaultSettings()
     const fixed = { ...settings }
+    const fixedByTab = fixed as Record<Exclude<SettingsTab, 'about'>, any>
+    const settingsByTab = settings as Record<Exclude<SettingsTab, 'about'>, any>
+    const defaultsByTab = defaults as Record<Exclude<SettingsTab, 'about'>, any>
 
     // 简单修复：使用默认值替换无效值
-    for (const tab of ['basic', 'editor', 'notifications', 'advanced', 'window'] as SettingsTab[]) {
-      const tabValidation = this.validateTabSettings(tab, settings[tab])
+    const tabs: Array<Exclude<SettingsTab, 'about'>> = ['basic', 'editor', 'notifications', 'advanced', 'window']
+    for (const tab of tabs) {
+      const tabValidation = this.validateTabSettings(tab, settingsByTab[tab])
       if (!tabValidation.isValid) {
-        fixed[tab] = { ...defaults[tab], ...settings[tab] }
+        fixedByTab[tab] = { ...defaultsByTab[tab], ...settingsByTab[tab] }
       }
     }
 
@@ -402,6 +407,9 @@ export class SettingsService {
    * 获取特定标签页设置
    */
   getTabSettings(tab: SettingsTab): any {
+    if (tab === 'about') {
+      return {}
+    }
     return { ...this.settings[tab] }
   }
 
@@ -411,10 +419,16 @@ export class SettingsService {
   async resetSettings(tab?: SettingsTab): Promise<void> {
     try {
       if (tab) {
+        if (tab === 'about') {
+          logger.info('about 设置无需重置')
+          return
+        }
         // 重置特定标签页
         const defaults = this.getDefaultSettings()
-        const oldValues = { ...this.settings[tab] }
-        this.settings[tab] = { ...defaults[tab] }
+        const settingsByTab = this.settings as Record<Exclude<SettingsTab, 'about'>, any>
+        const defaultsByTab = defaults as Record<Exclude<SettingsTab, 'about'>, any>
+        const oldValues = { ...settingsByTab[tab] }
+        settingsByTab[tab] = { ...defaultsByTab[tab] }
 
         await this.saveToFile()
         this.triggerChangeEvents(tab, oldValues, this.settings[tab])
@@ -428,8 +442,11 @@ export class SettingsService {
         await this.saveToFile()
 
         // 触发所有标签页的变更事件
-        for (const tabKey of ['basic', 'editor', 'notifications', 'advanced', 'window'] as SettingsTab[]) {
-          this.triggerChangeEvents(tabKey, oldSettings[tabKey], this.settings[tabKey])
+        const tabs: Array<Exclude<SettingsTab, 'about'>> = ['basic', 'editor', 'notifications', 'advanced', 'window']
+        const oldSettingsByTab = oldSettings as Record<Exclude<SettingsTab, 'about'>, any>
+        const newSettingsByTab = this.settings as Record<Exclude<SettingsTab, 'about'>, any>
+        for (const tabKey of tabs) {
+          this.triggerChangeEvents(tabKey, oldSettingsByTab[tabKey], newSettingsByTab[tabKey])
         }
 
         logger.info('所有设置已重置')

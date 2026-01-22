@@ -3,36 +3,42 @@
  */
 
 /**
- * 环境检查状态枚举
+ * 环境检查状态常量
  */
-export enum EnvironmentCheckStatus {
+export const EnvironmentCheckStatus = {
   /** 正常 */
-  OK = 'ok',
+  OK: 'ok',
   /** 警告 */
-  WARNING = 'warning',
+  WARNING: 'warning',
   /** 错误 */
-  ERROR = 'error',
+  ERROR: 'error',
   /** 未安装/未找到 */
-  NOT_FOUND = 'not_found',
+  NOT_FOUND: 'not_found',
   /** 检查中 */
-  CHECKING = 'checking'
-}
+  CHECKING: 'checking'
+} as const
+
+/** 环境检查状态类型 */
+export type EnvironmentCheckStatus = typeof EnvironmentCheckStatus[keyof typeof EnvironmentCheckStatus]
 
 /**
- * 预定义环境检查项类型
+ * 预定义环境检查项类型常量
  */
-export enum PredefinedCheckType {
+export const PredefinedCheckType = {
   /** UV包管理器 */
-  UV = 'uv',
+  UV: 'uv',
   /** Claude Code */
-  CLAUDE_CODE = 'claude-code',
+  CLAUDE_CODE: 'claude-code',
   /** Node.js */
-  NODEJS = 'nodejs',
+  NODEJS: 'nodejs',
   /** NPM */
-  NPM = 'npm',
+  NPM: 'npm',
   /** NPX */
-  NPX = 'npx'
-}
+  NPX: 'npx'
+} as const
+
+/** 预定义环境检查项类型 */
+export type PredefinedCheckType = typeof PredefinedCheckType[keyof typeof PredefinedCheckType]
 
 /**
  * 自定义环境检查项接口
@@ -86,10 +92,18 @@ export interface EnvironmentCheckResult {
 export interface ClaudeCodeVersionInfo {
   /** 版本号 */
   version: string
+  /** 当前版本 */
+  current?: string
+  /** 最新版本 */
+  latest?: string
+  /** 是否有更新 */
+  updateAvailable?: boolean
+  /** 更新日志 */
+  changelog?: string
   /** 安装路径 */
   path?: string
   /** 最后更新时间 */
-  lastUpdated?: Date
+  lastUpdated?: Date | string
 }
 
 /**

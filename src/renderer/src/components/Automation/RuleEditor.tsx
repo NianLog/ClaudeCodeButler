@@ -9,6 +9,7 @@ import { useRuleStore } from '../../store/rule-store';
 import { useConfigListStore } from '../../store/config-list-store';
 import { AutomationRule, TimeTrigger } from '@shared/types/rules';
 import dayjs from 'dayjs';
+import { useTranslation } from '../../locales/useTranslation'
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -19,66 +20,96 @@ interface RuleEditorProps {
   rule: AutomationRule | null;
 }
 
-const weekDaysOptions = [
-  { label: '周一', value: 1 },
-  { label: '周二', value: 2 },
-  { label: '周三', value: 3 },
-  { label: '周四', value: 4 },
-  { label: '周五', value: 5 },
-  { label: '周六', value: 6 },
-  { label: '周日', value: 0 },
-];
-
 const RuleEditor: React.FC<RuleEditorProps> = ({ visible, onClose, rule }) => {
+  const { t } = useTranslation()
   const [form] = Form.useForm();
   const { message } = AntdApp.useApp();
   const { createRule, updateRule } = useRuleStore();
   const { configs } = useConfigListStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const actionType = Form.useWatch('actionType', form);
+
+  const weekDaysOptions = [
+    { label: t('automation.weekday.mon'), value: 1 },
+    { label: t('automation.weekday.tue'), value: 2 },
+    { label: t('automation.weekday.wed'), value: 3 },
+    { label: t('automation.weekday.thu'), value: 4 },
+    { label: t('automation.weekday.fri'), value: 5 },
+    { label: t('automation.weekday.sat'), value: 6 },
+    { label: t('automation.weekday.sun'), value: 0 }
+  ];
 
   useEffect(() => {
     if (visible && rule) {
       const trigger = rule.trigger as TimeTrigger;
-      form.setFieldsValue({
+      const baseValues: any = {
         name: rule.name,
         enabled: rule.enabled,
         time: dayjs(trigger.time, 'HH:mm'),
         days: trigger.days,
-        targetConfigPath: rule.action.targetConfigPath,
-      });
+        actionType: rule.action.type,
+      };
+
+      if (rule.action.type === 'switch-config') {
+        baseValues.targetConfigPath = rule.action.targetConfigPath
+      } else if (rule.action.type === 'custom-command') {
+        baseValues.command = rule.action.command
+        baseValues.workingDirectory = rule.action.workingDirectory
+        baseValues.timeout = rule.action.timeout
+      }
+
+      form.setFieldsValue(baseValues)
     } else if (visible) {
       form.resetFields();
-      form.setFieldsValue({ enabled: true, days: [1, 2, 3, 4, 5], time: dayjs('09:00', 'HH:mm') });
+      form.setFieldsValue({
+        enabled: true,
+        days: [1, 2, 3, 4, 5],
+        time: dayjs('09:00', 'HH:mm'),
+        actionType: 'switch-config'
+      });
     }
   }, [visible, rule, form]);
 
   const handleFinish = async (values: any) => {
     setIsSubmitting(true);
     try {
-      const ruleData = {
+      const baseRule = {
         name: values.name,
         enabled: values.enabled,
         trigger: {
           type: 'time' as const,
           time: values.time.format('HH:mm'),
           days: values.days,
-        },
-        action: {
-          type: 'switch-config' as const,
-          targetConfigPath: values.targetConfigPath,
-        },
-      };
+        }
+      }
+
+      const action = values.actionType === 'custom-command'
+        ? {
+            type: 'custom-command' as const,
+            command: values.command,
+            workingDirectory: values.workingDirectory,
+            timeout: values.timeout ? Number(values.timeout) : undefined
+          }
+        : {
+            type: 'switch-config' as const,
+            targetConfigPath: values.targetConfigPath
+          }
+
+      const ruleData = {
+        ...baseRule,
+        action
+      }
 
       if (rule) {
         await updateRule(rule.id, ruleData);
-        message.success('规则更新成功');
+        message.success(t('automation.messages.updateSuccess'));
       } else {
         await createRule(ruleData as any);
-        message.success('规则创建成功');
+        message.success(t('automation.messages.createSuccess'));
       }
       onClose();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '操作失败');
+      message.error(error instanceof Error ? error.message : t('automation.messages.saveFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -86,7 +117,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ visible, onClose, rule }) => {
 
   return (
     <Modal
-      title={rule ? '编辑规则' : '创建新规则'}
+      title={rule ? t('automation.editor.editTitle') : t('automation.editor.createTitle')}
       open={visible}
       onCancel={onClose}
       footer={null}
@@ -94,50 +125,75 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ visible, onClose, rule }) => {
       destroyOnHidden
     >
       <Form form={form} layout="vertical" onFinish={handleFinish} style={{ marginTop: 24 }}>
-        <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
-          <Input placeholder="例如：工作日上班自动切换为高性能配置" />
+        <Form.Item name="name" label={t('automation.editor.nameLabel')} rules={[{ required: true, message: t('automation.editor.nameRequired') }]}>
+          <Input placeholder={t('automation.editor.namePlaceholder')} />
         </Form.Item>
 
-        <Divider>触发条件</Divider>
+        <Divider>{t('automation.editor.triggerTitle')}</Divider>
 
-        <Form.Item label="当满足以下时间条件时：">
+        <Form.Item label={t('automation.editor.triggerWhen')}>
           <Space align="baseline">
-            <Text>在每周的</Text>
-            <Form.Item name="days" noStyle rules={[{ required: true, message: '请选择周期' }]}>
+            <Text>{t('automation.editor.weekPrefix')}</Text>
+            <Form.Item name="days" noStyle rules={[{ required: true, message: t('automation.editor.daysRequired') }]}>
               <Checkbox.Group options={weekDaysOptions} />
             </Form.Item>
-            <Text>的</Text>
-            <Form.Item name="time" noStyle rules={[{ required: true, message: '请选择时间' }]}>
+            <Text>{t('automation.editor.timeSeparator')}</Text>
+            <Form.Item name="time" noStyle rules={[{ required: true, message: t('automation.editor.timeRequired') }]}>
               <TimePicker format="HH:mm" minuteStep={5} />
             </Form.Item>
           </Space>
         </Form.Item>
 
-        <Divider>执行动作</Divider>
+        <Divider>{t('automation.editor.actionTitle')}</Divider>
 
-        <Form.Item name="targetConfigPath" label="自动切换到以下配置文件：" rules={[{ required: true, message: '请选择目标配置文件' }]}>
-          <Select placeholder="选择一个 claude-code 类型的配置文件">
-            {configs
-              .filter(c => !c.isSystemConfig && c.type === 'claude-code') // 仅显示 claude-code 类型的用户配置
-              .map(c => (
-                <Option key={c.path} value={c.path}>
-                  {c.name}
-                </Option>
-              ))}
+        <Form.Item name="actionType" label={t('automation.editor.actionTypeLabel')} rules={[{ required: true, message: t('automation.editor.actionTypeRequired') }]}>
+          <Select>
+            <Option value="switch-config">{t('automation.action.switchConfig')}</Option>
+            <Option value="custom-command">{t('automation.action.command')}</Option>
           </Select>
         </Form.Item>
 
-        <Form.Item name="enabled" label="启用此规则" valuePropName="checked" style={{ marginTop: 32 }}>
+        {actionType === 'switch-config' && (
+          <Form.Item name="targetConfigPath" label={t('automation.editor.targetConfigLabel')} rules={[{ required: true, message: t('automation.editor.targetConfigRequired') }]}>
+            <Select placeholder={t('automation.editor.targetConfigPlaceholder')}>
+              {configs
+                .filter(c => !c.isSystemConfig && c.type === 'claude-code')
+                .map(c => (
+                  <Option key={c.path} value={c.path}>
+                    {c.name}
+                  </Option>
+                ))}
+            </Select>
+          </Form.Item>
+        )}
+
+        {actionType === 'custom-command' && (
+          <>
+            <Form.Item name="command" label={t('automation.editor.commandLabel')} rules={[{ required: true, message: t('automation.editor.commandRequired') }]}
+            >
+              <Input placeholder={t('automation.editor.commandPlaceholder')} />
+            </Form.Item>
+            <Form.Item name="workingDirectory" label={t('automation.editor.workingDirectoryLabel')}>
+              <Input placeholder={t('automation.editor.workingDirectoryPlaceholder')} />
+            </Form.Item>
+            <Form.Item name="timeout" label={t('automation.editor.timeoutLabel')}>
+              <Input placeholder={t('automation.editor.timeoutPlaceholder')} />
+            </Form.Item>
+            <Text type="secondary">{t('automation.editor.commandHint')}</Text>
+          </>
+        )}
+
+        <Form.Item name="enabled" label={t('automation.editor.enabledLabel')} valuePropName="checked" style={{ marginTop: 32 }}>
           <Switch />
         </Form.Item>
 
         <Form.Item style={{ textAlign: 'right', marginTop: 24, marginBottom: 0 }}>
           <Space>
             <Button onClick={onClose}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button type="primary" htmlType="submit" loading={isSubmitting}>
-              {rule ? '保存更改' : '创建规则'}
+              {rule ? t('automation.editor.saveChanges') : t('automation.editor.createAction')}
             </Button>
           </Space>
         </Form.Item>

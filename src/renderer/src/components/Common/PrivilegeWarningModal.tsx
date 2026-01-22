@@ -25,9 +25,9 @@ import {
   RocketOutlined,
   SettingOutlined
 } from '@ant-design/icons'
+import { useTranslation } from '../../locales/useTranslation'
 
-const { Title, Text, Paragraph } = Typography
-const { Step } = Steps
+const { Text } = Typography
 
 /**
  * 权限警告数据类型
@@ -70,6 +70,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
   onElevate,
   onRelaunchAsAdmin
 }) => {
+  const { t } = useTranslation()
   const message = useMessage()
   const [currentStep, setCurrentStep] = useState(0)
   const [isElevating, setIsElevating] = useState(false)
@@ -90,7 +91,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
       setPrivilegeCheck(result)
     } catch (error) {
       console.error('权限检查失败:', error)
-      message.error('权限检查失败')
+      message.error(t('privilege.checkFailed'))
     }
   }
 
@@ -117,16 +118,16 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
       setElevationProgress(success ? 100 : 0)
 
       if (success) {
-        message.success('权限提升成功')
+        message.success(t('privilege.elevateSuccess'))
         setTimeout(() => {
           window.location.reload()
         }, 1000)
       } else {
-        message.error('权限提升失败，请尝试手动以管理员身份运行')
+        message.error(t('privilege.elevateFailed'))
       }
     } catch (error) {
       console.error('权限提升失败:', error)
-      message.error('权限提升过程中发生错误')
+      message.error(t('privilege.elevateError'))
     } finally {
       setIsElevating(false)
       setTimeout(() => setElevationProgress(0), 2000)
@@ -156,14 +157,14 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
       setElevationProgress(success ? 100 : 0)
 
       if (success) {
-        message.success('应用将以管理员权限重启')
+        message.success(t('privilege.relaunchSuccess'))
         // 应用重启后不需要手动关闭模态框
       } else {
-        message.error('重启失败，请手动以管理员身份运行应用')
+        message.error(t('privilege.relaunchFailed'))
       }
     } catch (error) {
       console.error('重启失败:', error)
-      message.error('重启过程中发生错误')
+      message.error(t('privilege.relaunchError'))
     } finally {
       setIsElevating(false)
       setTimeout(() => setElevationProgress(0), 2000)
@@ -183,7 +184,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
   const renderPrivilegeCheck = () => {
     if (!privilegeCheck) {
       return (
-        <Card loading title="正在检查权限状态...">
+        <Card loading title={t('privilege.checking')}>
           <div style={{ height: 200 }} />
         </Card>
       )
@@ -194,25 +195,25 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
         title={
           <Space>
             <SecurityScanOutlined />
-            权限检查结果
+            {t('privilege.checkResult')}
           </Space>
         }
       >
         <List
           dataSource={[
             {
-              title: '管理员权限',
-              description: privilegeCheck.isRunningAsAdmin ? '当前具有管理员权限' : '当前以普通用户权限运行',
+              title: t('privilege.items.adminTitle'),
+              description: privilegeCheck.isRunningAsAdmin ? t('privilege.items.adminYes') : t('privilege.items.adminNo'),
               icon: renderPrivilegeIcon(privilegeCheck.isRunningAsAdmin)
             },
             {
-              title: '文件系统访问',
-              description: privilegeCheck.canAccessSystemFiles ? '可以访问系统文件' : '无法访问系统文件',
+              title: t('privilege.items.fsTitle'),
+              description: privilegeCheck.canAccessSystemFiles ? t('privilege.items.fsYes') : t('privilege.items.fsNo'),
               icon: renderPrivilegeIcon(privilegeCheck.canAccessSystemFiles)
             },
             {
-              title: '系统通知',
-              description: privilegeCheck.canAccessSystemNotifications ? '可以发送系统通知' : '无法发送系统通知',
+              title: t('privilege.items.notifyTitle'),
+              description: privilegeCheck.canAccessSystemNotifications ? t('privilege.items.notifyYes') : t('privilege.items.notifyNo'),
               icon: renderPrivilegeIcon(privilegeCheck.canAccessSystemNotifications)
             }
           ]}
@@ -232,25 +233,25 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
 
   // 渲染权限提升步骤
   const renderElevationSteps = () => (
-    <Card title="权限提升步骤">
+    <Card title={t('privilege.steps.title')}>
       <Steps
         current={currentStep}
         direction="vertical"
         size="small"
         items={[
           {
-            title: '选择提升方式',
-            description: '选择自动提升或手动重启',
+            title: t('privilege.steps.chooseTitle'),
+            description: t('privilege.steps.chooseDesc'),
             icon: <SettingOutlined />
           },
           {
-            title: '执行权限提升',
-            description: '系统将请求管理员权限',
+            title: t('privilege.steps.runTitle'),
+            description: t('privilege.steps.runDesc'),
             icon: <RocketOutlined />
           },
           {
-            title: '完成验证',
-            description: '验证权限提升是否成功',
+            title: t('privilege.steps.verifyTitle'),
+            description: t('privilege.steps.verifyDesc'),
             icon: <CheckCircleOutlined />
           }
         ]}
@@ -271,7 +272,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
             }}
             loading={isElevating}
           >
-            自动提升权限
+            {t('privilege.actions.autoElevate')}
           </Button>
 
           <Button
@@ -284,7 +285,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
             }}
             loading={isElevating}
           >
-            以管理员身份重启
+            {t('privilege.actions.relaunch')}
           </Button>
         </Space>
       )}
@@ -292,7 +293,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
       {(currentStep === 1 || currentStep === 2) && (
         <div>
           <div style={{ marginBottom: 16 }}>
-            <Text>正在执行权限提升...</Text>
+            <Text>{t('privilege.progress.running')}</Text>
             <Progress
               percent={elevationProgress}
               status={isElevating ? 'active' : 'normal'}
@@ -302,11 +303,11 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
 
           {elevationProgress === 100 && (
             <Alert
-              message={currentStep === 1 ? '权限提升完成' : '验证成功'}
+              message={currentStep === 1 ? t('privilege.progress.done') : t('privilege.progress.verified')}
               description={
                 currentStep === 1
-                  ? '权限提升成功，应用功能将完全可用'
-                  : '权限验证通过，所有功能正常'
+                  ? t('privilege.progress.doneDesc')
+                  : t('privilege.progress.verifiedDesc')
               }
               type="success"
               showIcon
@@ -320,12 +321,12 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
   // 渲染推荐操作
   const renderRecommendations = () => {
     const recommendations = warning?.recommendations || [
-      '右键点击应用图标，选择"以管理员身份运行"',
-      '或在设置中手动授予必要权限'
+      t('privilege.recommendations.default1'),
+      t('privilege.recommendations.default2')
     ]
 
     return (
-      <Card title="推荐操作">
+      <Card title={t('privilege.recommendations.title')}>
         <List
           dataSource={recommendations}
           renderItem={(item, index) => (
@@ -346,7 +347,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
       title={
         <Space>
           <WarningOutlined style={{ color: '#faad14' }} />
-          权限不足警告
+          {t('privilege.title')}
         </Space>
       }
       open={visible}
@@ -358,8 +359,8 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
     >
       <div style={{ minHeight: 400 }}>
         <Alert
-          message="应用权限不足"
-          description="CCB 需要管理员权限才能正常运行全部功能。缺少权限可能导致某些功能无法使用。"
+          message={t('privilege.alert.title')}
+          description={t('privilege.alert.desc')}
           type="warning"
           showIcon
           style={{ marginBottom: 24 }}
@@ -376,7 +377,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
         <div style={{ textAlign: 'center' }}>
           <Space>
             <Button onClick={onClose}>
-              稍后处理
+              {t('privilege.actions.later')}
             </Button>
             {!isElevating && privilegeCheck?.needsElevation && (
               <Button
@@ -385,7 +386,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
                 onClick={handleElevate}
                 loading={isElevating}
               >
-                立即提升权限
+                {t('privilege.actions.elevateNow')}
               </Button>
             )}
           </Space>

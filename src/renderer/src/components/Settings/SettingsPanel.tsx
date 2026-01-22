@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react'
-import { Card, Form, Switch, Input, InputNumber, Select, Button, Space, Typography, Tabs, Row, Col, Alert, Descriptions, Tag, message, Divider, Modal } from 'antd'
+import { Card, Form, Switch, Input, InputNumber, Select, Button, Space, Typography, Tabs, Row, Col, Alert, Descriptions, Tag, message, Divider } from 'antd'
 import {
   SaveOutlined,
   ReloadOutlined,
@@ -25,48 +25,44 @@ import { useAppStore } from '../../store/app-store'
 import { useTranslation } from '../../locales/useTranslation'
 import { versionService } from '../../services/version-service'
 import UpdateModal from '../Common/UpdateModal'
-import Logo from '../Common/Logo'
 import TerminalManagement from './TerminalManagement'
 import type { VersionInfo } from '../../services/version-service'
 
 const { Title, Text } = Typography
 const { Option } = Select
 
-/**
- * 设置面板组件
- */
 const SettingsPanel: React.FC = () => {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('basic')
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateModalVisible, setUpdateModalVisible] = useState(false)
+  const [latestVersion, setLatestVersion] = useState<string | null>(null)
+  const [latestVersionStatus, setLatestVersionStatus] = useState<'idle' | 'loading' | 'ready' | 'offline'>('idle')
+  const [changelogStatus, setChangelogStatus] = useState<'idle' | 'loading' | 'ready' | 'offline'>('idle')
+  const [changelogLines, setChangelogLines] = useState<string[]>([])
   const [updateInfo, setUpdateInfo] = useState<{
     currentVersion: string
     latestVersion: string
     versionInfo: VersionInfo
   } | null>(null)
 
-  // 使用新的设置 store
   const basicSettings = useBasicSettings()
   const editorSettings = useEditorSettings()
   const notificationSettings = useNotificationSettings()
   const advancedSettings = useAdvancedSettings()
   const windowSettings = useWindowSettings()
-  const { isLoading, isSaving, saveSettings, resetSettings: resetAppSettings, initialize } = useSettingsStore()
+  const { isSaving, saveSettings, resetSettings: resetAppSettings, initialize } = useSettingsStore()
   const { setTabSettings, markTabSaved } = useSettingsActions()
-  const unsavedChanges = useUnsavedChanges()
+  useUnsavedChanges()
 
-  
   const { theme, setTheme, version } = useAppStore()
-  const { t, language, setLanguage, availableLanguages } = useTranslation()
+  const { t, setLanguage, availableLanguages } = useTranslation()
 
   useEffect(() => {
-    // 初始化设置
     initialize()
   }, [initialize])
 
-  // 使用ref来追踪是否已经初始化，避免每次组件重新挂载时重置
   const isInitializedRef = useRef(false)
 
   useEffect(() => {
@@ -116,6 +112,49 @@ const SettingsPanel: React.FC = () => {
     // 初始化版本号
     versionService.setCurrentVersion(version)
   }, [version])
+
+  useEffect(() => {
+    if (activeTab !== 'about' || latestVersionStatus === 'loading' || changelogStatus === 'loading') {
+      return
+    }
+
+    if (latestVersionStatus === 'ready' && changelogStatus === 'ready') {
+      return
+    }
+
+    const fetchLatestVersion = async () => {
+      try {
+        setLatestVersionStatus('loading')
+        setChangelogStatus('loading')
+        const info = await versionService.fetchVersionInfo()
+        setLatestVersion(info.appId)
+        const formatted = versionService.formatUpdateText(info.updateText || '')
+        const lines = formatted
+          .split('\n')
+          .map(line => line.trim())
+          .filter(Boolean)
+        setChangelogLines(lines)
+        setLatestVersionStatus('ready')
+        setChangelogStatus('ready')
+      } catch (error) {
+        setLatestVersionStatus('offline')
+        setChangelogStatus('offline')
+      }
+    }
+
+    fetchLatestVersion()
+  }, [activeTab, latestVersionStatus, changelogStatus])
+
+  // 获取标签页中文名称
+  function getTabName(tab: string): string {
+    const names: Record<string, string> = {
+      basic: t('settings.basic'),
+      editor: t('settings.editor'),
+      notifications: t('settings.notifications'),
+      advanced: t('settings.advanced')
+    }
+    return names[tab] || tab
+  }
 
   // 按标签页保存设置
   const handleSaveTab = async (tab: string) => {
@@ -173,63 +212,37 @@ const SettingsPanel: React.FC = () => {
           height: values.window.height || windowSettings?.height || 800,
           minWidth: values.window.minWidth || windowSettings?.minWidth || 800,
           minHeight: values.window.minHeight || windowSettings?.minHeight || 600,
-          rememberPosition: values.window.rememberPosition !== undefined ? values.window.rememberPosition : (windowSettings?.rememberPosition ?? true)
+          rememberPosition: values.window.rememberPosition !== undefined
+            ? values.window.rememberPosition
+            : (windowSettings?.rememberPosition ?? true)
         }
         setTabSettings('window' as any, completeWindowSettings)
         await saveSettings('window' as any)
+        markTabSaved('window' as any)
       }
 
-      console.log('🔧 saveSettings函数执行完成')
       markTabSaved(tab as any)
       message.success(t('message.settings.saved', { tab: getTabName(tab) }))
-      console.log('🔧 标签页保存成功:', tab)
     } catch (error) {
-      console.error('🔧 保存标签页失败:', error)
       message.error(t('message.settings.saveFailed', { tab: getTabName(tab) }))
     } finally {
       setLoading(false)
     }
   }
 
-  // 保存当前标签页设置
   const handleSave = async () => {
-    console.log('🔧 保存按钮被点击，当前标签页:', activeTab)
-    console.log('🔧 表单数据:', await form.validateFields().catch(e => ({ error: e.message })))
     await handleSaveTab(activeTab)
   }
 
-  // 重置当前标签页设置
   const handleReset = async () => {
-    // 显示确认对话框
-    Modal.confirm({
-      title: '确认重置设置',
-      content: `您确定要重置"${getTabName(activeTab)}"标签页的所有设置吗？此操作无法撤销。`,
-      okText: '确认重置',
-      cancelText: '取消',
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          await resetAppSettings(activeTab as any)
-          message.success(t('message.settings.reset', { tab: getTabName(activeTab) }))
-        } catch (error) {
-          message.error(t('message.settings.resetFailed', { tab: getTabName(activeTab) }))
-        }
-      },
-      onCancel: () => {
-        // 用户取消操作
-      }
-    })
-  }
-
-  // 获取标签页中文名称
-  const getTabName = (tab: string): string => {
-    const names: Record<string, string> = {
-      basic: t('settings.basic'),
-      editor: t('settings.editor'),
-      notifications: t('settings.notifications'),
-      advanced: t('settings.advanced')
+    const tabName = getTabName(activeTab)
+    try {
+      await resetAppSettings(activeTab as any)
+      await initialize()
+      message.success(t('message.settings.reset', { tab: tabName }))
+    } catch (error) {
+      message.error(t('message.settings.resetFailed', { tab: tabName }))
     }
-    return names[tab] || tab
   }
 
   const handleExport = async () => {
@@ -273,7 +286,7 @@ const SettingsPanel: React.FC = () => {
     }
   }
 
-  const handleThemeChange = (newTheme: 'light' | 'dark') => {
+  const handleThemeChange = (newTheme: 'light' | 'dark' | 'auto') => {
     setTheme(newTheme)
     document.documentElement.setAttribute('data-theme', newTheme)
   }
@@ -285,9 +298,9 @@ const SettingsPanel: React.FC = () => {
     // 立即保存语言设置
     try {
       await saveSettings('basic')
-      message.success('语言设置已保存')
+      message.success(t('settings.messages.languageSaved'))
     } catch (error) {
-      message.error('保存语言设置失败')
+      message.error(t('settings.messages.languageSaveFailed'))
     }
   }
 
@@ -295,9 +308,12 @@ const SettingsPanel: React.FC = () => {
   const handleCheckUpdate = async () => {
     try {
       setCheckingUpdate(true)
-      message.loading({ content: '正在检查更新...', key: 'checkUpdate' })
+      message.loading({ content: t('update.checking'), key: 'checkUpdate' })
 
       const result = await versionService.checkForUpdates()
+
+      setLatestVersion(result.latestVersion)
+      setLatestVersionStatus('ready')
 
       if (result.hasUpdate && result.versionInfo) {
         message.destroy('checkUpdate')
@@ -308,13 +324,14 @@ const SettingsPanel: React.FC = () => {
         })
         setUpdateModalVisible(true)
       } else {
-        message.success({ content: '当前已是最新版本', key: 'checkUpdate' })
+        message.success({ content: t('update.latest'), key: 'checkUpdate' })
       }
     } catch (error) {
       message.error({
-        content: error instanceof Error ? error.message : '检查更新失败',
+        content: error instanceof Error ? error.message : t('update.failed'),
         key: 'checkUpdate'
       })
+      setLatestVersionStatus('offline')
     } finally {
       setCheckingUpdate(false)
     }
@@ -325,9 +342,9 @@ const SettingsPanel: React.FC = () => {
     try {
       await versionService.openDownloadPage(downloadUrl)
       setUpdateModalVisible(false)
-      message.success('已在浏览器中打开下载页面')
+      message.success(t('update.openDownloadSuccess'))
     } catch (error) {
-      message.error('打开下载页面失败')
+      message.error(t('update.openDownloadFailed'))
     }
   }
 
@@ -337,36 +354,39 @@ const SettingsPanel: React.FC = () => {
       await versionService.openDownloadPage()
       setUpdateModalVisible(false)
     } catch (error) {
-      message.error('打开官网失败')
+      message.error(t('update.openWebsiteFailed'))
     }
   }
 
   const generalSettings = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <Card title="基本设置" style={{ borderRadius: '12px' }}>
+      <Card title={t('settings.basic')} style={{ borderRadius: '12px' }}>
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12}>
             <Form.Item
               name={['basic', 'language']}
-              label="语言"
-              tooltip="选择应用界面语言"
+              label={t('settings.basic.language')}
+              tooltip={t('settings.basic.language.tooltip')}
             >
               <Select onChange={handleLanguageChange}>
-                <Option value="zh-CN">简体中文</Option>
-                <Option value="en-US">English</Option>
+                {availableLanguages.map((lang) => (
+                  <Option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </Option>
+                ))}
               </Select>
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item
               name={['basic', 'theme']}
-              label="主题"
-              tooltip="选择应用主题"
+              label={t('settings.basic.theme')}
+              tooltip={t('settings.basic.theme.tooltip')}
             >
-              <Select value={theme} onChange={handleThemeChange}>
-                <Option value="light">浅色主题</Option>
-                <Option value="dark">深色主题</Option>
-                <Option value="auto">跟随系统</Option>
+              <Select<'light' | 'dark' | 'auto'> value={theme} onChange={handleThemeChange}>
+                <Option value="light">{t('settings.basic.theme.light')}</Option>
+                <Option value="dark">{t('settings.basic.theme.dark')}</Option>
+                <Option value="auto">{t('settings.basic.theme.auto')}</Option>
               </Select>
             </Form.Item>
           </Col>
@@ -376,8 +396,8 @@ const SettingsPanel: React.FC = () => {
           <Col xs={24} md={12}>
             <Form.Item
               name={['basic', 'autoSave']}
-              label="自动保存"
-              tooltip="自动保存配置更改"
+              label={t('settings.basic.autoSave')}
+              tooltip={t('settings.basic.autoSave.tooltip')}
               valuePropName="checked"
             >
               <Switch />
@@ -386,8 +406,8 @@ const SettingsPanel: React.FC = () => {
           <Col xs={24} md={12}>
             <Form.Item
               name={['basic', 'startupCheck']}
-              label="启动时检查更新"
-              tooltip="应用启动时自动检查更新"
+              label={t('settings.basic.startupCheck')}
+              tooltip={t('settings.basic.startupCheck.tooltip')}
               valuePropName="checked"
             >
               <Switch />
@@ -399,8 +419,8 @@ const SettingsPanel: React.FC = () => {
           <Col xs={24} md={12}>
             <Form.Item
               name={['window', 'width']}
-              label="窗口宽度"
-              tooltip="应用启动时的窗口宽度"
+              label={t('settings.basic.windowWidth')}
+              tooltip={t('settings.basic.windowWidth.tooltip')}
             >
               <InputNumber min={800} max={1920} style={{ width: '100%' }} />
             </Form.Item>
@@ -408,8 +428,8 @@ const SettingsPanel: React.FC = () => {
           <Col xs={24} md={12}>
             <Form.Item
               name={['window', 'height']}
-              label="窗口高度"
-              tooltip="应用启动时的窗口高度"
+              label={t('settings.basic.windowHeight')}
+              tooltip={t('settings.basic.windowHeight.tooltip')}
             >
               <InputNumber min={600} max={1080} style={{ width: '100%' }} />
             </Form.Item>
@@ -431,13 +451,13 @@ const SettingsPanel: React.FC = () => {
   )
 
   const notificationSettingsContent = (
-    <Card title="通知设置" style={{ borderRadius: '12px' }}>
+    <Card title={t('settings.notifications')} style={{ borderRadius: '12px' }}>
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12}>
           <Form.Item
             name={['notifications', 'enabled']}
-            label="启用通知"
-            tooltip="启用系统通知"
+            label={t('settings.notifications.enabled')}
+            tooltip={t('settings.notifications.enabled.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -446,8 +466,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={12}>
           <Form.Item
             name={['notifications', 'sound']}
-            label="通知声音"
-            tooltip="通知时播放声音"
+            label={t('settings.notifications.sound')}
+            tooltip={t('settings.notifications.sound.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -459,8 +479,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={12}>
           <Form.Item
             name={['notifications', 'configChanges']}
-            label="配置变更通知"
-            tooltip="配置变更时发送通知"
+            label={t('settings.notifications.configChanges')}
+            tooltip={t('settings.notifications.configChanges.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -469,8 +489,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={12}>
           <Form.Item
             name={['notifications', 'errors']}
-            label="错误通知"
-            tooltip="发生错误时发送通知"
+            label={t('settings.notifications.errors')}
+            tooltip={t('settings.notifications.errors.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -482,8 +502,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={12}>
           <Form.Item
             name={['notifications', 'startupCheckUpdate']}
-            label="启动时检查更新"
-            tooltip="应用启动时自动检查版本更新"
+            label={t('settings.notifications.startupCheckUpdate')}
+            tooltip={t('settings.notifications.startupCheckUpdate.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -492,8 +512,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={12}>
           <Form.Item
             name={['notifications', 'silentUpdateCheck']}
-            label="静默更新检查"
-            tooltip="网络失败时不显示错误通知，仅在发现更新时提醒"
+            label={t('settings.notifications.silentUpdateCheck')}
+            tooltip={t('settings.notifications.silentUpdateCheck.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -503,15 +523,14 @@ const SettingsPanel: React.FC = () => {
     </Card>
   )
 
-
   const editorSettingsPanel = (
-    <Card title="编辑器设置" style={{ borderRadius: '12px' }}>
+    <Card title={t('settings.editor')} style={{ borderRadius: '12px' }}>
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
           <Form.Item
             name={['editor', 'fontSize']}
-            label="字体大小"
-            tooltip="编辑器字体大小"
+            label={t('settings.editor.fontSize')}
+            tooltip={t('settings.editor.fontSize.tooltip')}
           >
             <InputNumber min={10} max={24} style={{ width: '100%' }} />
           </Form.Item>
@@ -519,8 +538,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={8}>
           <Form.Item
             name={['editor', 'tabSize']}
-            label="Tab 大小"
-            tooltip="Tab 键缩进大小"
+            label={t('settings.editor.tabSize')}
+            tooltip={t('settings.editor.tabSize.tooltip')}
           >
             <InputNumber min={2} max={8} style={{ width: '100%' }} />
           </Form.Item>
@@ -528,8 +547,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={8}>
           <Form.Item
             name={['editor', 'wordWrap']}
-            label="自动换行"
-            tooltip="编辑器自动换行"
+            label={t('settings.editor.wordWrap')}
+            tooltip={t('settings.editor.wordWrap.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -541,8 +560,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={12}>
           <Form.Item
             name={['editor', 'minimap']}
-            label="显示小地图"
-            tooltip="显示代码小地图"
+            label={t('settings.editor.minimap')}
+            tooltip={t('settings.editor.minimap.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -551,8 +570,8 @@ const SettingsPanel: React.FC = () => {
         <Col xs={24} md={12}>
           <Form.Item
             name={['editor', 'lineNumbers']}
-            label="显示行号"
-            tooltip="显示行号"
+            label={t('settings.editor.lineNumbers')}
+            tooltip={t('settings.editor.lineNumbers.tooltip')}
             valuePropName="checked"
           >
             <Switch />
@@ -564,27 +583,27 @@ const SettingsPanel: React.FC = () => {
 
   const advancedSettingsContent = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <Card title="高级设置" style={{ borderRadius: '12px' }}>
+      <Card title={t('settings.advanced')} style={{ borderRadius: '12px' }}>
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12}>
             <Form.Item
               name={['advanced', 'logLevel']}
-              label="日志级别"
-              tooltip="设置日志输出级别"
+              label={t('settings.advanced.logLevel')}
+              tooltip={t('settings.advanced.logLevel.tooltip')}
             >
               <Select>
-                <Option value="error">错误</Option>
-                <Option value="warn">警告</Option>
-                <Option value="info">信息</Option>
-                <Option value="debug">调试</Option>
+                <Option value="error">{t('common.error')}</Option>
+                <Option value="warn">{t('common.warning')}</Option>
+                <Option value="info">{t('common.info')}</Option>
+                <Option value="debug">DEBUG</Option>
               </Select>
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item
               name={['advanced', 'cacheSize']}
-              label="缓存大小(MB)"
-              tooltip="设置缓存大小"
+              label={t('settings.advanced.cacheSize')}
+              tooltip={t('settings.advanced.cacheSize.tooltip')}
             >
               <InputNumber min={10} max={1000} style={{ width: '100%' }} />
             </Form.Item>
@@ -595,8 +614,8 @@ const SettingsPanel: React.FC = () => {
           <Col xs={24} md={12}>
             <Form.Item
               name={['advanced', 'autoBackup']}
-              label="自动备份"
-              tooltip="自动备份配置文件"
+              label={t('settings.advanced.autoBackup')}
+              tooltip={t('settings.advanced.autoBackup.tooltip')}
               valuePropName="checked"
             >
               <Switch />
@@ -605,8 +624,8 @@ const SettingsPanel: React.FC = () => {
           <Col xs={24} md={12}>
             <Form.Item
               name={['advanced', 'telemetry']}
-              label="遥测数据"
-              tooltip="发送匿名使用数据帮助改进"
+              label={t('settings.advanced.telemetry')}
+              tooltip={t('settings.advanced.telemetry.tooltip')}
               valuePropName="checked"
             >
               <Switch />
@@ -615,24 +634,24 @@ const SettingsPanel: React.FC = () => {
         </Row>
       </Card>
 
-      <Card title="数据管理" style={{ borderRadius: '12px' }}>
+      <Card title={t('settings.data.title')} style={{ borderRadius: '12px' }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Alert
-            message="数据管理"
-            description="管理应用数据和配置"
+            message={t('settings.data.title')}
+            description={t('settings.data.description')}
             type="info"
             showIcon
           />
 
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <Button icon={<ExportOutlined />} onClick={handleExport}>
-              导出设置
+              {t('settings.data.export')}
             </Button>
             <Button icon={<ImportOutlined />} onClick={handleImport}>
-              导入设置
+              {t('settings.data.import')}
             </Button>
             <Button icon={<ReloadOutlined />} onClick={handleReset} danger>
-              重置设置
+              {t('settings.data.reset')}
             </Button>
           </div>
         </Space>
@@ -691,7 +710,7 @@ const SettingsPanel: React.FC = () => {
                 try {
                   await versionService.openDownloadPage()
                 } catch (error) {
-                  message.error('打开官网失败')
+                  message.error(t('update.openWebsiteFailed'))
                 }
               }}
             >
@@ -703,7 +722,7 @@ const SettingsPanel: React.FC = () => {
                 try {
                   await versionService.openDocsPage()
                 } catch (error) {
-                  message.error('打开文档失败')
+                  message.error(t('update.openDocsFailed'))
                 }
               }}
             >
@@ -715,7 +734,7 @@ const SettingsPanel: React.FC = () => {
                 try {
                   await versionService.openGitHubPage()
                 } catch (error) {
-                  message.error('打开 GitHub 失败')
+                  message.error(t('update.openGitHubFailed'))
                 }
               }}
             >
@@ -723,27 +742,54 @@ const SettingsPanel: React.FC = () => {
             </Button>
           </div>
         </Space>
+
+        <Divider />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text type="secondary">{t('about.latestVersion')}</Text>
+          {latestVersionStatus === 'ready' && latestVersion && (
+            <Tag color="green">{latestVersion}</Tag>
+          )}
+          {latestVersionStatus === 'loading' && (
+            <Tag color="processing">{t('about.latestVersion.loading')}</Tag>
+          )}
+          {latestVersionStatus === 'offline' && (
+            <Tag color="default">{t('about.latestVersion.offline')}</Tag>
+          )}
+        </div>
       </Card>
 
       <Card title={t('changelog.title')} style={{ borderRadius: '12px' }}>
-        <Alert
-          message={t('changelog.version')}
-          description={
-            <div>
-              <p>{t('changelog.description')}</p>
-              <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
-                {(Array.isArray(t('changelog.features', { returnObjects: true }))
-                  ? t('changelog.features', { returnObjects: true })
-                  : []
-                ).map((feature: string, index: number) => (
-                  <li key={index}>{feature}</li>
-                ))}
-              </ul>
-            </div>
-          }
-          type="info"
-          showIcon
-        />
+        {changelogStatus === 'loading' && (
+          <Alert
+            message={t('changelog.loading')}
+            type="info"
+            showIcon
+          />
+        )}
+        {changelogStatus === 'offline' && (
+          <Alert
+            message={t('changelog.networkError')}
+            type="warning"
+            showIcon
+          />
+        )}
+        {changelogStatus === 'ready' && (
+          <Alert
+            message={latestVersion ? `${t('changelog.version')} ${latestVersion}` : t('changelog.version')}
+            description={
+              <div>
+                <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
+                  {(changelogLines.length > 0 ? changelogLines : [t('update.latest')]).map((feature, index) => (
+                    <li key={index}>{feature}</li>
+                  ))}
+                </ul>
+              </div>
+            }
+            type="info"
+            showIcon
+          />
+        )}
       </Card>
     </div>
   )
@@ -779,7 +825,7 @@ const SettingsPanel: React.FC = () => {
                 label: (
                   <span>
                     <SettingOutlined />
-                    基本设置
+                    {t('settings.basic')}
                   </span>
                 ),
                 children: generalSettings
@@ -789,7 +835,7 @@ const SettingsPanel: React.FC = () => {
                 label: (
                   <span>
                     <CodeOutlined />
-                    编辑器设置
+                    {t('settings.editor')}
                   </span>
                 ),
                 children: editorSettingsPanel
@@ -799,7 +845,7 @@ const SettingsPanel: React.FC = () => {
                 label: (
                   <span>
                     <BellOutlined />
-                    通知设置
+                    {t('settings.notifications')}
                   </span>
                 ),
                 children: notificationSettingsContent
@@ -809,7 +855,7 @@ const SettingsPanel: React.FC = () => {
                 label: (
                   <span>
                     <DatabaseOutlined />
-                    高级设置
+                    {t('settings.advanced')}
                   </span>
                 ),
                 children: advancedSettingsContent
@@ -819,7 +865,7 @@ const SettingsPanel: React.FC = () => {
                 label: (
                   <span>
                     <DesktopOutlined />
-                    终端管理
+                    {t('settings.terminal')}
                   </span>
                 ),
                 children: <TerminalManagement />
@@ -829,7 +875,7 @@ const SettingsPanel: React.FC = () => {
                 label: (
                   <span>
                     <InfoCircleOutlined />
-                    关于
+                    {t('settings.about')}
                   </span>
                 ),
                 children: aboutSettings

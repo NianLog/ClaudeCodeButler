@@ -50,7 +50,7 @@ export class DeepSeekTransformer extends BaseTransformer {
   /**
    * 转换请求格式
    */
-  async transformRequest(request: ClaudeRequest, provider: ApiProvider): Promise<any> {
+  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<any> {
     const transformed = this.clone(request)
 
     // 映射模型名称
@@ -102,7 +102,7 @@ export class DeepSeekTransformer extends BaseTransformer {
   /**
    * 转换响应格式
    */
-  async transformResponse(response: any, provider: ApiProvider): Promise<ClaudeResponse> {
+  async transformResponse(response: any, _provider: ApiProvider): Promise<ClaudeResponse> {
     const transformed: ClaudeResponse = {
       id: response.id || `msg_${Date.now()}`,
       type: 'message',
@@ -171,7 +171,7 @@ export class DeepSeekTransformer extends BaseTransformer {
   /**
    * 转换流式响应数据块
    */
-  transformStreamChunk(chunk: string, provider: ApiProvider): string | null {
+  transformStreamChunk(chunk: string, _provider: ApiProvider): string | null {
     try {
       // DeepSeek的SSE格式与OpenAI基本兼容
       if (chunk.startsWith('data: ')) {
@@ -225,7 +225,7 @@ export class DeepSeekTransformer extends BaseTransformer {
   /**
    * 转换错误格式
    */
-  transformError(error: any, provider: ApiProvider): any {
+  transformError(error: any, _provider: ApiProvider): any {
     // DeepSeek错误格式
     if (error.error) {
       const deepSeekError = error.error

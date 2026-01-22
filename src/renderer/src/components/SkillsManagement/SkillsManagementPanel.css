@@ -5,8 +5,8 @@
 /* 页面容器 */
 .skills-management-panel {
   padding: 24px;
-  background: #fafafa;
-  min-height: 100vh;
+  background: transparent;
+  min-height: 100%;
 }
 
 /* 页面头部 */

@@ -14,6 +14,7 @@ import {
   CloseCircleOutlined
 } from '@ant-design/icons'
 import type { VersionInfo } from '../../services/version-service'
+import { useTranslation } from '../../locales/useTranslation'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -49,6 +50,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
   onUpdate,
   onVisitWebsite
 }) => {
+  const { t } = useTranslation()
   const [downloading, setDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [downloadComplete, setDownloadComplete] = useState(false)
@@ -81,7 +83,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
     // 防止重复下载：如果已经在下载中，直接返回
     if (downloading) {
       console.log('下载已在进行中，忽略重复点击')
-      message.info('下载正在进行中，请稍候...')
+      message.info(t('updateModal.downloadingInProgress'))
       return
     }
 
@@ -98,7 +100,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
       console.log('文件名:', `CCB-${latestVersion}.exe`)
 
       if (!versionInfo.downloadUrl || typeof versionInfo.downloadUrl !== 'string') {
-        throw new Error('下载地址无效')
+        throw new Error(t('updateModal.invalidDownloadUrl'))
       }
 
       // 设置3分钟超时,显示浏览器下载按钮
@@ -123,7 +125,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
       if (result.success) {
         setDownloadComplete(true)
         setDownloading(false)
-        message.success(result.message || '下载完成,已打开文件夹')
+        message.success(result.message || t('updateModal.downloadSuccess'))
 
         // 3秒后自动关闭Modal
         setTimeout(() => {
@@ -135,20 +137,20 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
           setShowBrowserButton(true)
           setDownloading(false)
           const errorMessage = result.error === 'timeout'
-            ? '下载超时，请使用浏览器下载'
-            : result.message || '下载被中断，请使用浏览器下载'
+            ? t('updateModal.downloadTimeout')
+            : result.message || t('updateModal.downloadInterrupted')
           message.warning(errorMessage)
         } else {
           setDownloadError(true)
           setDownloading(false)
-          message.error(`下载失败: ${result.message || result.error || '未知错误'}`)
+          message.error(t('updateModal.downloadFailed', { error: result.message || result.error || t('common.unknownError') }))
           setShowBrowserButton(true)
         }
       }
     } catch (error) {
       setDownloadError(true)
       setDownloading(false)
-      message.error(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`)
+      message.error(t('updateModal.downloadFailed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
       setShowBrowserButton(true)
     }
   }
@@ -159,10 +161,10 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
   const handleBrowserDownload = async () => {
     try {
       await onUpdate(versionInfo.downloadUrl)
-      message.info('已在浏览器中打开下载页面')
+      message.info(t('updateModal.openInBrowserSuccess'))
       onClose()
     } catch (error) {
-      message.error('打开浏览器失败')
+      message.error(t('updateModal.openBrowserFailed'))
     }
   }
 
@@ -206,12 +208,12 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
           )}
           <Title level={3} style={{ margin: 0, marginBottom: '8px' }}>
             {downloadComplete
-              ? '下载完成'
+              ? t('updateModal.title.completed')
               : downloadError
-              ? '下载失败'
+              ? t('updateModal.title.failed')
               : downloading
-              ? '正在下载'
-              : '发现新版本'}
+              ? t('updateModal.title.downloading')
+              : t('updateModal.title.available')}
           </Title>
           <Space>
             <Tag color="default">{currentVersion}</Tag>
@@ -227,15 +229,15 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
           size="small"
           style={{ marginBottom: '24px' }}
         >
-          <Descriptions.Item label="当前版本">{currentVersion}</Descriptions.Item>
-          <Descriptions.Item label="最新版本">
+          <Descriptions.Item label={t('updateModal.labels.currentVersion')}>{currentVersion}</Descriptions.Item>
+          <Descriptions.Item label={t('updateModal.labels.latestVersion')}>
             <Tag color="success">{latestVersion}</Tag>
           </Descriptions.Item>
           {versionInfo.zipPassword && (
             <Descriptions.Item
               label={
                 <span>
-                  <LockOutlined /> 压缩包密码
+                  <LockOutlined /> {t('updateModal.labels.zipPassword')}
                 </span>
               }
             >
@@ -251,7 +253,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
           <div style={{ marginBottom: '24px' }}>
             <Progress percent={downloadProgress} status="active" />
             <div style={{ textAlign: 'center', marginTop: '8px' }}>
-              <Text type="secondary">正在下载更新文件...</Text>
+              <Text type="secondary">{t('updateModal.progress.downloading')}</Text>
             </div>
           </div>
         )}
@@ -267,7 +269,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             }}
           >
             <Title level={5} style={{ marginTop: 0, marginBottom: '12px' }}>
-              更新说明:
+              {t('updateModal.section.releaseNotes')}
             </Title>
             <div>
               {formatUpdateText(versionInfo.updateText).map((line, index) => (
@@ -298,9 +300,9 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             }}
           >
             <Text style={{ fontSize: '14px' }}>
-              文件已下载完成并自动打开文件夹!
+              {t('updateModal.complete.message')}
               <br />
-              窗口将在 3 秒后自动关闭...
+              {t('updateModal.complete.subMessage')}
             </Text>
           </div>
         )}
@@ -309,47 +311,47 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
         <Space style={{ width: '100%', justifyContent: 'center' }} size="middle">
           {!downloading && !downloadComplete ? (
             <>
-              <Button onClick={onClose}>稍后提醒</Button>
+              <Button onClick={onClose}>{t('updateModal.actions.remindLater')}</Button>
               <Button
                 icon={<GlobalOutlined />}
                 onClick={onVisitWebsite}
               >
-                访问官网
+                {t('updateModal.actions.visitWebsite')}
               </Button>
               <Button
                 type="primary"
                 icon={<CloudDownloadOutlined />}
                 onClick={handleDownload}
               >
-                立即下载
+                {t('updateModal.actions.downloadNow')}
               </Button>
             </>
           ) : downloading && showBrowserButton ? (
             <>
-              <Button onClick={onClose}>关闭</Button>
+              <Button onClick={onClose}>{t('updateModal.actions.close')}</Button>
               <Button
                 type="primary"
                 icon={<GlobalOutlined />}
                 onClick={handleBrowserDownload}
               >
-                在浏览器中下载
+                {t('updateModal.actions.downloadInBrowser')}
               </Button>
             </>
           ) : downloadError ? (
             <>
-              <Button onClick={onClose}>关闭</Button>
-              <Button onClick={handleDownload}>重试下载</Button>
+              <Button onClick={onClose}>{t('updateModal.actions.close')}</Button>
+              <Button onClick={handleDownload}>{t('updateModal.actions.retryDownload')}</Button>
               <Button
                 type="primary"
                 icon={<GlobalOutlined />}
                 onClick={handleBrowserDownload}
               >
-                在浏览器中下载
+                {t('updateModal.actions.downloadInBrowser')}
               </Button>
             </>
           ) : downloadComplete ? (
             <Button type="primary" onClick={onClose}>
-              关闭
+              {t('updateModal.actions.close')}
             </Button>
           ) : null}
         </Space>
@@ -360,9 +362,9 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             <Text type="secondary" style={{ fontSize: '12px' }}>
               {downloading
                 ? showBrowserButton
-                  ? '下载时间较长,您可以选择在浏览器中下载'
-                  : '正在下载中,请稍候...'
-                : '点击"立即下载"开始下载,如果网络错误或3分钟内未完成将显示浏览器下载选项'}
+                  ? t('updateModal.hint.longDownload')
+                  : t('updateModal.hint.downloading')
+                : t('updateModal.hint.downloadStart')}
             </Text>
           </div>
         )}

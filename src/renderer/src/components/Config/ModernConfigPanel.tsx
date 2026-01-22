@@ -3,19 +3,17 @@
  * 采用卡片式布局和现代化交互设计
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import {
   Button,
   Space,
   Input,
   Select,
   Tag,
-  Tooltip,
   Dropdown,
   Empty,
   Spin,
   Typography,
-  Divider,
   Modal,
   App,
   Card,
@@ -24,8 +22,6 @@ import {
 } from 'antd'
 import {
   PlusOutlined,
-  SearchOutlined,
-  SortAscendingOutlined,
   MoreOutlined,
   EditOutlined,
   DeleteOutlined,
@@ -36,11 +32,9 @@ import {
   StarOutlined,
   StarFilled,
   FileTextOutlined,
-  ClockCircleOutlined,
   ReloadOutlined,
   CloudOutlined,
   LockOutlined,
-  UnlockOutlined,
   WarningOutlined
 } from '@ant-design/icons'
 import { useConfigListStore } from '../../store/config-list-store'
@@ -48,7 +42,8 @@ import { useConfigEditorStore } from '../../store/config-editor-store'
 import { ConfigFile } from '@shared/types'
 import ConfigEditor from './ConfigEditor'
 import ConfigImportModal from './ConfigImportModal'
-import CodeEditor from '../Common/CodeEditor'
+const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
+import { useTranslation } from '../../locales/useTranslation'
 import './ModernConfigPanel.css'
 
 const { Title, Text } = Typography
@@ -59,6 +54,7 @@ const { Option } = Select
  * 现代化配置面板组件
  */
 const ModernConfigPanel: React.FC = () => {
+  const { t } = useTranslation()
   const { message } = App.useApp()
 
   const {
@@ -84,7 +80,8 @@ const ModernConfigPanel: React.FC = () => {
   // 托管模式相关状态
   const [managedModeEnabled, setManagedModeEnabled] = useState(false)
   const [managedModeLoading, setManagedModeLoading] = useState(false)
-  const [hasBackup, setHasBackup] = useState(false)
+  // hasBackup 用于检查备份状态，当前仅设置但未读取（预留为后续功能）
+  const [, setHasBackup] = useState(false)
 
   const [editorVisible, setEditorVisible] = useState(false)
   const [importVisible, setImportVisible] = useState(false)
@@ -115,7 +112,7 @@ const ModernConfigPanel: React.FC = () => {
           // 延迟显示警告，避免在渲染中直接调用
           setTimeout(() => {
             message.warning({
-              content: '检测到系统设置备份文件，建议在启用托管模式前手动处理或重新启用托管模式以自动还原。',
+              content: t('configPanel.managedMode.backupWarning'),
               duration: 6, // 显示6秒
               key: 'managed-mode-backup-warning' // 使用key避免重复显示
             })
@@ -161,13 +158,13 @@ const ModernConfigPanel: React.FC = () => {
       const result = await window.electronAPI.managedMode.enable()
       if (result.success) {
         setManagedModeEnabled(true)
-        message.success(result.message || '托管模式已启用')
+        message.success(result.message || t('managedMode.messages.enabled'))
         await refreshConfigs()
       } else {
-        message.error(result.error || '启用托管模式失败')
+        message.error(result.error || t('managedMode.messages.enableFailed'))
       }
     } catch (error: any) {
-      message.error(`启用托管模式失败: ${error.message}`)
+      message.error(t('managedMode.messages.enableFailedWithError', { error: error.message }))
     } finally {
       setManagedModeLoading(false)
     }
@@ -182,13 +179,13 @@ const ModernConfigPanel: React.FC = () => {
       const result = await window.electronAPI.managedMode.disable()
       if (result.success) {
         setManagedModeEnabled(false)
-        message.success(result.message || '托管模式已禁用')
+        message.success(result.message || t('managedMode.messages.disabled'))
         await refreshConfigs()
       } else {
-        message.error(result.error || '禁用托管模式失败')
+        message.error(result.error || t('managedMode.messages.disableFailed'))
       }
     } catch (error: any) {
-      message.error(`禁用托管模式失败: ${error.message}`)
+      message.error(t('managedMode.messages.disableFailedWithError', { error: error.message }))
     } finally {
       setManagedModeLoading(false)
     }
@@ -201,42 +198,42 @@ const ModernConfigPanel: React.FC = () => {
     if (enabled) {
       // 启用前确认
       Modal.confirm({
-        title: '启用托管模式',
+        title: t('configPanel.managedMode.enableTitle'),
         icon: <WarningOutlined />,
         content: (
           <div>
-            <p>启用托管模式将会：</p>
+            <p>{t('configPanel.managedMode.enableIntro')}</p>
             <ul>
-              <li>备份当前系统 settings.json 配置文件</li>
-              <li>启动本地代理服务（端口 8487）</li>
-              <li>禁用配置列表中的切换激活功能</li>
-              <li>不允许编辑 ~/.claude/settings.json 文件</li>
+              <li>{t('configPanel.managedMode.enableItemBackup')}</li>
+              <li>{t('configPanel.managedMode.enableItemProxy')}</li>
+              <li>{t('configPanel.managedMode.enableItemDisableSwitch')}</li>
+              <li>{t('configPanel.managedMode.enableItemLockSettings')}</li>
             </ul>
-            <p>您确定要启用托管模式吗？</p>
+            <p>{t('configPanel.managedMode.enableConfirm')}</p>
           </div>
         ),
-        okText: '确认启用',
-        cancelText: '取消',
+        okText: t('configPanel.managedMode.enableOk'),
+        cancelText: t('common.cancel'),
         onOk: handleEnableManagedMode
       })
     } else {
       // 禁用前确认
       Modal.confirm({
-        title: '禁用托管模式',
+        title: t('configPanel.managedMode.disableTitle'),
         icon: <WarningOutlined />,
         content: (
           <div>
-            <p>禁用托管模式将会：</p>
+            <p>{t('configPanel.managedMode.disableIntro')}</p>
             <ul>
-              <li>停止本地代理服务</li>
-              <li>从备份中还原系统 settings.json 配置</li>
-              <li>重新启用配置切换功能</li>
+              <li>{t('configPanel.managedMode.disableItemStop')}</li>
+              <li>{t('configPanel.managedMode.disableItemRestore')}</li>
+              <li>{t('configPanel.managedMode.disableItemEnableSwitch')}</li>
             </ul>
-            <p>您确定要禁用托管模式吗？</p>
+            <p>{t('configPanel.managedMode.disableConfirm')}</p>
           </div>
         ),
-        okText: '确认禁用',
-        cancelText: '取消',
+        okText: t('configPanel.managedMode.disableOk'),
+        cancelText: t('common.cancel'),
         onOk: handleDisableManagedMode
       })
     }
@@ -261,11 +258,11 @@ const ModernConfigPanel: React.FC = () => {
           setPreviewContent(content)
         }
       } else {
-        setPreviewContent('// 无法加载配置内容')
+        setPreviewContent(t('configPanel.preview.loadFailed'))
       }
     } catch (error) {
       console.error('加载配置内容失败:', error)
-      setPreviewContent('// 加载配置内容失败')
+      setPreviewContent(t('configPanel.preview.loadFailed'))
     }
   }
 
@@ -298,16 +295,16 @@ const ModernConfigPanel: React.FC = () => {
     if (isSystemSettingsConfig && managedModeEnabled) {
       // 如果是系统settings配置且托管模式已启用，显示提示信息
       Modal.info({
-        title: '配置已锁定',
+        title: t('configPanel.locked.title'),
         icon: React.createElement(LockOutlined, { style: { color: '#1890ff' } }),
         width: 480,
         content: (
           <div style={{ padding: '16px 0' }}>
             <p>
-              <strong>配置文件：</strong>
+              <strong>{t('configPanel.locked.fileLabel')}</strong>
               <Text code>{config.name}</Text>
             </p>
-            <p>当前已启用托管模式，系统settings配置文件已被托管服务管理。</p>
+            <p>{t('configPanel.locked.description')}</p>
             <div style={{
               background: '#f6ffed',
               border: '1px solid #b7eb8f',
@@ -316,12 +313,12 @@ const ModernConfigPanel: React.FC = () => {
               marginTop: '12px'
             }}>
               <Text style={{ color: '#52c41a', fontWeight: 500 }}>
-                💡 如需修改settings配置，请前往「托管模式」页面的「配置」标签页进行设置。
+                {t('configPanel.locked.hint')}
               </Text>
             </div>
           </div>
         ),
-        okText: '知道了',
+        okText: t('configPanel.locked.ok'),
         centered: true
       })
       return
@@ -342,7 +339,7 @@ const ModernConfigPanel: React.FC = () => {
     try {
       const duplicatedConfig = {
         ...config,
-        name: `${config.name} - 副本`,
+        name: t('configPanel.duplicateName', { name: config.name }),
         id: undefined, // 让系统生成新的ID
         path: undefined, // 让系统生成新的路径
         isSystemConfig: false, // 复制的配置不是系统配置
@@ -461,22 +458,22 @@ const ModernConfigPanel: React.FC = () => {
    */
   const handleResetFilters = () => {
     resetFilters()
-    message.info('已重置所有筛选条件')
+    message.info(t('configPanel.filters.resetSuccess'))
   }
 
   // 获取配置类型中文标签
   const getTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      'settings': '设置配置',
-      'settings-local': '本地设置',
-      'claude-json': 'Claude配置',
-      'claude-md': '记忆配置',
-      'claude-code': '代码配置',
-      'user-preferences': '用户偏好',
-      'mcp-config': 'MCP配置',
-      'project-config': '项目配置',
-      'custom': '自定义配置',
-      'system': '系统配置'
+      'settings': t('configPanel.types.settings'),
+      'settings-local': t('configPanel.types.settingsLocal'),
+      'claude-json': t('configPanel.types.claudeJson'),
+      'claude-md': t('configPanel.types.claudeMd'),
+      'claude-code': t('configPanel.types.claudeCode'),
+      'user-preferences': t('configPanel.types.userPreferences'),
+      'mcp-config': t('configPanel.types.mcp'),
+      'project-config': t('configPanel.types.project'),
+      'custom': t('configPanel.types.custom'),
+      'system': t('configPanel.types.system')
     }
     return labels[type] || type
   }
@@ -513,36 +510,36 @@ const ModernConfigPanel: React.FC = () => {
     const diff = now.getTime() - date.getTime()
     const days = Math.floor(diff / (1000 * 60 * 60 * 24))
     
-    if (days === 0) return '今天'
-    if (days === 1) return '昨天'
-    if (days < 7) return `${days}天前`
-    if (days < 30) return `${Math.floor(days / 7)}周前`
+    if (days === 0) return t('configPanel.time.today')
+    if (days === 1) return t('configPanel.time.yesterday')
+    if (days < 7) return t('configPanel.time.daysAgo', { days })
+    if (days < 30) return t('configPanel.time.weeksAgo', { weeks: Math.floor(days / 7) })
     return date.toLocaleDateString()
   }
 
   // 配置操作菜单
-  const getConfigMenuItems = (config: ConfigFile) => {
+  const getConfigMenuItems = (config: ConfigFile): any[] => {
     const isSystemSettingsConfig = config.path.endsWith('settings.json') &&
       (config.path.includes('.claude') || config.path.includes('~/.claude'))
 
-    const menuItems = [
+    const menuItems: any[] = [
       {
         key: 'view',
         icon: <EyeOutlined />,
-        label: '查看详情',
+        label: t('configPanel.menu.view'),
         onClick: () => handlePreviewConfig(config)
       },
       {
         key: 'edit',
         icon: isSystemSettingsConfig && managedModeEnabled ? <LockOutlined /> : <EditOutlined />,
-        label: isSystemSettingsConfig && managedModeEnabled ? '已锁定' : '编辑配置',
+        label: isSystemSettingsConfig && managedModeEnabled ? t('configPanel.menu.locked') : t('configPanel.menu.edit'),
         onClick: () => handleEditConfig(config),
         disabled: isSystemSettingsConfig && managedModeEnabled
       },
       {
         key: 'duplicate',
         icon: <CopyOutlined />,
-        label: '复制配置',
+        label: t('configPanel.menu.duplicate'),
         onClick: () => handleDuplicateConfig(config)
       },
       {
@@ -551,7 +548,7 @@ const ModernConfigPanel: React.FC = () => {
       {
         key: 'export',
         icon: <DownloadOutlined />,
-        label: '导出配置',
+        label: t('configPanel.menu.export'),
         onClick: () => console.log('导出配置', config.id)
       }
     ]
@@ -561,7 +558,7 @@ const ModernConfigPanel: React.FC = () => {
       menuItems.push({
         key: 'favorite',
         icon: config.isInUse ? <StarFilled /> : <StarOutlined />,
-        label: config.isInUse ? '取消收藏' : '添加收藏',
+        label: config.isInUse ? t('configPanel.menu.unfavorite') : t('configPanel.menu.favorite'),
         onClick: () => console.log('切换收藏', config.id)
       })
     }
@@ -573,7 +570,7 @@ const ModernConfigPanel: React.FC = () => {
       {
         key: 'delete',
         icon: <DeleteOutlined />,
-        label: '删除配置',
+        label: t('configPanel.menu.delete'),
         danger: true,
         disabled: config.isSystemConfig, // 系统配置文件不允许删除
         onClick: () => handleDeleteConfig(config)
@@ -627,9 +624,9 @@ const ModernConfigPanel: React.FC = () => {
                   disabled={isSystemSettingsConfig && managedModeEnabled}
                   title={
                     isSystemSettingsConfig && managedModeEnabled
-                      ? '托管模式下已锁定，请前往托管模式页面设置'
+                      ? t('configPanel.locked.tooltipManaged')
                       : isSystemSettingsConfig
-                      ? '系统settings配置，启用托管模式后将被锁定'
+                      ? t('configPanel.locked.tooltipSystem')
                       : undefined
                   }
                 />
@@ -659,10 +656,10 @@ const ModernConfigPanel: React.FC = () => {
                   {getTypeLabel(config.type)}
                 </Tag>
                 {config.isSystemConfig && (
-                  <Tag color="red">系统配置</Tag>
+                  <Tag color="red">{t('configPanel.tags.system')}</Tag>
                 )}
                 {config.isInUse && (
-                  <Tag color="green">正在使用</Tag>
+                  <Tag color="green">{t('configPanel.tags.inUse')}</Tag>
                 )}
                 <Text type="secondary">{formatTime(config.lastModified)}</Text>
                 <Text type="secondary">{formatFileSize(config.size || 0)}</Text>
@@ -679,11 +676,13 @@ const ModernConfigPanel: React.FC = () => {
       <div className="config-panel-error">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={error}
-          extra={
-            <Button type="primary" onClick={refreshConfigs}>
-              重新加载
-            </Button>
+          description={
+            <div>
+              <div>{error}</div>
+              <Button type="primary" onClick={refreshConfigs} style={{ marginTop: 16 }}>
+                {t('configPanel.actions.reload')}
+              </Button>
+            </div>
           }
         />
       </div>
@@ -698,10 +697,10 @@ const ModernConfigPanel: React.FC = () => {
       <div className="config-panel-header">
         <div className="header-left">
           <Title level={3} className="panel-title">
-            配置管理
+            {t('configPanel.title')}
           </Title>
           <Text type="secondary">
-            共 {configs.length} 个配置文件
+            {t('configPanel.subtitle', { count: configs.length })}
           </Text>
         </div>
         
@@ -711,23 +710,23 @@ const ModernConfigPanel: React.FC = () => {
               icon={<ReloadOutlined />}
               onClick={async () => {
                 await refreshConfigs()
-                message.success('配置列表已刷新')
+                message.success(t('configPanel.refreshSuccess'))
               }}
             >
-              刷新
+              {t('common.refresh')}
             </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={handleCreateConfig}
             >
-              新建配置
+              {t('configPanel.actions.create')}
             </Button>
             <Button
               icon={<UploadOutlined />}
               onClick={handleImportConfig}
             >
-              导入
+              {t('configPanel.actions.import')}
             </Button>
           </Space>
         </div>
@@ -738,7 +737,7 @@ const ModernConfigPanel: React.FC = () => {
       <div className="config-panel-toolbar">
         <div className="toolbar-left">
           <Search
-            placeholder="搜索配置名称或路径..."
+            placeholder={t('configPanel.search.placeholder')}
             allowClear
             value={filters.search}
             style={{ width: 300 }}
@@ -747,40 +746,40 @@ const ModernConfigPanel: React.FC = () => {
           />
 
           <Select
-            placeholder="筛选类型"
+            placeholder={t('configPanel.filters.typePlaceholder')}
             allowClear
             value={filters.type}
             style={{ width: 150 }}
             onChange={(value) => handleFilterChange('type', value)}
           >
-            <Option value="__system__">系统配置</Option>
-            <Option value="__in_use__">正在使用</Option>
-            <Option value="settings">设置配置</Option>
-            <Option value="settings-local">本地设置</Option>
-            <Option value="claude-json">Claude配置</Option>
-            <Option value="claude-md">记忆配置</Option>
-            <Option value="claude-code">代码配置</Option>
-            <Option value="user-preferences">用户偏好</Option>
-            <Option value="mcp-config">MCP配置</Option>
-            <Option value="project-config">项目配置</Option>
-            <Option value="custom">自定义配置</Option>
+            <Option value="__system__">{t('configPanel.types.system')}</Option>
+            <Option value="__in_use__">{t('configPanel.tags.inUse')}</Option>
+            <Option value="settings">{t('configPanel.types.settings')}</Option>
+            <Option value="settings-local">{t('configPanel.types.settingsLocal')}</Option>
+            <Option value="claude-json">{t('configPanel.types.claudeJson')}</Option>
+            <Option value="claude-md">{t('configPanel.types.claudeMd')}</Option>
+            <Option value="claude-code">{t('configPanel.types.claudeCode')}</Option>
+            <Option value="user-preferences">{t('configPanel.types.userPreferences')}</Option>
+            <Option value="mcp-config">{t('configPanel.types.mcp')}</Option>
+            <Option value="project-config">{t('configPanel.types.project')}</Option>
+            <Option value="custom">{t('configPanel.types.custom')}</Option>
           </Select>
 
           <Select
-            placeholder="排序方式"
+            placeholder={t('configPanel.filters.sortPlaceholder')}
             value={filters.sort}
             style={{ width: 120 }}
             onChange={handleSortChange}
           >
-            <Option value="name">按名称</Option>
-            <Option value="lastModified">按修改时间</Option>
-            <Option value="size">按大小</Option>
-            <Option value="type">按类型</Option>
+            <Option value="name">{t('configPanel.sort.name')}</Option>
+            <Option value="lastModified">{t('configPanel.sort.lastModified')}</Option>
+            <Option value="size">{t('configPanel.sort.size')}</Option>
+            <Option value="type">{t('configPanel.sort.type')}</Option>
           </Select>
 
           {(filters.search || filters.type) && (
             <Button size="small" onClick={handleResetFilters}>
-              重置筛选
+              {t('configPanel.filters.reset')}
             </Button>
           )}
         </div>
@@ -808,12 +807,12 @@ const ModernConfigPanel: React.FC = () => {
                 />
                 <div>
                   <Title level={5} style={{ margin: 0, fontSize: 14 }}>
-                    托管模式配置
+                    {t('configPanel.managedMode.cardTitle')}
                   </Title>
                   <Text type="secondary" style={{ fontSize: 11 }}>
                     {managedModeEnabled
-                      ? '托管服务运行中，配置已托管'
-                      : '启用托管服务和配置热切换'
+                      ? t('configPanel.managedMode.cardEnabled')
+                      : t('configPanel.managedMode.cardDisabled')
                     }
                   </Text>
                 </div>
@@ -823,8 +822,8 @@ const ModernConfigPanel: React.FC = () => {
             <div className="managed-mode-card-right">
               <Space size="small" align="center">
                 {managedModeEnabled && (
-                  <Tag color="success" size="small" style={{ fontSize: 11 }}>
-                    代理服务运行中
+                  <Tag color="success" style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>
+                    {t('configPanel.managedMode.proxyRunning')}
                   </Tag>
                 )}
                 <Switch
@@ -832,8 +831,8 @@ const ModernConfigPanel: React.FC = () => {
                   checked={managedModeEnabled}
                   onChange={handleManagedModeToggle}
                   loading={managedModeLoading}
-                  checkedChildren="启用"
-                  unCheckedChildren="禁用"
+                  checkedChildren={t('managedMode.config.switch.enable')}
+                  unCheckedChildren={t('managedMode.config.switch.disable')}
                 />
               </Space>
             </div>
@@ -844,18 +843,20 @@ const ModernConfigPanel: React.FC = () => {
           <div className="config-panel-loading">
             <Spin size="large" />
             <Text type="secondary" style={{ marginTop: 16 }}>
-              加载配置文件中...
+              {t('configPanel.loading')}
             </Text>
           </div>
         ) : filteredConfigsList.length === 0 ? (
           <div className="config-panel-empty">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="没有找到匹配的配置文件"
-              extra={
-                <Button type="primary" icon={<PlusOutlined />}>
-                  创建第一个配置
-                </Button>
+              description={
+                <div>
+                  <div>{t('configPanel.empty')}</div>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateConfig} style={{ marginTop: 16 }}>
+                    {t('configPanel.actions.createFirst')}
+                  </Button>
+                </div>
               }
             />
           </div>
@@ -890,23 +891,23 @@ const ModernConfigPanel: React.FC = () => {
 
       {/* 系统配置操作确认模态框 */}
       <Modal
-        title="系统配置文件操作确认"
+        title={t('configPanel.systemConfirm.title')}
         open={systemConfigConfirmVisible}
         onOk={handleSystemConfigConfirm}
         onCancel={handleSystemConfigCancel}
-        okText="确认"
-        cancelText="取消"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true }}
       >
         <div style={{ padding: '16px 0' }}>
           <p>
-            <strong>警告：</strong>您正在尝试编辑系统配置文件
+            <strong>{t('configPanel.systemConfirm.warningLabel')}</strong>{t('configPanel.systemConfirm.warningText')}
             <code style={{ margin: '0 4px', padding: '2px 6px', background: '#f5f5f5', borderRadius: '4px' }}>
               {pendingSystemConfigAction?.config.name}
             </code>
           </p>
-          <p>系统配置文件是应用的核心配置，错误的修改可能导致应用无法正常工作。</p>
-          <p>请确认您了解此操作的风险，并确保您知道如何恢复配置。</p>
+          <p>{t('configPanel.systemConfirm.risk')}</p>
+          <p>{t('configPanel.systemConfirm.confirm')}</p>
         </div>
       </Modal>
 
@@ -915,9 +916,9 @@ const ModernConfigPanel: React.FC = () => {
         title={
           <Space>
             <EyeOutlined />
-            <span>配置预览 - {previewConfig?.name}</span>
+            <span>{t('configPanel.preview.title', { name: previewConfig?.name || '' })}</span>
             {previewConfig?.isSystemConfig && (
-              <Tag color="red">系统配置</Tag>
+              <Tag color="red">{t('configPanel.tags.system')}</Tag>
             )}
           </Space>
         }
@@ -925,7 +926,7 @@ const ModernConfigPanel: React.FC = () => {
         onCancel={closePreviewModal}
         footer={[
           <Button key="close" onClick={closePreviewModal}>
-            关闭
+            {t('common.close')}
           </Button>
         ]}
         width={900}
@@ -941,8 +942,8 @@ const ModernConfigPanel: React.FC = () => {
         }}
       >
         <Alert
-          message="配置预览"
-          description="当前为只读预览模式。如需编辑此配置，请在配置列表中点击编辑按钮。"
+          message={t('configPanel.preview.alertTitle')}
+          description={t('configPanel.preview.alertDesc')}
           type="info"
           showIcon
           style={{ marginBottom: 16, flexShrink: 0 }}
@@ -956,22 +957,24 @@ const ModernConfigPanel: React.FC = () => {
           overflow: 'hidden',
           position: 'relative'
         }}>
-          <CodeEditor
-            value={previewContent}
-            language="json"
-            height="100%"
-            readOnly={true}
-            options={{
-              minimap: { enabled: false },
-              readOnly: true,
-              lineNumbers: 'on',
-              wordWrap: 'on',
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              fontSize: 14,
-              lineHeight: 1.6
-            }}
-          />
+          <Suspense fallback={<Spin size="large" />}>
+            <CodeEditor
+              value={previewContent}
+              language="json"
+              height="100%"
+              readOnly={true}
+              options={{
+                minimap: { enabled: false },
+                readOnly: true,
+                lineNumbers: 'on',
+                wordWrap: 'on',
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                fontSize: 14,
+                lineHeight: 1.6
+              }}
+            />
+          </Suspense>
         </div>
       </Modal>
     </div>

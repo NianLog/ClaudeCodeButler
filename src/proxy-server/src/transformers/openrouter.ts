@@ -43,7 +43,7 @@ export class OpenRouterTransformer extends BaseTransformer {
   /**
    * 转换请求格式
    */
-  async transformRequest(request: ClaudeRequest, provider: ApiProvider): Promise<any> {
+  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<any> {
     const transformed = this.clone(request)
 
     // 映射模型名称
@@ -53,11 +53,6 @@ export class OpenRouterTransformer extends BaseTransformer {
 
     // 添加OpenRouter特定的请求头（这些通常由HTTP客户端处理）
     // 这里保留文档说明，实际请求头在代理服务器中添加
-    const openRouterHeaders = {
-      'HTTP-Referer': 'https://claudecodebutler.com', // 可选：告诉OpenRouter您的应用
-      'X-Title': 'Claude Code Butler' // 可选：设置应用名称
-    }
-
     // OpenRouter支持stream参数，与Claude兼容
     // 不需要额外转换
 
@@ -73,7 +68,7 @@ export class OpenRouterTransformer extends BaseTransformer {
   /**
    * 转换响应格式
    */
-  async transformResponse(response: any, provider: ApiProvider): Promise<ClaudeResponse> {
+  async transformResponse(response: any, _provider: ApiProvider): Promise<ClaudeResponse> {
     // OpenRouter响应格式基本与OpenAI兼容
     const transformed: ClaudeResponse = {
       id: response.id || `msg_${Date.now()}`,
@@ -152,7 +147,7 @@ export class OpenRouterTransformer extends BaseTransformer {
   /**
    * 转换流式响应数据块
    */
-  transformStreamChunk(chunk: string, provider: ApiProvider): string | null {
+  transformStreamChunk(chunk: string, _provider: ApiProvider): string | null {
     try {
       // OpenRouter的SSE格式与OpenAI基本兼容
       if (chunk.startsWith('data: ')) {
@@ -206,7 +201,7 @@ export class OpenRouterTransformer extends BaseTransformer {
   /**
    * 转换错误格式
    */
-  transformError(error: any, provider: ApiProvider): any {
+  transformError(error: any, _provider: ApiProvider): any {
     // OpenRouter错误格式
     if (error.error) {
       const openRouterError = error.error

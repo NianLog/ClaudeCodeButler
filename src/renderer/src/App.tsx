@@ -3,23 +3,23 @@
  * 提供应用布局和路由功能
  */
 
-import React, { useEffect, useState } from 'react'
-import { App as AntdApp } from 'antd'
+import React, { useEffect, useState, Suspense } from 'react'
+import { App as AntdApp, Spin } from 'antd'
 import { useAppStore } from './store/app-store'
 import { useSettingsStore } from './store/settings-store'
 import { useConfigListStore } from './store/config-list-store'
 import { useRuleStore } from './store/rule-store'
 import ModernLayout from './components/Layout/ModernLayout'
-import ModernConfigPanel from './components/Config/ModernConfigPanel'
-import AutomationPanel from './components/Automation/AutomationPanel'
-import StatisticsPanel from './components/Statistics/StatisticsPanel'
-import SettingsPanel from './components/Settings/SettingsPanel'
-import ProjectManagement from './components/Projects/ProjectManagement'
-import ManagedModePanel from './components/ManagedMode/ManagedModePanel'
-import MCPManagementPanel from './components/MCP/MCPManagementPanel'
-import AgentsManagementPanel from './components/AgentsManagement/AgentsManagementPanel'
-import SkillsManagementPanel from './components/SkillsManagement/SkillsManagementPanel'
-import EnvironmentCheckPanel from './components/EnvironmentCheck/EnvironmentCheckPanel'
+const ModernConfigPanel = React.lazy(() => import('./components/Config/ModernConfigPanel'))
+const AutomationPanel = React.lazy(() => import('./components/Automation/AutomationPanel'))
+const StatisticsPanel = React.lazy(() => import('./components/Statistics/StatisticsPanel'))
+const SettingsPanel = React.lazy(() => import('./components/Settings/SettingsPanel'))
+const ProjectManagement = React.lazy(() => import('./components/Projects/ProjectManagement'))
+const ManagedModePanel = React.lazy(() => import('./components/ManagedMode/ManagedModePanel'))
+const MCPManagementPanel = React.lazy(() => import('./components/MCP/MCPManagementPanel'))
+const AgentsManagementPanel = React.lazy(() => import('./components/AgentsManagement/AgentsManagementPanel'))
+const SkillsManagementPanel = React.lazy(() => import('./components/SkillsManagement/SkillsManagementPanel'))
+const EnvironmentCheckPanel = React.lazy(() => import('./components/EnvironmentCheck/EnvironmentCheckPanel'))
 import LoadingScreen from './components/Common/LoadingScreen'
 import ErrorBoundary from './components/Common/ErrorBoundary'
 import NotificationContainer from './components/Common/NotificationContainer'
@@ -36,7 +36,6 @@ const AppContent: React.FC = () => {
   const { message } = AntdApp.useApp()
   const {
     activeMainTab,
-    sidebarCollapsed,
     notifications,
     initialize,
     removeNotification
@@ -48,18 +47,13 @@ const AppContent: React.FC = () => {
 
   // 权限警告状态
   const [privilegeWarningVisible, setPrivilegeWarningVisible] = useState(false)
-  const [privilegeWarning, setPrivilegeWarning] = useState<any>(null)
+  const [privilegeWarning, _setPrivilegeWarning] = useState<any>(null)
   
   // 全局加载状态
   const [isAppLoading, setIsAppLoading] = useState(true)
 
   // 权限警告监听
   useEffect(() => {
-    const handlePrivilegeWarning = (event: any) => {
-      setPrivilegeWarning(event)
-      setPrivilegeWarningVisible(true)
-    }
-
     // 托盘配置切换监听
     const handleTraySwitchConfig = () => {
       // 刷新配置列表以更新UI
@@ -82,24 +76,45 @@ const AppContent: React.FC = () => {
     const initApp = async () => {
       let loadingMessage: (() => void) | null = null
 
+      // 带超时的 Promise 包装
+      const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>((_, reject) => 
+            setTimeout(() => reject(new Error(`${name} 初始化超时 (${timeoutMs}ms)`)), timeoutMs)
+          )
+        ])
+      }
+
+      // 安全执行初始化函数
+      const safeInit = async (fn: () => Promise<void>, name: string): Promise<void> => {
+        try {
+          await withTimeout(fn(), 15000, name)
+        } catch (error) {
+          console.warn(`${name} 初始化失败:`, error)
+          // 不抛出错误，允许其他初始化继续
+        }
+      }
+
       try {
         // 安全检查message API
         if (!message || typeof message.loading !== 'function') {
           console.error('Message API not available')
+          setIsAppLoading(false)
           return
         }
 
         // 显示加载状态
         loadingMessage = message.loading('正在初始化应用...', 0)
 
-        // 并行初始化各个模块
-        await Promise.all([
-          initialize(),
-          initializeSettings(),
-          refreshConfigs(),
-          refreshRules(),
-          loadExecutionLogs(),
-          loadStats()
+        // 使用 Promise.allSettled 确保所有初始化都尝试执行
+        await Promise.allSettled([
+          safeInit(initialize, 'AppStore'),
+          safeInit(initializeSettings, 'Settings'),
+          safeInit(refreshConfigs, 'Configs'),
+          safeInit(refreshRules, 'Rules'),
+          safeInit(loadExecutionLogs, 'ExecutionLogs'),
+          safeInit(loadStats, 'Stats')
         ])
 
         // 关闭加载消息
@@ -181,7 +196,15 @@ const AppContent: React.FC = () => {
 
   return (
     <ModernLayout>
-      {renderContent()}
+      <Suspense
+        fallback={(
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+            <Spin size="large" />
+          </div>
+        )}
+      >
+        {renderContent()}
+      </Suspense>
 
       {/* 通知容器 */}
       <NotificationContainer

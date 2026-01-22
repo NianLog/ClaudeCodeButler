@@ -6,7 +6,6 @@
 import React, { useEffect, useState } from 'react'
 import {
   Card,
-  Table,
   Button,
   Form,
   Input,
@@ -27,11 +26,11 @@ import {
   CodeOutlined,
   DesktopOutlined,
   WindowsOutlined,
-  AppleOutlined,
   LinuxOutlined
 } from '@ant-design/icons'
 import { useTerminalStore } from '../../store/terminal-store'
 import type { TerminalConfig, TerminalType } from '@shared/types/terminal'
+import { useTranslation } from '../../locales/useTranslation'
 import './TerminalManagement.css'
 
 const { Title, Text } = Typography
@@ -56,6 +55,7 @@ const getTerminalIcon = (type: TerminalType) => {
  */
 const TerminalManagement: React.FC = () => {
   const [form] = Form.useForm()
+  const { t } = useTranslation()
 
   const {
     terminals,
@@ -113,12 +113,12 @@ const TerminalManagement: React.FC = () => {
         : values.type
 
       if (!resolvedType) {
-        message.error('请输入自定义终端类型')
+        message.error(t('terminal.messages.customTypeRequired'))
         return
       }
 
       if (!editingTerminal && existingTypes.has(resolvedType)) {
-        message.error('该终端类型已存在，请编辑现有配置')
+        message.error(t('terminal.messages.typeExists'))
         return
       }
 
@@ -134,10 +134,10 @@ const TerminalManagement: React.FC = () => {
       }
 
       await upsertTerminal(config)
-      message.success('终端保存成功')
+      message.success(t('terminal.messages.saveSuccess'))
       setModalVisible(false)
     } catch (error) {
-      console.error('保存终端失败:', error)
+      console.error(t('terminal.messages.saveFailed'), error)
     }
   }
 
@@ -145,14 +145,14 @@ const TerminalManagement: React.FC = () => {
   const handleSetDefault = async (type: TerminalType) => {
     try {
       await setDefaultTerminal(type)
-      message.success('默认终端设置成功')
+      message.success(t('terminal.messages.setDefaultSuccess'))
     } catch (error) {
-      console.error('设置默认终端失败:', error)
+      console.error(t('terminal.messages.setDefaultFailed'), error)
     }
   }
 
   // 终端表格行渲染
-  const renderTerminalRow = (record: TerminalConfig, index: number) => {
+  const renderTerminalRow = (record: TerminalConfig) => {
     const isDefault = record.type === defaultTerminal
 
     return (
@@ -172,7 +172,7 @@ const TerminalManagement: React.FC = () => {
             </div>
             {isDefault && (
               <Tag icon={<CheckCircleOutlined />} color="success">
-                默认
+                {t('terminal.labels.default')}
               </Tag>
             )}
           </Space>
@@ -205,7 +205,7 @@ const TerminalManagement: React.FC = () => {
           <Space size="small">
             {record.type !== 'auto' && (
               <>
-                <Tooltip title="编辑">
+                <Tooltip title={t('terminal.actions.edit')}>
                   <Button
                     type="text"
                     size="small"
@@ -214,7 +214,7 @@ const TerminalManagement: React.FC = () => {
                   />
                 </Tooltip>
                 {!isDefault && (
-                  <Tooltip title="设为默认">
+                  <Tooltip title={t('terminal.actions.setDefault')}>
                     <Button
                       type="text"
                       size="small"
@@ -225,20 +225,20 @@ const TerminalManagement: React.FC = () => {
                   </Tooltip>
                 )}
                 <Popconfirm
-                  title="确认删除"
-                  description="确定要删除此终端配置吗？"
+                  title={t('terminal.confirm.deleteTitle')}
+                  description={t('terminal.confirm.deleteDescription')}
                   onConfirm={async () => {
                     try {
                       await deleteTerminal(record.type)
-                      message.success('删除成功')
+                      message.success(t('terminal.messages.deleteSuccess'))
                     } catch (error) {
-                      console.error('删除终端失败:', error)
+                      console.error(t('terminal.messages.deleteFailed'), error)
                     }
                   }}
-                  okText="确定"
-                  cancelText="取消"
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
                 >
-                  <Tooltip title="删除">
+                  <Tooltip title={t('terminal.actions.delete')}>
                     <Button
                       type="text"
                       size="small"
@@ -261,7 +261,7 @@ const TerminalManagement: React.FC = () => {
       'powershell': 'PowerShell',
       'cmd': 'CMD',
       'wsl': 'WSL',
-      'auto': '自动检测'
+      'auto': t('terminal.labels.autoDetect')
     }
     return labels[type] || type
   }
@@ -296,18 +296,18 @@ const TerminalManagement: React.FC = () => {
       )}
 
       <Card
-        bordered={false}
+        variant="borderless"
         className="terminal-management-card"
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
         <div className="terminal-header">
           <div className="terminal-header-left">
             <Title level={4} style={{ margin: 0, color: '#1f2937' }}>
               <DesktopOutlined style={{ marginRight: 8, color: '#7C3AED' }} />
-              终端配置
+              {t('terminal.title')}
             </Title>
             <Text type="secondary" style={{ fontSize: 14, marginLeft: 8 }}>
-              配置全局默认终端，所有命令执行都将使用此终端
+              {t('terminal.subtitle')}
             </Text>
           </div>
           <Button
@@ -316,7 +316,7 @@ const TerminalManagement: React.FC = () => {
             onClick={() => openTerminalModal()}
             size="large"
           >
-            添加终端
+            {t('terminal.actions.add')}
           </Button>
         </div>
 
@@ -324,16 +324,16 @@ const TerminalManagement: React.FC = () => {
           <thead>
             <tr>
               <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: '#6b7280' }}>
-                终端名称
+                {t('terminal.table.name')}
               </th>
               <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: '#6b7280' }}>
-                类型
+                {t('terminal.table.type')}
               </th>
               <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: '#6b7280' }}>
-                路径
+                {t('terminal.table.path')}
               </th>
               <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: '#6b7280', textAlign: 'right' }}>
-                操作
+                {t('terminal.table.actions')}
               </th>
             </tr>
           </thead>
@@ -341,13 +341,13 @@ const TerminalManagement: React.FC = () => {
             {isLoading ? (
               <tr>
                 <td colSpan={4} style={{ padding: '40px', textAlign: 'center' }}>
-                  加载中...
+                  {t('common.loading')}
                 </td>
               </tr>
             ) : terminals.length === 0 ? (
               <tr>
                 <td colSpan={4} style={{ padding: '40px', textAlign: 'center' }}>
-                  <Text type="secondary">暂无终端配置</Text>
+                  <Text type="secondary">{t('terminal.empty')}</Text>
                 </td>
               </tr>
             ) : (
@@ -359,14 +359,14 @@ const TerminalManagement: React.FC = () => {
 
       {/* 终端编辑对话框 */}
       <Modal
-        title={editingTerminal ? '编辑终端' : '添加终端'}
+        title={editingTerminal ? t('terminal.modal.editTitle') : t('terminal.modal.addTitle')}
         open={modalVisible}
         onOk={saveTerminal}
         onCancel={() => setModalVisible(false)}
         confirmLoading={isSaving}
         width={560}
-        okText="确定"
-        cancelText="取消"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ size: 'large' }}
         cancelButtonProps={{ size: 'large' }}
       >
@@ -378,12 +378,12 @@ const TerminalManagement: React.FC = () => {
         >
           <Form.Item
             name="type"
-            label="终端类型"
-            rules={[{ required: true, message: '请选择终端类型' }]}
+            label={t('terminal.form.type')}
+            rules={[{ required: true, message: t('terminal.form.typeRequired') }]}
           >
             <Select
               disabled={!!editingTerminal}
-              placeholder="请选择终端类型"
+              placeholder={t('terminal.form.typePlaceholder')}
               size="large"
             >
               <Option value="git-bash" disabled={!editingTerminal && existingTypes.has('git-bash')}>
@@ -413,7 +413,7 @@ const TerminalManagement: React.FC = () => {
               <Option value="custom">
                 <Space>
                   <DesktopOutlined />
-                  自定义
+                  {t('terminal.form.customTypeOption')}
                 </Space>
               </Option>
             </Select>
@@ -424,10 +424,10 @@ const TerminalManagement: React.FC = () => {
               getFieldValue('type') === 'custom' ? (
                 <Form.Item
                   name="customType"
-                  label="自定义终端类型"
-                  rules={[{ required: true, message: '请输入自定义终端类型' }]}
+                  label={t('terminal.form.customTypeLabel')}
+                  rules={[{ required: true, message: t('terminal.form.customTypeRequired') }]}
                 >
-                  <Input placeholder="例如: wezterm" size="large" />
+                  <Input placeholder={t('terminal.form.customTypePlaceholder')} size="large" />
                 </Form.Item>
               ) : null
             }
@@ -435,57 +435,57 @@ const TerminalManagement: React.FC = () => {
 
           <Form.Item
             name="name"
-            label="终端名称"
-            rules={[{ required: true, message: '请输入终端名称' }]}
+            label={t('terminal.form.name')}
+            rules={[{ required: true, message: t('terminal.form.nameRequired') }]}
           >
-            <Input placeholder="例如: Git Bash (Custom)" size="large" />
+            <Input placeholder={t('terminal.form.namePlaceholder')} size="large" />
           </Form.Item>
 
           <Form.Item
             name="path"
-            label="终端路径"
-            rules={[{ required: true, message: '请输入终端路径' }]}
+            label={t('terminal.form.path')}
+            rules={[{ required: true, message: t('terminal.form.pathRequired') }]}
             extra={
               <Text type="secondary" style={{ fontSize: 12 }}>
-                例如: C:\Program Files\Git\bin\bash.exe
+                {t('terminal.form.pathExtra')}
               </Text>
             }
           >
-            <Input placeholder="终端可执行文件的完整路径" size="large" />
+            <Input placeholder={t('terminal.form.pathPlaceholder')} size="large" />
           </Form.Item>
 
           <Form.Item
             name="args"
-            label="启动参数（可选）"
+            label={t('terminal.form.args')}
             extra={
               <Text type="secondary" style={{ fontSize: 12 }}>
-                例如: -c 或 --login -i（多个参数用空格分隔）
+                {t('terminal.form.argsExtra')}
               </Text>
             }
           >
-            <Input placeholder="例如: -c" size="large" />
+            <Input placeholder={t('terminal.form.argsPlaceholder')} size="large" />
           </Form.Item>
 
           <Form.Item
             name="initialDirectory"
-            label="初始工作目录（可选）"
+            label={t('terminal.form.initialDirectory')}
             extra={
               <Text type="secondary" style={{ fontSize: 12 }}>
-                终端启动时使用的工作目录，留空使用系统默认
+                {t('terminal.form.initialDirectoryExtra')}
               </Text>
             }
           >
-            <Input placeholder="例如: C:\Projects" size="large" />
+            <Input placeholder={t('terminal.form.initialDirectoryPlaceholder')} size="large" />
           </Form.Item>
 
           <Form.Item
             name="isDefault"
-            label="设为默认终端"
+            label={t('terminal.form.isDefault')}
             valuePropName="checked"
           >
             <Select size="large" defaultValue={false}>
-              <Option value={true}>是</Option>
-              <Option value={false}>否</Option>
+              <Option value={true}>{t('common.yes')}</Option>
+              <Option value={false}>{t('common.no')}</Option>
             </Select>
           </Form.Item>
         </Form>

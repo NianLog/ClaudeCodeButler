@@ -18,12 +18,22 @@ export interface ConfigFile {
   type: ConfigType
   path: string
   content?: Record<string, any>
-  size?: number
+  size: number
   lastModified: Date
   isActive?: boolean
   isValid?: boolean
   createdAt?: Date
   updatedAt?: Date
+  /** 错误信息 */
+  errors?: string[]
+  /** 是否正在编辑 */
+  isEditing?: boolean
+  /** 是否有未保存的更改 */
+  hasUnsavedChanges?: boolean
+  /** 是否为系统配置文件 */
+  isSystemConfig?: boolean
+  /** 是否正在使用中（Claude Code配置专用） */
+  isInUse?: boolean
 }
 
 /**

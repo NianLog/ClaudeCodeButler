@@ -18,7 +18,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import * as readline from 'readline'
-import { Readable } from 'stream'
 import { logger } from '../utils/logger'
 
 /**
@@ -75,6 +74,21 @@ interface ProjectUsageStats {
   firstUsed: string
   lastUsed: string
   models: Map<string, number> // 模型名 -> 使用次数
+  sessions?: Set<string> // 会话集合（用于去重）
+}
+
+/**
+ * 项目统计输出格式（用于渲染）
+ */
+interface ProjectUsageSummary {
+  projectPath: string
+  projectName: string
+  sessionCount: number
+  totalMessages: number
+  totalTokens: number
+  firstUsed: string
+  lastUsed: string
+  models: Record<string, number>
 }
 
 /**
@@ -98,7 +112,7 @@ export interface ClaudeCodeAnalytics {
   modelStats: ModelUsageStats[]
 
   // 项目统计
-  projectStats: ProjectUsageStats[]
+  projectStats: ProjectUsageSummary[]
 
   // 总体统计
   totalSessions: number
@@ -239,17 +253,17 @@ class ClaudeCodeAnalyticsService {
     }
 
     // 转换项目统计中的Map为普通对象,并对模型按使用次数排序
-    const projectStatsArray = Array.from(projectStatsMap.values()).map(stats => {
-      // 提取sessions集合但保留sessionCount
-      const { sessions, models, ...basicStats } = stats as any
+    const projectStatsArray = Array.from(projectStatsMap.values()).map((stats) => {
+      const { sessions, models, ...basicStats } = stats
+      const modelsMap = models instanceof Map ? models : new Map<string, number>()
 
       // 将Map转换为对象并按使用次数降序排序
-      const sortedModels = Array.from(models.entries())
-        .sort((a, b) => b[1] - a[1]) // 按使用次数降序
-        .reduce((acc, [model, count]) => {
+      const sortedModels = Array.from(modelsMap.entries())
+        .sort(([, a], [, b]) => b - a)
+        .reduce<Record<string, number>>((acc, [model, count]) => {
           acc[model] = count
           return acc
-        }, {} as Record<string, number>)
+        }, {})
 
       return {
         ...basicStats,
@@ -319,7 +333,7 @@ class ClaudeCodeAnalyticsService {
       return
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       let fileStream: fs.ReadStream | null = null
 
       try {
@@ -543,9 +557,9 @@ class ClaudeCodeAnalyticsService {
     stats.totalTokens += (usage.input_tokens || 0) + (usage.output_tokens || 0)
 
     // 跟踪唯一会话
-    if (sessionId && !(stats as any).sessions.has(sessionId)) {
-      (stats as any).sessions.add(sessionId)
-      stats.sessionCount = (stats as any).sessions.size
+    if (sessionId && stats.sessions && !stats.sessions.has(sessionId)) {
+      stats.sessions.add(sessionId)
+      stats.sessionCount = stats.sessions.size
     }
 
     if (timestamp < stats.firstUsed) {

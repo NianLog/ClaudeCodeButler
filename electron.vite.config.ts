@@ -11,15 +11,25 @@ export default defineConfig({
     },
     plugins: [],
     build: {
+      sourcemap: false,
+      minify: true,
       rollupOptions: {
-        external: ['electron']
+        external: ['electron'],
+        output: {
+          exports: 'named'
+        }
       }
     }
   },
   preload: {
-    plugins: []
+    plugins: [],
+    build: {
+      sourcemap: false,
+      minify: true
+    }
   },
   renderer: {
+    base: './',
     resolve: {
       alias: {
         '@': resolve('src/renderer/src'),
@@ -35,14 +45,33 @@ export default defineConfig({
       host: 'localhost' // 只监听本地主机
     },
     build: {
+      sourcemap: false,
+      minify: true,
+      chunkSizeWarningLimit: 5000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom'],
-            antd: ['antd'],
-            charts: ['recharts'],
-            // Monaco Editor 相关 chunks
-            monacoEditor: ['monaco-editor', '@monaco-editor/react']
+          manualChunks: (id) => {
+            if (!id.includes('node_modules')) return undefined
+
+            // 只分割主要的大型模块
+            if (id.includes('monaco-editor') || id.includes('@monaco-editor/react')) {
+              return 'monaco-editor'
+            }
+
+            if (id.includes('recharts')) {
+              return 'charts'
+            }
+
+            if (id.includes('react-markdown') || id.includes('remark-gfm')) {
+              return 'markdown'
+            }
+
+            if (id.includes('react-syntax-highlighter')) {
+              return 'syntax-highlighter'
+            }
+
+            // 其他依赖打包到 vendor（包含 antd/rc-*，避免循环依赖）
+            return 'vendor'
           }
         }
       }

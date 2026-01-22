@@ -119,11 +119,11 @@ export const useConfigListStore = create<ConfigListStore>((set, get) => ({
             // 发送配置变更通知
             const addNotification = get().addNotification
             if (addNotification) {
-              addNotification({
-                type: 'info',
-                title: '配置状态更新',
-                message: `检测到 ${updatedConfigs} 个配置文件状态发生变化，已自动更新`
-              })
+              addNotification(
+                'info',
+                '配置状态更新',
+                `检测到 ${updatedConfigs} 个配置文件状态发生变化，已自动更新`
+              )
             }
 
             // 重新获取配置列表以反映更新
@@ -169,11 +169,15 @@ export const useConfigListStore = create<ConfigListStore>((set, get) => ({
       set({ isLoading: true, error: null })
       const response = await window.electronAPI.config.create(name, template)
 
+      if (!response?.success || !response.data?.path) {
+        throw new Error(response?.error || '创建配置失败')
+      }
+
       // 刷新配置列表
       await get().refreshConfigs()
 
       // 选择新创建的配置
-      const newConfig = get().configs.find(c => c.path === response.path)
+      const newConfig = get().configs.find(c => c.path === response.data?.path)
       if (newConfig) {
         get().setSelectedConfig(newConfig)
       }
@@ -189,7 +193,10 @@ export const useConfigListStore = create<ConfigListStore>((set, get) => ({
   deleteConfig: async (config) => {
     try {
       set({ isLoading: true, error: null })
-      await window.electronAPI.config.delete(config.path)
+      const response = await window.electronAPI.config.delete(config.path)
+      if (!response?.success) {
+        throw new Error(response?.error || '删除配置失败')
+      }
 
       // 刷新配置列表
       await get().refreshConfigs()
@@ -224,20 +231,24 @@ export const useConfigListStore = create<ConfigListStore>((set, get) => ({
       }
 
       const createResponse = await window.electronAPI.config.create(`${config.name}_copy`)
-      if (createResponse.path) {
+      if (createResponse?.success && createResponse.data?.path) {
         // 获取原配置内容并保存到新配置
-        const content = await window.electronAPI.config.get(config.path)
-        const saveResponse = await window.electronAPI.config.save(createResponse.path, content)
+        const contentResponse = await window.electronAPI.config.get(config.path)
+        if (!contentResponse?.success) {
+          throw new Error(contentResponse?.error || '读取配置失败')
+        }
+        const saveResponse = await window.electronAPI.config.save(createResponse.data.path, contentResponse.data)
+        if (!saveResponse?.success) {
+          throw new Error(saveResponse?.error || '保存配置失败')
+        }
         
-        if (saveResponse !== undefined) {
-          // 刷新配置列表
-          await get().refreshConfigs()
-          
-          // 选择新创建的配置
-          const newConfig = get().configs.find(c => c.path === createResponse.path)
-          if (newConfig) {
-            get().setSelectedConfig(newConfig)
-          }
+        // 刷新配置列表
+        await get().refreshConfigs()
+        
+        // 选择新创建的配置
+        const newConfig = get().configs.find(c => c.path === createResponse.data.path)
+        if (newConfig) {
+          get().setSelectedConfig(newConfig)
         }
       }
     } catch (error) {

@@ -57,6 +57,7 @@ export interface AppSettings {
   notifications: NotificationSettings
   advanced: AdvancedSettings
   window: WindowSettings
+  about: Record<string, never>
 }
 
 // 设置标签页类型

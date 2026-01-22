@@ -6,7 +6,6 @@
 
 import path from 'path';
 import os from 'os';
-import { app } from 'electron';
 import { CONFIG_FILES, PATHS as PATH_CONSTANTS } from '@shared/constants';
 
 // 使用用户主目录而不是程序运行目录

@@ -19,7 +19,7 @@ export class AnthropicTransformer extends BaseTransformer {
    * @param provider API服务商配置
    * @returns 原始请求
    */
-  async transformRequest(request: ClaudeRequest, provider: ApiProvider): Promise<any> {
+  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<any> {
     this.log('debug', '请求直通,无需转换', { model: request.model })
     return this.clone(request)
   }
@@ -30,7 +30,7 @@ export class AnthropicTransformer extends BaseTransformer {
    * @param provider API服务商配置
    * @returns 原始响应
    */
-  async transformResponse(response: any, provider: ApiProvider): Promise<ClaudeResponse> {
+  async transformResponse(response: any, _provider: ApiProvider): Promise<ClaudeResponse> {
     this.log('debug', '响应直通,无需转换', {
       responseId: response.id,
       model: response.model
@@ -44,7 +44,7 @@ export class AnthropicTransformer extends BaseTransformer {
    * @param provider API服务商配置
    * @returns 原始数据块
    */
-  transformStreamChunk(chunk: string, provider: ApiProvider): string | null {
+  transformStreamChunk(chunk: string, _provider: ApiProvider): string | null {
     // 流式响应直接透传
     return chunk
   }

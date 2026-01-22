@@ -6,6 +6,7 @@
 import React from 'react'
 import { Spin } from 'antd'
 import { DatabaseOutlined } from '@ant-design/icons'
+import { useTranslation } from '../../locales/useTranslation'
 
 /**
  * 加载屏幕组件属性
@@ -13,7 +14,7 @@ import { DatabaseOutlined } from '@ant-design/icons'
 interface LoadingScreenProps {
   visible?: boolean
   text?: string
-  icon?: React.ReactNode
+  icon?: React.ReactElement
   size?: 'small' | 'default' | 'large'
 }
 
@@ -22,10 +23,11 @@ interface LoadingScreenProps {
  */
 const LoadingScreen: React.FC<LoadingScreenProps> = ({
   visible = true,
-  text = '正在加载...',
+  text,
   icon = <DatabaseOutlined />,
   size = 'large'
 }) => {
+  const { t } = useTranslation()
   if (!visible) {
     return null
   }
@@ -41,7 +43,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
           />
         </div>
         <div className="loading-text">
-          {text}
+          {text || t('common.loading')}
         </div>
         <div className="loading-dots">
           <span></span>

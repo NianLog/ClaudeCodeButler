@@ -47,6 +47,7 @@ import {
 import { useAgentsManagementStore } from '@/store/agents-management-store'
 import { getUploadFilePath, readUploadFileText } from '@/utils/upload'
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
+import { useTranslation } from '@/locales/useTranslation'
 import type { AgentFile, AgentFormData } from '@shared/types/agents'
 import './AgentsManagementPanel.css'
 
@@ -73,6 +74,7 @@ const normalizeTools = (tools: string | string[] | undefined): string[] => {
  */
 const AgentsManagementPanel: React.FC = () => {
   const messageApi = message
+  const { t } = useTranslation()
   const {
     agents,
     isLoading,
@@ -149,13 +151,13 @@ const AgentsManagementPanel: React.FC = () => {
         tools: normalizeTools(values.tools)
       }
       await addAgent(formData)
-      messageApi.success('Agent已添加')
+      messageApi.success(t('agents.message.added'))
       form.resetFields()
     } catch (error: any) {
       if (error?.errorFields) {
         return // 表单验证错误
       }
-      messageApi.error('添加失败: ' + (error?.message || '未知错误'))
+      messageApi.error(t('agents.message.addFailed', { error: error?.message || t('common.unknownError') }))
     }
   }
 
@@ -170,13 +172,13 @@ const AgentsManagementPanel: React.FC = () => {
           tools: normalizeTools(values.tools)
         }
         await updateAgent(editingAgent.id, formData)
-        messageApi.success('Agent已更新')
+        messageApi.success(t('agents.message.updated'))
       }
     } catch (error: any) {
       if (error?.errorFields) {
         return
       }
-      messageApi.error('更新失败: ' + (error?.message || '未知错误'))
+      messageApi.error(t('agents.message.updateFailed', { error: error?.message || t('common.unknownError') }))
     }
   }
 
@@ -184,9 +186,9 @@ const AgentsManagementPanel: React.FC = () => {
   const handleDelete = async (agentId: string) => {
     try {
       await deleteAgent(agentId)
-      messageApi.success('Agent已删除')
+      messageApi.success(t('agents.message.deleted'))
     } catch (error: any) {
-      messageApi.error('删除失败: ' + (error?.message || '未知错误'))
+      messageApi.error(t('agents.message.deleteFailed', { error: error?.message || t('common.unknownError') }))
     }
   }
 
@@ -198,23 +200,23 @@ const AgentsManagementPanel: React.FC = () => {
         ? await importAgent(filePath, { overwrite: false })
         : await importAgentContent(await readUploadFileText(file), { overwrite: false })
       if (!result) {
-        messageApi.error('导入失败: 未知错误')
+        messageApi.error(t('agents.message.importFailed', { error: t('common.unknownError') }))
         return
       }
       if (result.success) {
-        messageApi.success(`Agent "${result.agentId}" 导入成功`)
+        messageApi.success(t('agents.message.importSuccess', { name: result.agentId ?? '' }))
       } else {
-        messageApi.error(`导入失败: ${result.error || '未知错误'}`)
+        messageApi.error(t('agents.message.importFailed', { error: result.error || t('common.unknownError') }))
       }
     } catch (error: any) {
-      messageApi.error('导入失败: ' + (error.message || '未知错误'))
+      messageApi.error(t('agents.message.importFailed', { error: error.message || t('common.unknownError') }))
     }
   }
 
   // 处理批量导入
   const handleBatchImport = async () => {
     if (fileList.length === 0) {
-      messageApi.warning('请先选择要导入的文件')
+      messageApi.warning(t('agents.message.batchImportSelect'))
       return
     }
 
@@ -232,7 +234,7 @@ const AgentsManagementPanel: React.FC = () => {
       )
 
       if (filePaths.length === 0 && contentFiles.length === 0) {
-        messageApi.error('批量导入失败: 未获取到文件内容')
+        messageApi.error(t('agents.message.batchImportNoContent'))
         return
       }
 
@@ -265,28 +267,28 @@ const AgentsManagementPanel: React.FC = () => {
 
       const result = merged
       if (!result) {
-        messageApi.error('批量导入失败: 未知错误')
+        messageApi.error(t('agents.message.batchImportFailed', { error: t('common.unknownError') }))
         return
       }
       if (result.success) {
-        messageApi.success(`成功导入 ${result.imported?.length || 0} 个Agent`)
+        messageApi.success(t('agents.message.batchImportSuccess', { count: result.imported?.length || 0 }))
         if (result.errors && result.errors.length > 0) {
-          messageApi.warning(`${result.errors.length} 个文件导入失败`)
+          messageApi.warning(t('agents.message.batchImportFailedCount', { count: result.errors.length }))
         }
         setFileList([])
         closeImportModal()
       } else {
-        messageApi.error('批量导入失败')
+        messageApi.error(t('agents.message.batchImportFailed', { error: '' }))
       }
     } catch (error: any) {
-      messageApi.error('批量导入失败: ' + (error.message || '未知错误'))
+      messageApi.error(t('agents.message.batchImportFailed', { error: error.message || t('common.unknownError') }))
     }
   }
 
   // 表格列定义
   const columns = [
     {
-      title: 'Agent名称',
+      title: t('agents.table.name'),
       dataIndex: ['metadata', 'name'],
       key: 'name',
       render: (name: string, record: AgentFile) => (
@@ -295,7 +297,7 @@ const AgentsManagementPanel: React.FC = () => {
             <div
               className="agent-color-badge"
               style={{ backgroundColor: record.metadata.color }}
-              title="自定义颜色"
+              title={t('agents.table.customColor')}
             />
           )}
           <div style={{ maxWidth: 200 }}>
@@ -314,7 +316,7 @@ const AgentsManagementPanel: React.FC = () => {
       )
     },
     {
-      title: '可用工具',
+      title: t('agents.table.tools'),
       dataIndex: ['metadata', 'tools'],
       key: 'tools',
       render: (tools: string | string[] | undefined) => {
@@ -342,7 +344,7 @@ const AgentsManagementPanel: React.FC = () => {
       }
     },
     {
-      title: '模型',
+      title: t('agents.table.model'),
       dataIndex: ['metadata', 'model'],
       key: 'model',
       render: (model: string | undefined) => model ? (
@@ -354,7 +356,7 @@ const AgentsManagementPanel: React.FC = () => {
       )
     },
     {
-      title: '文件信息',
+      title: t('agents.table.fileInfo'),
       key: 'fileInfo',
       render: (_: any, record: AgentFile) => (
         <Space direction="vertical" size="small">
@@ -368,39 +370,39 @@ const AgentsManagementPanel: React.FC = () => {
       )
     },
     {
-      title: '操作',
+      title: t('agents.table.actions'),
       key: 'actions',
       width: 200,
       render: (_: any, record: AgentFile) => (
         <Space size="small">
-          <Tooltip title="查看详情">
+          <Tooltip title={t('agents.table.viewDetail')}>
             <Button
               type="primary"
               size="small"
               icon={<EyeOutlined />}
               onClick={() => openDetailDrawer(record)}
             >
-              查看
+              {t('agents.table.view')}
             </Button>
           </Tooltip>
-          <Tooltip title="编辑">
+          <Tooltip title={t('agents.table.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}
               onClick={() => openEditModal(record)}
             >
-              编辑
+              {t('agents.table.edit')}
             </Button>
           </Tooltip>
           <Popconfirm
-            title="确认删除"
-            description="确定要删除这个Agent吗？"
+            title={t('agents.confirm.deleteTitle')}
+            description={t('agents.confirm.deleteDescription')}
             onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
+              {t('agents.table.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -412,10 +414,10 @@ const AgentsManagementPanel: React.FC = () => {
     <div className="agents-management-panel">
       {/* 标题栏 */}
       <div className="page-header">
-        <Title level={3}>子Agent管理</Title>
+        <Title level={3}>{t('agents.title')}</Title>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={loadAgents} loading={isLoading}>
-            刷新
+            {t('common.refresh')}
           </Button>
           <Upload
             accept=".md"
@@ -426,17 +428,17 @@ const AgentsManagementPanel: React.FC = () => {
               return false
             }}
           >
-            <Button icon={<UploadOutlined />}>导入文件</Button>
+            <Button icon={<UploadOutlined />}>{t('agents.importFile')}</Button>
           </Upload>
           <Button
             type="primary"
             icon={<InboxOutlined />}
             onClick={openImportModal}
           >
-            批量导入
+            {t('agents.batchImport')}
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openAddModal}>
-            新建Agent
+            {t('agents.create')}
           </Button>
         </Space>
       </div>
@@ -444,9 +446,9 @@ const AgentsManagementPanel: React.FC = () => {
       {/* 统计卡片行 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}>
-          <Card bordered={false} className="stat-card">
+          <Card variant="borderless" className="stat-card">
             <Statistic
-              title="总Agent数"
+              title={t('agents.stats.totalAgents')}
               value={totalAgents}
               prefix={<RobotOutlined />}
               valueStyle={{ color: '#7C3AED' }}
@@ -454,9 +456,9 @@ const AgentsManagementPanel: React.FC = () => {
           </Card>
         </Col>
         <Col span={6}>
-          <Card bordered={false} className="stat-card">
+          <Card variant="borderless" className="stat-card">
             <Statistic
-              title="工具总数"
+              title={t('agents.stats.totalTools')}
               value={totalTools}
               prefix={<ToolOutlined />}
               valueStyle={{ color: '#52C41A' }}
@@ -464,9 +466,9 @@ const AgentsManagementPanel: React.FC = () => {
           </Card>
         </Col>
         <Col span={6}>
-          <Card bordered={false} className="stat-card">
+          <Card variant="borderless" className="stat-card">
             <Statistic
-              title="模型类型"
+              title={t('agents.stats.modelTypes')}
               value={modelTypes}
               prefix={<CodeOutlined />}
               valueStyle={{ color: '#1890FF' }}
@@ -474,9 +476,9 @@ const AgentsManagementPanel: React.FC = () => {
           </Card>
         </Col>
         <Col span={6}>
-          <Card bordered={false} className="stat-card">
+          <Card variant="borderless" className="stat-card">
             <Statistic
-              title="自定义颜色"
+              title={t('agents.stats.customColors')}
               value={customColors}
               prefix={<BgColorsOutlined />}
               valueStyle={{ color: '#FAAD14' }}
@@ -486,7 +488,7 @@ const AgentsManagementPanel: React.FC = () => {
       </Row>
 
       {/* Agent列表表格 */}
-      <Card bordered={false} className="agent-list-card">
+      <Card variant="borderless" className="agent-list-card">
         <Table
           dataSource={agents}
           columns={columns}
@@ -495,17 +497,17 @@ const AgentsManagementPanel: React.FC = () => {
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 个Agent`
+            showTotal: (total) => t('agents.table.total', { total })
           }}
           locale={{
             emptyText: (
               <div style={{ padding: '40px 0' }}>
                 <RobotOutlined style={{ fontSize: 48, color: '#ccc' }} />
                 <div style={{ marginTop: 16 }}>
-                  <Text type="secondary">暂无Agent</Text>
+                  <Text type="secondary">{t('agents.empty.title')}</Text>
                   <br />
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    点击"新建Agent"或"批量导入"开始使用
+                    {t('agents.empty.subtitle')}
                   </Text>
                 </div>
               </div>
@@ -534,18 +536,18 @@ const AgentsManagementPanel: React.FC = () => {
       >
         {selectedAgent && (
           <>
-            <Divider orientation="left">元数据</Divider>
+            <Divider orientation="left">{t('agents.detail.metadata')}</Divider>
             <Descriptions column={2} bordered size="small">
-              <Descriptions.Item label="名称">
+              <Descriptions.Item label={t('agents.detail.name')}>
                 {selectedAgent.metadata.name}
               </Descriptions.Item>
-              <Descriptions.Item label="模型">
+              <Descriptions.Item label={t('agents.detail.model')}>
                 {selectedAgent.metadata.model || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="描述" span={2}>
+              <Descriptions.Item label={t('agents.detail.description')} span={2}>
                 {selectedAgent.metadata.description}
               </Descriptions.Item>
-              <Descriptions.Item label="可用工具" span={2}>
+              <Descriptions.Item label={t('agents.detail.tools')} span={2}>
                 <Space size="small" wrap>
                   {(() => {
                     const toolsArray = normalizeTools(selectedAgent.metadata.tools)
@@ -556,12 +558,12 @@ const AgentsManagementPanel: React.FC = () => {
                         </Tag>
                       ))
                     ) : (
-                      <Text type="secondary">无</Text>
+                      <Text type="secondary">{t('common.none')}</Text>
                     )
                   })()}
                 </Space>
               </Descriptions.Item>
-              <Descriptions.Item label="颜色" span={2}>
+              <Descriptions.Item label={t('agents.detail.color')} span={2}>
                 {selectedAgent.metadata.color ? (
                   <Space>
                     <div
@@ -574,18 +576,18 @@ const AgentsManagementPanel: React.FC = () => {
                   <Text type="secondary">-</Text>
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="文件名" span={2}>
+              <Descriptions.Item label={t('agents.detail.fileName')} span={2}>
                 {selectedAgent.fileName}
               </Descriptions.Item>
-              <Descriptions.Item label="文件大小" span={1}>
+              <Descriptions.Item label={t('agents.detail.fileSize')} span={1}>
                 {(selectedAgent.fileSize / 1024).toFixed(2)} KB
               </Descriptions.Item>
-              <Descriptions.Item label="修改时间" span={1}>
+              <Descriptions.Item label={t('agents.detail.updatedAt')} span={1}>
                 {new Date(selectedAgent.updatedAt).toLocaleString()}
               </Descriptions.Item>
             </Descriptions>
 
-            <Divider orientation="left">Agent内容</Divider>
+            <Divider orientation="left">{t('agents.detail.content')}</Divider>
             <div className="agent-content-markdown">
               <MarkdownRenderer content={selectedAgent.content} />
             </div>
@@ -595,7 +597,7 @@ const AgentsManagementPanel: React.FC = () => {
 
       {/* 添加/编辑Modal */}
       <Modal
-        title={formMode === 'add' ? '新建Agent' : '编辑Agent'}
+        title={formMode === 'add' ? t('agents.form.createTitle') : t('agents.form.editTitle')}
         open={isFormModalOpen}
         onOk={formMode === 'add' ? handleAdd : handleEdit}
         onCancel={closeFormModal}
@@ -608,49 +610,49 @@ const AgentsManagementPanel: React.FC = () => {
         >
           <Form.Item
             name="name"
-            label="Agent名称"
-            rules={[{ required: true, message: '请输入Agent名称' }]}
+            label={t('agents.form.name')}
+            rules={[{ required: true, message: t('agents.form.nameRequired') }]}
           >
-            <Input placeholder="例如: code-explorer" />
+            <Input placeholder={t('agents.form.namePlaceholder')} />
           </Form.Item>
 
           <Form.Item
             name="description"
-            label="描述"
-            rules={[{ required: true, message: '请输入描述' }]}
+            label={t('agents.form.description')}
+            rules={[{ required: true, message: t('agents.form.descriptionRequired') }]}
           >
-            <TextArea rows={2} placeholder="简要描述这个Agent的功能" />
+            <TextArea rows={2} placeholder={t('agents.form.descriptionPlaceholder')} />
           </Form.Item>
 
           <Form.Item
             name="tools"
-            label="可用工具"
-            tooltip="多个工具使用逗号或空格分隔，例如: web-search, file-read, database"
+            label={t('agents.form.tools')}
+            tooltip={t('agents.form.toolsTip')}
           >
             <Input
-              placeholder="例如: web-search, file-read, database"
+              placeholder={t('agents.form.toolsPlaceholder')}
               style={{ fontFamily: 'monospace' }}
             />
           </Form.Item>
 
           <Form.Item
             name="model"
-            label="使用的模型"
-            tooltip="留空则使用默认模型"
+            label={t('agents.form.model')}
+            tooltip={t('agents.form.modelTip')}
           >
             <Input
-              placeholder="例如: claude-sonnet-4-20250514 或留空"
+              placeholder={t('agents.form.modelPlaceholder')}
               style={{ fontFamily: 'monospace' }}
             />
           </Form.Item>
 
           <Form.Item
             name="color"
-            label="显示颜色"
-            tooltip="使用十六进制颜色代码，例如: #7C3AED 或 DEFABC"
+            label={t('agents.form.color')}
+            tooltip={t('agents.form.colorTip')}
           >
             <Input
-              placeholder="#7C3AED 或 DEFABC"
+              placeholder={t('agents.form.colorPlaceholder')}
               maxLength={7}
               style={{ fontFamily: 'monospace', width: 200 }}
             />
@@ -658,12 +660,12 @@ const AgentsManagementPanel: React.FC = () => {
 
           <Form.Item
             name="content"
-            label="Agent内容"
-            rules={[{ required: true, message: '请输入Agent内容' }]}
+            label={t('agents.form.content')}
+            rules={[{ required: true, message: t('agents.form.contentRequired') }]}
           >
             <TextArea
               rows={8}
-              placeholder="输入Agent的系统消息或Prompt内容..."
+              placeholder={t('agents.form.contentPlaceholder')}
               style={{ fontFamily: 'monospace' }}
             />
           </Form.Item>
@@ -672,7 +674,7 @@ const AgentsManagementPanel: React.FC = () => {
 
       {/* 批量导入Modal */}
       <Modal
-        title="批量导入Agent"
+        title={t('agents.import.title')}
         open={isImportModalOpen}
         onOk={handleBatchImport}
         onCancel={() => {
@@ -692,9 +694,9 @@ const AgentsManagementPanel: React.FC = () => {
           <p className="ant-upload-drag-icon">
             <InboxOutlined />
           </p>
-          <p className="ant-upload-text">点击或拖拽.md文件到此区域上传</p>
+          <p className="ant-upload-text">{t('agents.import.tip')}</p>
           <p className="ant-upload-hint">
-            支持批量上传。每个文件必须包含有效的YAML元数据（name、description必填）。
+            {t('agents.import.hint')}
           </p>
         </Upload.Dragger>
       </Modal>

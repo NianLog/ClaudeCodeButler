@@ -4,8 +4,8 @@
   "description": "Claude Code Butler - 配置管理工具",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "dev:admin": "electron-vite dev --admin",
+    "dev": "cross-env LANG=zh_CN.UTF-8 LC_ALL=zh_CN.UTF-8 electron-vite dev",
+    "dev:admin": "cross-env LANG=zh_CN.UTF-8 LC_ALL=zh_CN.UTF-8 electron-vite dev --admin",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "pack": "electron-builder",
@@ -24,7 +24,8 @@
     "pack:all": "electron-builder --win --mac --linux",
     "dist:mac": "electron-builder --mac --publish=never",
     "dist:linux": "electron-builder --linux --publish=never",
-    "dist:all": "electron-builder --win --mac --linux --publish=never"
+    "dist:all": "electron-builder --win --mac --linux --publish=never",
+    "postinstall": "patch-package"
   },
   "keywords": [
     "claude-code",
@@ -45,10 +46,6 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
-    "@types/js-yaml": "^4.0.9",
-    "@types/node-cron": "^3.0.11",
-    "@types/react-syntax-highlighter": "^15.5.13",
-    "@types/react-window": "^1.8.8",
     "antd": "^5.12.0",
     "axios": "^1.12.2",
     "chokidar": "^3.5.3",
@@ -56,12 +53,12 @@
     "dayjs": "^1.11.10",
     "express": "^5.1.0",
     "js-yaml": "^4.1.1",
-    "monaco-editor": "^0.54.0",
+    "monaco-editor": "^0.55.1",
     "node-cron": "^3.0.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^9.1.0",
-    "react-syntax-highlighter": "^15.6.6",
+    "react-syntax-highlighter": "^16.1.0",
     "react-window": "^1.8.10",
     "recharts": "^2.8.0",
     "remark-gfm": "^4.0.1",
@@ -69,29 +66,43 @@
     "zustand": "^4.4.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.0",
+    "@types/node-cron": "^3.0.11",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/react-window": "^1.8.8",
     "@types/uuid": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",
     "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.0",
-    "electron": "^32.0.0",
-    "electron-builder": "^24.9.0",
-    "electron-vite": "^2.0.0",
+    "baseline-browser-mapping": "^2.9.17",
+    "cross-env": "^7.0.3",
+    "electron": "^40.0.0",
+    "electron-builder": "^26.5.0",
+    "electron-vite": "^5.0.0",
     "eslint": "^8.57.0",
     "eslint-plugin-import": "^2.29.1",
+    "patch-package": "^8.0.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.3.0",
     "typescript": "^5.3.0",
-    "vite": "^5.0.0",
+    "vite": "^7.3.1",
     "vite-plugin-monaco-editor": "^1.1.0",
-    "vitest": "^1.0.0"
+    "vitest": "^4.0.17"
+  },
+  "overrides": {
+    "@electron/rebuild": "^4.0.2",
+    "tar": "^7.5.6"
   },
   "build": {
     "appId": "com.claudecode.butler",
     "productName": "CCB",
+    "compression": "normal",
     "directories": {
       "output": "release",
       "buildResources": "resources"

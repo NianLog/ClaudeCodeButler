@@ -5,8 +5,8 @@
 
 import chokidar from 'chokidar'
 import { EventEmitter } from 'events'
-import { join, basename, extname } from 'path'
-import { ConfigChangeEvent, ConfigType } from '@shared/types'
+import { basename, extname } from 'path'
+import { ConfigChangeEvent } from '@shared/types'
 import { CONFIG_FILES } from '@shared/constants'
 import { logger } from './utils/logger'
 
@@ -231,7 +231,8 @@ export class OptimizedFileWatcher extends EventEmitter {
     }
 
     // 检查是否为已知的配置文件
-    return Object.values(CONFIG_FILES).includes(fileName) ||
+    const knownFiles = new Set(Object.values(CONFIG_FILES) as string[])
+    return knownFiles.has(fileName) ||
            fileName.startsWith('.claude') ||
            fileName.includes('config')
   }

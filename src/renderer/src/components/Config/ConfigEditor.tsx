@@ -3,7 +3,7 @@
  * 提供配置文件的编辑功能
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import {
   Modal,
   Form,
@@ -26,7 +26,6 @@ import {
 import {
   SaveOutlined,
   EyeOutlined,
-  CopyOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   ImportOutlined,
@@ -36,13 +35,13 @@ import {
 import { useConfigEditorStore } from '../../store/config-editor-store'
 import { useConfigValidationStore } from '../../store/config-validation-store'
 import { useMessage } from '../../hooks/useMessage'
-import type { ConfigFile, ConfigType } from '@shared/types'
-import CodeEditor from '../Common/CodeEditor'
+import type { ConfigFile } from '@shared/types'
+const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
+import { useTranslation } from '../../locales/useTranslation'
 
-const { TextArea } = Input
 const { Option } = Select
-const { Title, Text } = Typography
+const { Text } = Typography
 
 /**
  * 配置编辑器属性
@@ -63,11 +62,11 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   onClose,
   onSave
 }) => {
+  const { t } = useTranslation()
   const [form] = Form.useForm()
   const message = useMessage()
   const [content, setContent] = useState('')
   const [isValid, setIsValid] = useState(true)
-  const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [previewVisible, setPreviewVisible] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showUserImport, setShowUserImport] = useState(false)
@@ -81,7 +80,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   } | null>(null)
 
   const { editorContent, loadConfigContent } = useConfigEditorStore()
-  const { validateConfig } = useConfigValidationStore()
+  useConfigValidationStore()
 
   // 初始化表单数据
   useEffect(() => {
@@ -162,9 +161,8 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   }
 
   // 处理验证变化
-  const handleValidationChange = (isValid: boolean, errors?: string[]) => {
+  const handleValidationChange = (isValid: boolean, _errors?: string[]) => {
     setIsValid(isValid)
-    setValidationErrors(errors || [])
   }
 
   // 确认系统配置操作
@@ -248,18 +246,19 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       try {
         values = await form.validateFields()
       } catch (formError) {
-        console.error('表单验证失败:', formError)
-        if (formError.errorFields && formError.errorFields.length > 0) {
-          const firstError = formError.errorFields[0]
-          message.error(`表单验证失败: ${firstError.errors[0]}`)
+        const fieldError = formError as { errorFields?: Array<{ errors: string[] }> }
+        console.error('表单验证失败:', fieldError)
+        if (fieldError.errorFields && fieldError.errorFields.length > 0) {
+          const firstError = fieldError.errorFields[0]
+          message.error(t('configEditor.form.validationFailed', { error: firstError.errors[0] }))
         } else {
-          message.error('请检查表单是否填写完整')
+          message.error(t('configEditor.form.incomplete'))
         }
         return
       }
 
       if (!isValid) {
-        message.error('配置内容格式不正确，请先修正')
+        message.error(t('configEditor.content.invalid'))
         return
       }
 
@@ -278,7 +277,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         }
       } catch (error) {
         console.error('内容解析失败:', error)
-        message.error(`配置内容解析失败: ${error instanceof Error ? error.message : '未知错误'}`)
+        message.error(t('configEditor.content.parseFailed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
         return
       }
 
@@ -286,7 +285,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       const configData = {
         content: actualContent, // 纯内容
         metadata: { // 元数据
-          name: String(values.name || '未命名配置'),
+          name: String(values.name || t('configEditor.defaults.unnamed')),
           description: String(values.description || ''),
           type: values.type || 'claude-code',
           isActive: Boolean(values.isActive)
@@ -300,7 +299,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           action: 'save',
           callback: async () => {
             await window.electronAPI.config.save(config.path, actualContent)
-            message.success('系统配置文件已保存')
+            message.success(t('configEditor.save.systemSuccess'))
             // 系统配置保存后关闭编辑器，触发父组件刷新
             onClose()
           }
@@ -318,16 +317,16 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
 
             if (activateResponse && typeof activateResponse === 'object' && 'success' in activateResponse) {
               if (activateResponse.success) {
-                message.success('配置已激活并应用到系统settings')
+                message.success(t('configEditor.activate.success'))
                 console.log('✅ 配置激活成功')
               } else {
-                message.error('配置激活失败')
+                message.error(t('configEditor.activate.failed'))
                 console.error('❌ 配置激活失败')
               }
             }
           } catch (error) {
             console.error('激活配置失败:', error)
-            message.error(`激活配置失败: ${error instanceof Error ? error.message : '未知错误'}`)
+            message.error(t('configEditor.activate.failedWithError', { error: error instanceof Error ? error.message : t('common.unknownError') }))
           }
         }
 
@@ -336,7 +335,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       }
     } catch (error) {
       console.error('Save failed:', error)
-      message.error(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`)
+      message.error(t('configEditor.save.failed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
     } finally {
       setIsSaving(false)
     }
@@ -345,12 +344,12 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   // 获取类型提示
   const getTypeDescription = (type: string) => {
     const descriptions: Record<string, string> = {
-      'claude-code': 'Claude Code 主配置文件，包含工具链、项目设置等',
-      'mcp-config': 'MCP (Model Context Protocol) 服务器配置',
-      'project-config': '项目特定的配置文件',
-      'user-preferences': '用户个人偏好设置'
+      'claude-code': t('configEditor.typeDesc.claudeCode'),
+      'mcp-config': t('configEditor.typeDesc.mcp'),
+      'project-config': t('configEditor.typeDesc.project'),
+      'user-preferences': t('configEditor.typeDesc.userPreferences')
     }
-    return descriptions[type] || '自定义配置文件'
+    return descriptions[type] || t('configEditor.typeDesc.custom')
   }
 
   return (
@@ -358,11 +357,11 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       <Modal
         title={
           <Space>
-            {config ? '编辑配置' : '新建配置'}
+            {config ? t('configEditor.title.edit') : t('configEditor.title.create')}
             {isValid ? (
-              <Tag color="success" icon={<CheckCircleOutlined />}>格式正确</Tag>
+              <Tag color="success" icon={<CheckCircleOutlined />}>{t('configEditor.status.valid')}</Tag>
             ) : (
-              <Tag color="error" icon={<ExclamationCircleOutlined />}>格式错误</Tag>
+              <Tag color="error" icon={<ExclamationCircleOutlined />}>{t('configEditor.status.invalid')}</Tag>
             )}
           </Space>
         }
@@ -371,7 +370,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         width={900}
         footer={[
           <Button key="cancel" onClick={onClose}>
-            取消
+            {t('common.cancel')}
           </Button>,
           <Button
             key="import"
@@ -381,7 +380,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
               loadUserConfigs()
             }}
           >
-            从用户目录导入
+            {t('configEditor.actions.importFromUser')}
           </Button>,
           <Button
             key="preview"
@@ -389,7 +388,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
             onClick={handlePreview}
             disabled={!isValid}
           >
-            预览
+            {t('configEditor.actions.preview')}
           </Button>,
           <Button
             key="save"
@@ -399,7 +398,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
             onClick={handleSave}
             disabled={!isValid}
           >
-            保存
+            {t('common.save')}
           </Button>
         ]}
       >
@@ -414,12 +413,12 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="配置名称"
+                label={t('configEditor.fields.name')}
                 name="name"
-                rules={[{ required: true, message: '请输入配置名称' }]}
+                rules={[{ required: true, message: t('configEditor.fields.nameRequired') }]}
               >
                 <Input
-                  placeholder="输入配置文件名称"
+                  placeholder={t('configEditor.fields.namePlaceholder')}
                   disabled={config?.isSystemConfig}
                   style={{
                     backgroundColor: config?.isSystemConfig ? '#f5f5f5' : 'white',
@@ -430,33 +429,33 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
             </Col>
             <Col span={12}>
               <Form.Item
-                label="配置类型"
+                label={t('configEditor.fields.type')}
                 name="type"
-                rules={[{ required: true, message: '请选择配置类型' }]}
+                rules={[{ required: true, message: t('configEditor.fields.typeRequired') }]}
               >
                 <Select
-                  placeholder="选择配置类型"
+                  placeholder={t('configEditor.fields.typePlaceholder')}
                   disabled={config?.isSystemConfig}
                   style={{
                     backgroundColor: config?.isSystemConfig ? '#f5f5f5' : 'white',
                     cursor: config?.isSystemConfig ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  <Option value="claude-code">Claude Code</Option>
-                  <Option value="mcp-config">MCP配置</Option>
-                  <Option value="project-config">项目配置</Option>
-                  <Option value="user-preferences">用户偏好</Option>
+                  <Option value="claude-code">{t('configPanel.types.claudeCode')}</Option>
+                  <Option value="mcp-config">{t('configPanel.types.mcp')}</Option>
+                  <Option value="project-config">{t('configPanel.types.project')}</Option>
+                  <Option value="user-preferences">{t('configPanel.types.userPreferences')}</Option>
                 </Select>
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item
-            label="描述"
+            label={t('configEditor.fields.description')}
             name="description"
           >
             <Input.TextArea
-              placeholder="输入配置文件的描述信息"
+              placeholder={t('configEditor.fields.descriptionPlaceholder')}
               rows={2}
               disabled={config?.isSystemConfig}
               style={{
@@ -467,13 +466,13 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           </Form.Item>
 
           <Form.Item
-            label="激活状态"
+            label={t('configEditor.fields.active')}
             name="isActive"
             valuePropName="checked"
           >
             <Switch
-              checkedChildren="激活"
-              unCheckedChildren="未激活"
+              checkedChildren={t('configEditor.fields.activeOn')}
+              unCheckedChildren={t('configEditor.fields.activeOff')}
               disabled={config?.isSystemConfig}
               style={{
                 cursor: config?.isSystemConfig ? 'not-allowed' : 'pointer'
@@ -481,7 +480,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
             />
           </Form.Item>
 
-          <Divider>配置内容</Divider>
+          <Divider>{t('configEditor.content.title')}</Divider>
 
           {/* 类型描述 */}
           <Form.Item shouldUpdate={(prev, curr) => prev.type !== curr.type}>
@@ -500,13 +499,13 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
 
           {/* 代码编辑器 */}
           <Form.Item
-            label="配置内容"
-            rules={[{ required: true, message: '请输入配置内容' }]}
+            label={t('configEditor.content.label')}
+            rules={[{ required: true, message: t('configEditor.content.required') }]}
           >
             <div className="config-editor-wrapper">
               <div className="editor-language-selector">
                 <Space>
-                  <Text>编辑器类型:</Text>
+                  <Text>{t('configEditor.editor.type')}</Text>
                   <Select
                     value={editorLanguage}
                     onChange={(value) => setEditorLanguage(value)}
@@ -518,18 +517,20 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
                 </Space>
               </div>
 
-              <CodeEditor
-                value={content}
-                onChange={handleContentChange}
-                language={editorLanguage}
-                height={400}
-                onValidate={handleValidationChange}
-                showPreview={false}
-                placeholder={editorLanguage === 'json'
-                  ? '输入JSON格式的配置内容'
-                  : '输入Markdown格式的配置内容'
-                }
-              />
+              <Suspense fallback={<Spin size="large" />}>
+                <CodeEditor
+                  value={content}
+                  onChange={handleContentChange}
+                  language={editorLanguage}
+                  height={400}
+                  onValidate={handleValidationChange}
+                  showPreview={false}
+                  placeholder={editorLanguage === 'json'
+                    ? t('configEditor.content.jsonPlaceholder')
+                    : t('configEditor.content.mdPlaceholder')
+                  }
+                />
+              </Suspense>
             </div>
           </Form.Item>
         </Form>
@@ -537,12 +538,12 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
 
       {/* 预览模态框 */}
       <Modal
-        title="配置预览"
+        title={t('configEditor.preview.title')}
         open={previewVisible}
         onCancel={() => setPreviewVisible(false)}
         footer={[
           <Button key="close" onClick={() => setPreviewVisible(false)}>
-            关闭
+            {t('common.close')}
           </Button>
         ]}
         width={800}
@@ -551,13 +552,13 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           <div className="config-preview">
             {editorLanguage === 'markdown' ? (
               <div className="markdown-preview-modal">
-                <MarkdownRenderer content={content || '内容为空'} />
+                <MarkdownRenderer content={content || t('configEditor.preview.empty')} />
               </div>
             ) : (
               (() => {
                 try {
                   if (!content || content.trim() === '') {
-                    return <pre>内容为空</pre>
+                    return <pre>{t('configEditor.preview.empty')}</pre>
                   }
                   const parsed = JSON.parse(content)
                   const formatted = JSON.stringify(parsed, null, 2)
@@ -571,7 +572,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
                 } catch (error) {
                   return (
                     <pre className="error-preview">
-                      JSON解析错误: {error instanceof Error ? error.message : '未知错误'}
+                      {t('configEditor.preview.jsonError', { error: error instanceof Error ? error.message : t('common.unknownError') })}
                     </pre>
                   )
                 }
@@ -586,22 +587,22 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         title={
           <Space>
             <UserOutlined />
-            <span>从用户目录导入配置</span>
+            <span>{t('configEditor.userImport.title')}</span>
           </Space>
         }
         open={showUserImport}
         onCancel={() => setShowUserImport(false)}
         footer={[
           <Button key="cancel" onClick={() => setShowUserImport(false)}>
-            取消
+            {t('common.cancel')}
           </Button>
         ]}
         width={600}
       >
         <div className="user-import-content">
           <Alert
-            message="从用户目录导入"
-            description="从 ~/.claude 目录导入 settings.json 和 CLAUDE.md 等配置文件"
+            message={t('configEditor.userImport.alertTitle')}
+            description={t('configEditor.userImport.alertDesc')}
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -610,7 +611,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           {loadingUserConfigs ? (
             <div style={{ textAlign: 'center', padding: 40 }}>
               <Spin size="large" />
-              <div style={{ marginTop: 16 }}>正在扫描用户配置...</div>
+              <div style={{ marginTop: 16 }}>{t('configEditor.userImport.scanning')}</div>
             </div>
           ) : userConfigs.length > 0 ? (
             <List
@@ -625,7 +626,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
                       icon={<ImportOutlined />}
                       onClick={() => importUserConfig(item)}
                     >
-                      导入
+                      {t('configEditor.userImport.import')}
                     </Button>
                   ]}
                 >
@@ -639,11 +640,11 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
             />
           ) : (
             <Empty
-              description="未找到用户配置文件"
+              description={t('configEditor.userImport.empty')}
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             >
               <Button type="primary" onClick={loadUserConfigs}>
-                重新扫描
+                {t('configEditor.userImport.rescan')}
               </Button>
             </Empty>
           )}
@@ -768,26 +769,26 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
 
       {/* 系统配置操作确认模态框 */}
       <Modal
-        title="系统配置文件操作确认"
+        title={t('configEditor.systemConfirm.title')}
         open={systemConfigConfirmVisible}
         onOk={handleSystemConfigConfirm}
         onCancel={handleSystemConfigCancel}
-        okText="确认"
-        cancelText="取消"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true }}
       >
         <div style={{ padding: '16px 0' }}>
           <p>
-            <strong>警告：</strong>您正在尝试{pendingSystemConfigAction?.action === 'load' ? '读取' : '修改'}系统配置文件
+            <strong>{t('configEditor.systemConfirm.warningLabel')}</strong>{t('configEditor.systemConfirm.action', { action: pendingSystemConfigAction?.action === 'load' ? t('configEditor.systemConfirm.actionLoad') : t('configEditor.systemConfirm.actionSave') })}
             <code style={{ margin: '0 4px', padding: '2px 6px', background: '#f5f5f5', borderRadius: '4px' }}>
               {config?.name}
             </code>
           </p>
-          <p>系统配置文件是应用的核心配置，错误的修改可能导致Claude Code无法正常工作。</p>
+          <p>{t('configEditor.systemConfirm.risk')}</p>
           {pendingSystemConfigAction?.action === 'save' && (
-            <p><strong>注意：</strong>系统配置文件只能修改现有字段，不能添加新字段。</p>
+            <p><strong>{t('configEditor.systemConfirm.noteLabel')}</strong>{t('configEditor.systemConfirm.note')}</p>
           )}
-          <p>请确认您了解此操作的风险，并确保您知道如何恢复配置。</p>
+          <p>{t('configEditor.systemConfirm.confirm')}</p>
         </div>
       </Modal>
     </>

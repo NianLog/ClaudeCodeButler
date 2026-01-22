@@ -21,8 +21,8 @@ export class WindowManager {
     const { width, height } = primaryDisplay.workAreaSize
 
     // 尝试从设置中获取窗口大小，否则使用默认值
-    let windowWidth = DEFAULT_SETTINGS.window.width
-    let windowHeight = DEFAULT_SETTINGS.window.height
+    let windowWidth: number = DEFAULT_SETTINGS.window.width
+    let windowHeight: number = DEFAULT_SETTINGS.window.height
 
     try {
       // 检查是否有自定义窗口设置
@@ -61,7 +61,6 @@ export class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        enableRemoteModule: false,
         preload: join(__dirname, '../preload/index.js'),
         webSecurity: true,
         allowRunningInsecureContent: false,
@@ -69,14 +68,18 @@ export class WindowManager {
       }
     })
 
+    logger.info('主窗口创建开始，准备加载渲染器')
+
     // 加载应用
     if (process.env.NODE_ENV === 'development') {
       // 开发环境加载本地服务器
+      logger.info('加载渲染器: http://localhost:5175')
       await this.mainWindow.loadURL('http://localhost:5175')
       // 开发环境打开开发者工具
       this.mainWindow.webContents.openDevTools()
     } else {
       // 生产环境加载本地文件
+      logger.info(`加载渲染器文件: ${join(__dirname, '../renderer/index.html')}`)
       await this.mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
     }
 
@@ -142,18 +145,43 @@ export class WindowManager {
       logger.info('主窗口页面加载完成')
     })
 
+    this.mainWindow.webContents.on('did-start-loading', () => {
+      logger.info('主窗口开始加载')
+    })
+
+    this.mainWindow.webContents.on('dom-ready', () => {
+      logger.info('主窗口 DOM ready')
+    })
+
+    this.mainWindow.webContents.on('did-stop-loading', () => {
+      logger.info('主窗口停止加载')
+    })
+
     // 页面加载失败时
-    this.mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    this.mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
       logger.error(`页面加载失败: ${errorCode} - ${errorDescription}`)
     })
 
     // 控制台消息
-    this.mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-      const levelMap = ['debug', 'info', 'warn', 'error']
-      logger[levelMap[level] || 'info'](`[Renderer] ${message}`, {
-        line,
-        source: sourceId
-      })
+    this.mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      const payload = { line, source: sourceId }
+      switch (level) {
+        case 0:
+          logger.debug(`[Renderer] ${message}`, payload)
+          break
+        case 1:
+          logger.info(`[Renderer] ${message}`, payload)
+          break
+        case 2:
+          logger.warn(`[Renderer] ${message}`, payload)
+          break
+        case 3:
+          logger.error(`[Renderer] ${message}`, payload)
+          break
+        default:
+          logger.info(`[Renderer] ${message}`, payload)
+          break
+      }
     })
   }
 

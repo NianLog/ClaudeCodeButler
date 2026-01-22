@@ -2,48 +2,81 @@
  * 统一的Markdown渲染组件
  */
 
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 interface MarkdownRendererProps {
   content: string
   className?: string
 }
 
-const syntaxTheme = vscDarkPlus as Record<string, React.CSSProperties>
+type SyntaxModule = {
+  SyntaxHighlighter: any
+  theme: Record<string, React.CSSProperties>
+}
 
-const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className }) => (
-  <ReactMarkdown
-    className={className}
-    remarkPlugins={[remarkGfm]}
-    components={{
-      code({ className: codeClassName, children, node, ...rest }) {
-        const match = /language-(\w+)/.exec(codeClassName || '')
-        const codeText = String(children).replace(/\n$/, '')
-        if (match) {
-          return (
-            <SyntaxHighlighter
-              style={syntaxTheme}
-              language={match[1]}
-              PreTag="div"
-            >
-              {codeText}
-            </SyntaxHighlighter>
-          )
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className }) => {
+  const [syntaxModule, setSyntaxModule] = useState<SyntaxModule | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const [{ Prism }, themeModule] = await Promise.all([
+          import('react-syntax-highlighter'),
+          import('react-syntax-highlighter/dist/esm/styles/prism')
+        ])
+        if (!cancelled) {
+          setSyntaxModule({
+            SyntaxHighlighter: Prism,
+            theme: themeModule.vscDarkPlus as Record<string, React.CSSProperties>
+          })
         }
+      } catch {
+        // ignore
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const components = useMemo(() => ({
+    code({ className: codeClassName, children, node, ...rest }: any) {
+      const match = /language-(\w+)/.exec(codeClassName || '')
+      const codeText = String(children).replace(/\n$/, '')
+      if (match && syntaxModule?.SyntaxHighlighter) {
+        const SyntaxHighlighter = syntaxModule.SyntaxHighlighter
         return (
-          <code className={codeClassName} {...rest}>
+          <SyntaxHighlighter
+            style={syntaxModule.theme}
+            language={match[1]}
+            PreTag="div"
+          >
             {codeText}
-          </code>
+          </SyntaxHighlighter>
         )
       }
-    }}
-  >
-    {content}
-  </ReactMarkdown>
-)
+      return (
+        <code className={codeClassName} {...rest}>
+          {codeText}
+        </code>
+      )
+    }
+  }), [syntaxModule])
+
+  return (
+    <ReactMarkdown
+      className={className}
+      remarkPlugins={[remarkGfm]}
+      components={components}
+    >
+      {content}
+    </ReactMarkdown>
+  )
+}
 
 export default MarkdownRenderer

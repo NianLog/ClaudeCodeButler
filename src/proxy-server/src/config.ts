@@ -78,7 +78,7 @@ export async function saveConfig(config: ManagedModeConfig): Promise<void> {
  * 监听配置文件变化
  * @param callback 配置变化回调函数
  */
-export function watchConfig(callback: (config: ManagedModeConfig) => void): void {
+export function watchConfig(_callback: (config: ManagedModeConfig) => void): void {
   // 简化实现，暂时不监听文件变化
   // TODO: 实现配置文件监听
 }

@@ -8,9 +8,18 @@ import type {
   CustomEnvironmentCheck,
   CustomCheckFormData,
   EnvironmentCheckSummary,
-  PredefinedCheckType,
   ClaudeCodeVersionInfo
 } from '@shared/types/environment'
+import type { PredefinedCheckType as PredefinedCheckTypeValue } from '@shared/types/environment'
+import { EnvironmentCheckStatus, PredefinedCheckType } from '@shared/types/environment'
+
+const PREDEFINED_CHECKS: Array<{ id: PredefinedCheckTypeValue; type: PredefinedCheckTypeValue; name: string; icon?: string }> = [
+  { id: PredefinedCheckType.UV, type: PredefinedCheckType.UV, name: 'UV', icon: '🧪' },
+  { id: PredefinedCheckType.CLAUDE_CODE, type: PredefinedCheckType.CLAUDE_CODE, name: 'Claude Code', icon: '🤖' },
+  { id: PredefinedCheckType.NODEJS, type: PredefinedCheckType.NODEJS, name: 'Node.js', icon: '🟩' },
+  { id: PredefinedCheckType.NPM, type: PredefinedCheckType.NPM, name: 'NPM', icon: '📦' },
+  { id: PredefinedCheckType.NPX, type: PredefinedCheckType.NPX, name: 'NPX', icon: '⚡' }
+]
 
 /**
  * 环境检测状态接口
@@ -32,9 +41,9 @@ interface EnvironmentCheckState {
 
   // 操作
   checkAllPredefined: () => Promise<void>
-  checkPredefined: (checkType: PredefinedCheckType) => Promise<void>
+  checkPredefined: (checkType: PredefinedCheckTypeValue) => Promise<void>
   checkCustom: (customCheck: CustomEnvironmentCheck) => Promise<void>
-  checkOne: (checkType: PredefinedCheckType | 'custom', id: string) => Promise<void>
+  checkOne: (checkType: PredefinedCheckTypeValue | 'custom', id: string) => Promise<void>
   refreshAll: () => Promise<void>
   loadCustomChecks: () => Promise<void>
   addCustomCheck: (formData: CustomCheckFormData) => Promise<void>
@@ -69,15 +78,66 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
   checkAllPredefined: async () => {
     set({ isChecking: true, error: null })
     try {
-      const result = await window.electronAPI.environment.checkAllPredefined()
-      if (result?.success && result.data) {
-        set({ predefinedResults: result.data, isChecking: false })
-        await get().calculateSummary()
-      } else {
-        set({ error: result?.error || '检查失败', isChecking: false })
+      // 先填充“检查中”占位
+      const placeholders = PREDEFINED_CHECKS.map((item) => ({
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        status: EnvironmentCheckStatus.CHECKING,
+        version: undefined,
+        error: undefined,
+        lastCheckTime: new Date(),
+        icon: item.icon,
+        isCustom: false
+      }))
+      set({ predefinedResults: placeholders })
+
+      const updateResult = (resultData: EnvironmentCheckResult) => {
+        const { predefinedResults } = get()
+        const updatedResults = predefinedResults.map(r =>
+          r.id === resultData.id ? { ...r, ...resultData } : r
+        )
+        set({ predefinedResults: updatedResults })
       }
+
+      const promises = PREDEFINED_CHECKS.map((item) =>
+        window.electronAPI.environment.checkPredefined(item.type)
+          .then((result: any) => {
+            if (result?.success && result.data) {
+              updateResult(result.data)
+            } else {
+              updateResult({
+                id: item.id,
+                name: item.name,
+                type: item.type,
+                status: EnvironmentCheckStatus.ERROR,
+                error: result?.error || '检查失败',
+                lastCheckTime: new Date(),
+                icon: item.icon,
+                isCustom: false
+              } as EnvironmentCheckResult)
+            }
+          })
+          .catch((error: any) => {
+            updateResult({
+              id: item.id,
+              name: item.name,
+              type: item.type,
+              status: EnvironmentCheckStatus.ERROR,
+              error: String(error),
+              lastCheckTime: new Date(),
+              icon: item.icon,
+              isCustom: false
+            } as EnvironmentCheckResult)
+          })
+      )
+
+      await Promise.allSettled(promises)
+      await get().calculateSummary()
     } catch (error) {
-      set({ error: String(error), isChecking: false })
+      set({ error: String(error) })
+    } finally {
+      set({ isChecking: false })
     }
   },
 
@@ -85,6 +145,13 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
   checkPredefined: async (checkType) => {
     set({ isChecking: true, error: null })
     try {
+      // 标记该项为检查中
+      const { predefinedResults } = get()
+      set({
+        predefinedResults: predefinedResults.map(r =>
+          r.type === checkType ? { ...r, status: EnvironmentCheckStatus.CHECKING } : r
+        )
+      })
       const result = await window.electronAPI.environment.checkPredefined(checkType)
       if (result?.success && result.data) {
         const { predefinedResults } = get()
@@ -105,6 +172,22 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
   checkCustom: async (customCheck) => {
     set({ isChecking: true, error: null })
     try {
+      // 标记该项为检查中
+      const { customResults } = get()
+      const updatedResults = customResults.filter(r => r.id !== customCheck.id)
+      updatedResults.push({
+        id: customCheck.id,
+        name: customCheck.name,
+        type: 'custom',
+        status: EnvironmentCheckStatus.CHECKING,
+        version: undefined,
+        error: undefined,
+        lastCheckTime: new Date(),
+        icon: customCheck.icon,
+        isCustom: true
+      } as EnvironmentCheckResult)
+      set({ customResults: updatedResults })
+
       const result = await window.electronAPI.environment.checkCustom(customCheck)
       if (result?.success && result.data) {
         const { customResults } = get()
@@ -134,13 +217,46 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
 
   // 刷新所有检查
   refreshAll: async () => {
-    await get().checkAllPredefined()
-    // 刷新所有自定义检查
+    set({ isChecking: true, error: null })
+    // 先填充预定义检查占位
+    const placeholders = PREDEFINED_CHECKS.map((item) => ({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      status: EnvironmentCheckStatus.CHECKING,
+      version: undefined,
+      error: undefined,
+      lastCheckTime: new Date(),
+      icon: item.icon,
+      isCustom: false
+    }))
+    set({ predefinedResults: placeholders })
+
+    // 先把自定义检查标记为检查中
     const { customChecks } = get()
-    for (const check of customChecks) {
-      await get().checkCustom(check)
-    }
+    const customPlaceholders = customChecks.map((check) => ({
+      id: check.id,
+      name: check.name,
+      type: 'custom' as const,
+      status: EnvironmentCheckStatus.CHECKING,
+      version: undefined,
+      error: undefined,
+      lastCheckTime: new Date(),
+      icon: check.icon,
+      isCustom: true
+    }))
+    set({ customResults: customPlaceholders })
+
+    const predefinedPromise = get().checkAllPredefined()
+
+    const customPromises = customChecks.map((check) =>
+      get().checkCustom(check)
+    )
+
+    await Promise.allSettled([predefinedPromise, ...customPromises])
     await get().loadClaudeCodeVersion()
+    await get().calculateSummary()
+    set({ isChecking: false })
   },
 
   // 加载自定义检查列表
@@ -228,6 +344,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
 
   // 加载Claude Code版本信息（使用与Statistics页面相同的API）
   loadClaudeCodeVersion: async () => {
+    set({ isChecking: true })
     try {
       const result = await window.electronAPI.claudeCodeVersion.checkUpdates(false)
       if (result.success && result.data) {
@@ -245,6 +362,8 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
       }
     } catch (error) {
       console.error('加载Claude Code版本失败:', error)
+    } finally {
+      set({ isChecking: false })
     }
   },
 

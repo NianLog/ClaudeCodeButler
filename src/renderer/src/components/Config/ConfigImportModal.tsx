@@ -3,7 +3,7 @@
  * 提供配置文件的导入功能
  */
 
-import React, { useState, useRef } from 'react'
+import React, { useState } from 'react'
 import {
   Modal,
   Form,
@@ -11,7 +11,6 @@ import {
   Select,
   Upload,
   Button,
-  Space,
   Typography,
   Alert,
   Steps,
@@ -21,18 +20,17 @@ import {
 } from 'antd'
 import {
   InboxOutlined,
-  UploadOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined,
   FileTextOutlined,
   EyeOutlined
 } from '@ant-design/icons'
 import type { UploadFile, UploadProps } from 'antd'
 import type { ConfigFile } from '@shared/types'
+import { useTranslation } from '../../locales/useTranslation'
 
 const { TextArea } = Input
 const { Option } = Select
-const { Title, Text, Paragraph } = Typography
+const { Title, Paragraph } = Typography
 const { Dragger } = Upload
 const { Step } = Steps
 
@@ -65,12 +63,12 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
   onClose,
   onImport
 }) => {
+  const { t } = useTranslation()
   const [form] = Form.useForm()
   const [currentStep, setCurrentStep] = useState(0)
   const [importData, setImportData] = useState<ImportData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [fileList, setFileList] = useState<UploadFile[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 重置状态
   const resetState = () => {
@@ -96,7 +94,7 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
       // 检查是否为多层JSON格式
       let actualContent = parsedContent
       let configName = file.name.replace(/\.json$/i, '')
-      let configDescription = `从文件 ${file.name} 导入`
+      let configDescription = t('configImport.defaults.fromFile', { file: file.name })
       let configType = 'claude-code'
 
       if (parsedContent && typeof parsedContent === 'object') {
@@ -196,8 +194,8 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
       }
 
       setImportData({
-        name: form.getFieldValue('name') || '手动导入的配置',
-        description: form.getFieldValue('description') || '手动输入的配置',
+        name: form.getFieldValue('name') || t('configImport.defaults.manualName'),
+        description: form.getFieldValue('description') || t('configImport.defaults.manualDescription'),
         type: configType,
         content: actualContent,
         isValid: true
@@ -251,10 +249,8 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
   // 渲染文件上传步骤
   const renderFileUpload = () => (
     <div className="import-file-upload">
-      <Title level={4}>选择配置文件</Title>
-      <Paragraph type="secondary">
-        支持导入JSON格式的配置文件，系统会自动识别配置类型。
-      </Paragraph>
+      <Title level={4}>{t('configImport.file.title')}</Title>
+      <Paragraph type="secondary">{t('configImport.file.desc')}</Paragraph>
 
       <Dragger
         name="configFile"
@@ -270,13 +266,13 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         <p className="ant-upload-drag-icon">
           <InboxOutlined />
         </p>
-        <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
+        <p className="ant-upload-text">{t('configImport.file.dragText')}</p>
         <p className="ant-upload-hint">
-          仅支持 .json 格式的配置文件
+          {t('configImport.file.hint')}
         </p>
       </Dragger>
 
-      <Divider>或</Divider>
+      <Divider>{t('configImport.file.or')}</Divider>
 
       <Button
         type="default"
@@ -284,7 +280,7 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         onClick={handleManualInput}
         block
       >
-        手动输入配置内容
+        {t('configImport.file.manualButton')}
       </Button>
     </div>
   )
@@ -292,18 +288,18 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
   // 渲染配置确认步骤
   const renderConfigConfirm = () => (
     <div className="import-config-confirm">
-      <Title level={4}>确认配置信息</Title>
+      <Title level={4}>{t('configImport.confirm.title')}</Title>
 
       {importData?.isValid ? (
         <Alert
-          message="配置文件解析成功"
+          message={t('configImport.confirm.parseSuccess')}
           type="success"
           showIcon
           style={{ marginBottom: 16 }}
         />
       ) : (
         <Alert
-          message="配置文件解析失败"
+          message={t('configImport.confirm.parseFailed')}
           description={importData?.error}
           type="error"
           showIcon
@@ -316,32 +312,32 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         layout="vertical"
       >
         <Form.Item
-          label="配置名称"
+          label={t('configImport.fields.name')}
           name="name"
-          rules={[{ required: true, message: '请输入配置名称' }]}
+          rules={[{ required: true, message: t('configImport.fields.nameRequired') }]}
         >
-          <Input placeholder="输入配置文件名称" />
+          <Input placeholder={t('configImport.fields.namePlaceholder')} />
         </Form.Item>
 
         <Form.Item
-          label="配置类型"
+          label={t('configImport.fields.type')}
           name="type"
-          rules={[{ required: true, message: '请选择配置类型' }]}
+          rules={[{ required: true, message: t('configImport.fields.typeRequired') }]}
         >
-          <Select placeholder="选择配置类型">
-            <Option value="claude-code">Claude Code</Option>
-            <Option value="mcp-config">MCP配置</Option>
-            <Option value="project-config">项目配置</Option>
-            <Option value="user-preferences">用户偏好</Option>
+          <Select placeholder={t('configImport.fields.typePlaceholder')}>
+            <Option value="claude-code">{t('configImport.types.claudeCode')}</Option>
+            <Option value="mcp-config">{t('configImport.types.mcp')}</Option>
+            <Option value="project-config">{t('configImport.types.project')}</Option>
+            <Option value="user-preferences">{t('configImport.types.userPreferences')}</Option>
           </Select>
         </Form.Item>
 
         <Form.Item
-          label="描述"
+          label={t('configImport.fields.description')}
           name="description"
         >
           <TextArea
-            placeholder="输入配置文件的描述信息"
+            placeholder={t('configImport.fields.descriptionPlaceholder')}
             rows={3}
           />
         </Form.Item>
@@ -349,7 +345,7 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
 
       {importData?.isValid && (
         <Card
-          title="配置内容预览"
+          title={t('configImport.preview.title')}
           size="small"
           extra={
             <Button
@@ -357,7 +353,7 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
               icon={<EyeOutlined />}
               onClick={handlePreview}
             >
-              详细预览
+              {t('configImport.preview.detail')}
             </Button>
           }
         >
@@ -372,10 +368,8 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
   // 渲染手动输入步骤
   const renderManualInput = () => (
     <div className="import-manual-input">
-      <Title level={4}>手动输入配置内容</Title>
-      <Paragraph type="secondary">
-        请直接粘贴或输入JSON格式的配置内容。
-      </Paragraph>
+      <Title level={4}>{t('configImport.manual.title')}</Title>
+      <Paragraph type="secondary">{t('configImport.manual.desc')}</Paragraph>
 
       <Form
         form={form}
@@ -385,31 +379,31 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         }}
       >
         <Form.Item
-          label="配置名称"
+          label={t('configImport.fields.name')}
           name="name"
-          rules={[{ required: true, message: '请输入配置名称' }]}
+          rules={[{ required: true, message: t('configImport.fields.nameRequired') }]}
         >
-          <Input placeholder="输入配置文件名称" />
+          <Input placeholder={t('configImport.fields.namePlaceholder')} />
         </Form.Item>
 
         <Form.Item
-          label="配置类型"
+          label={t('configImport.fields.type')}
           name="type"
-          rules={[{ required: true, message: '请选择配置类型' }]}
+          rules={[{ required: true, message: t('configImport.fields.typeRequired') }]}
         >
-          <Select placeholder="选择配置类型">
-            <Option value="claude-code">Claude Code</Option>
-            <Option value="mcp-config">MCP配置</Option>
-            <Option value="project-config">项目配置</Option>
-            <Option value="user-preferences">用户偏好</Option>
+          <Select placeholder={t('configImport.fields.typePlaceholder')}>
+            <Option value="claude-code">{t('configImport.types.claudeCode')}</Option>
+            <Option value="mcp-config">{t('configImport.types.mcp')}</Option>
+            <Option value="project-config">{t('configImport.types.project')}</Option>
+            <Option value="user-preferences">{t('configImport.types.userPreferences')}</Option>
           </Select>
         </Form.Item>
 
         <Form.Item
-          label="JSON配置内容"
+          label={t('configImport.manual.jsonContent')}
         >
           <TextArea
-            placeholder='输入JSON格式的配置内容，例如：\n{\n  "name": "example",\n  "value": "test"\n}'
+            placeholder={t('configImport.manual.jsonPlaceholder')}
             rows={12}
             onChange={(e) => handleJsonContentChange(e.target.value)}
             className={`json-input ${importData?.isValid === false ? 'error' : ''}`}
@@ -429,20 +423,20 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
 
   return (
     <Modal
-      title="导入配置"
+      title={t('configImport.title')}
       open={visible}
       onCancel={handleClose}
       width={700}
       footer={[
         <Button key="cancel" onClick={handleClose}>
-          取消
+          {t('common.cancel')}
         </Button>,
         <Button
           key="back"
           onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
           disabled={currentStep === 0}
         >
-          上一步
+          {t('configImport.back')}
         </Button>,
         <Button
           key="next"
@@ -457,14 +451,14 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
           disabled={!importData?.isValid}
           loading={isLoading}
         >
-          {currentStep === 1 ? '导入' : '下一步'}
+          {currentStep === 1 ? t('configImport.import') : t('configImport.next')}
         </Button>
       ]}
     >
       <Steps current={currentStep} style={{ marginBottom: 24 }}>
-        <Step title="选择文件" icon={<InboxOutlined />} />
-        <Step title="确认信息" icon={<CheckCircleOutlined />} />
-        <Step title="手动输入" icon={<FileTextOutlined />} />
+        <Step title={t('configImport.steps.selectFile')} icon={<InboxOutlined />} />
+        <Step title={t('configImport.steps.confirmInfo')} icon={<CheckCircleOutlined />} />
+        <Step title={t('configImport.steps.manualInput')} icon={<FileTextOutlined />} />
       </Steps>
 
       <div className="import-content">
@@ -479,7 +473,7 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .import-content {
           min-height: 400px;
         }

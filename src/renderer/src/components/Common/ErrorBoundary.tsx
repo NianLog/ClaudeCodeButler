@@ -3,13 +3,14 @@
  * 捕获和处理React组件中的错误
  */
 
-import React, { Component, ErrorInfo, ReactNode } from 'react'
+import { Component, ErrorInfo, ReactNode } from 'react'
 import { Button, Result } from 'antd'
 import {
   ExclamationCircleOutlined,
   ReloadOutlined,
   HomeOutlined
 } from '@ant-design/icons'
+import { getTranslation } from '../../locales/useTranslation'
 
 /**
  * 错误边界组件属性
@@ -107,11 +108,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
           <Result
             status="error"
             icon={<ExclamationCircleOutlined />}
-            title="应用出现错误"
+            title={getTranslation('errorBoundary.title')}
             subTitle={
               typeof process !== 'undefined' && process.env?.NODE_ENV === 'development'
                 ? this.state.error?.message
-                : '抱歉，应用遇到了一个意外错误'
+                : getTranslation('errorBoundary.subtitle')
             }
             extra={[
               <Button
@@ -120,21 +121,21 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 onClick={this.handleRetry}
                 key="retry"
               >
-                重试
+                {getTranslation('errorBoundary.retry')}
               </Button>,
               <Button
                 icon={<HomeOutlined />}
                 onClick={this.handleGoHome}
                 key="home"
               >
-                回到首页
+                {getTranslation('errorBoundary.goHome')}
               </Button>
             ]}
           >
             {/* 开发环境显示详细错误信息 */}
             {typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && (
               <div className="error-details">
-                <h4>错误详情：</h4>
+                <h4>{getTranslation('errorBoundary.details')}</h4>
                 <pre style={{
                   textAlign: 'left',
                   background: '#f5f5f5',
@@ -149,7 +150,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
                 {this.state.errorInfo && (
                   <>
-                    <h4>组件堆栈：</h4>
+                    <h4>{getTranslation('errorBoundary.componentStack')}</h4>
                     <pre style={{
                       textAlign: 'left',
                       background: '#f5f5f5',

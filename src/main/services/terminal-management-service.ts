@@ -330,11 +330,12 @@ class TerminalManagementService {
           const bashCwd = workingDirectory ? this.toGitBashPath(workingDirectory) : null
           const safeCwd = bashCwd ? bashCwd.replace(/'/g, "'\\''") : null
           const cdPrefix = safeCwd ? `cd '${safeCwd}' && ` : ''
-          execCommand = `"${bashPath}" -c "${cdPrefix}${command.replace(/"/g, '\\"')}"`
+          execCommand = `"${bashPath}" -ic "${cdPrefix}${command.replace(/"/g, '\\"')}"`
         } else {
           const safeCwd = workingDirectory ? workingDirectory.replace(/'/g, "'\\''") : null
           const cdPrefix = safeCwd ? `cd '${safeCwd}' && ` : ''
-          execCommand = `/bin/bash -c "${cdPrefix}${command.replace(/"/g, '\\"')}"`
+          const initPrefix = 'if [ -f ~/.bashrc ]; then source ~/.bashrc; fi; '
+          execCommand = `/bin/bash -c "${initPrefix}${cdPrefix}${command.replace(/"/g, '\\"')}"`
         }
       } else if (terminalType === 'powershell') {
         if (process.platform === 'win32') {
@@ -350,7 +351,8 @@ class TerminalManagementService {
         }
       } else if (terminalType === 'wsl' && process.platform === 'win32') {
         const wslCwd = workingDirectory ? `--cd "${workingDirectory.replace(/"/g, '\\"')}" ` : ''
-        execCommand = `wsl.exe ${terminalConfig?.args?.join(' ') || ''} ${wslCwd}-- bash -c "${command.replace(/"/g, '\\"')}"`
+        const initPrefix = 'source ~/.bashrc >/dev/null 2>&1; '
+        execCommand = `wsl.exe ${terminalConfig?.args?.join(' ') || ''} ${wslCwd}-- bash -lc "${initPrefix}${command.replace(/"/g, '\\"')}"`
       } else if (terminalType === 'cmd') {
         const cdPrefix = workingDirectory ? `cd /d "${workingDirectory.replace(/"/g, '\\"')}" && ` : ''
         execCommand = `cmd /c "${cdPrefix}${command.replace(/"/g, '\\"')}"`

@@ -105,3 +105,12 @@ export interface RuleExecutionLog {
   success: boolean;
   message: string;
 }
+
+/**
+ * 规则执行结果
+ */
+export interface RuleExecutionResult {
+  success: boolean;
+  message: string;
+  result?: any;
+}

@@ -283,7 +283,7 @@ export class FileWatcher extends EventEmitter {
 
         if (item.isFile() && this.isConfigFile(fullPath)) {
           foundFiles.push(fullPath)
-        } else if (item.isDirectory && !item.name.startsWith('.')) {
+        } else if (item.isDirectory() && !item.name.startsWith('.')) {
           const subFiles = await this.scanDirectory(fullPath)
           foundFiles.push(...subFiles)
         }

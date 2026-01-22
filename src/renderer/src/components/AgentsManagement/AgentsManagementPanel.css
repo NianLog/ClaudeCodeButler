@@ -5,8 +5,8 @@
 /* 页面容器 */
 .agents-management-panel {
   padding: 24px;
-  background: #fafafa;
-  min-height: 100vh;
+  background: transparent;
+  min-height: 100%;
 }
 
 /* 页面头部 */
@@ -125,7 +125,7 @@
 
 /* Modal样式优化 */
 .agents-management-panel .ant-modal-content {
-  borderRadius: 8px;
+  border-radius: 8px;
 }
 
 .agents-management-panel .ant-modal-header {

@@ -3,7 +3,7 @@
  * 支持语法高亮、自动修正、JSON/Markdown格式化
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useState, useCallback } from 'react'
 import Editor, { loader } from '@monaco-editor/react'
 import { Button, Space, Typography, Alert, Select, Switch } from 'antd'
 import { useAppStore } from '../../store/app-store'
@@ -11,11 +11,11 @@ import {
   FormatPainterOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
-  BgColorsOutlined,
   FileTextOutlined
 } from '@ant-design/icons'
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 import * as monaco from 'monaco-editor'
+import { useTranslation } from '../../locales/useTranslation'
 
 // 配置Monaco Editor使用本地资源,避免CDN依赖
 loader.config({ monaco })
@@ -24,7 +24,7 @@ loader.config({ monaco })
 // 这对于 Electron 环境下的生产构建至关重要
 if (typeof window !== 'undefined') {
   (window as any).MonacoEnvironment = {
-    getWorker(_: any, label: string) {
+    getWorker(_: any, _label: string) {
       // 返回一个简单的 Worker,Monaco Editor 会在主线程中回退运行
       // 这对于 Electron 应用是可以接受的性能折衷
       return new Worker(
@@ -46,13 +46,18 @@ const { Option } = Select
  */
 interface CodeEditorProps {
   value: string
-  onChange: (value: string) => void
+  onChange?: (value: string) => void
   language?: 'json' | 'markdown' | 'plaintext'
   height?: number | string
+  /** @deprecated 使用 readOnly 代替 */
   readonly?: boolean
+  /** 只读模式 */
+  readOnly?: boolean
   showPreview?: boolean
   onValidate?: (isValid: boolean, errors?: string[]) => void
   placeholder?: string
+  /** Monaco Editor 配置选项 */
+  options?: Record<string, any>
 }
 
 /**
@@ -60,14 +65,19 @@ interface CodeEditorProps {
  */
 const CodeEditor: React.FC<CodeEditorProps> = ({
   value,
-  onChange,
+  onChange = () => {},
   language = 'json',
   height = 400,
   readonly = false,
+  readOnly,
   showPreview = false,
   onValidate,
-  placeholder = ''
+  placeholder = '',
+  options: externalOptions
 }) => {
+  // 支持两种只读属性名称，优先使用 readOnly
+  const isReadOnly = readOnly ?? readonly
+  const { t } = useTranslation()
   const editorRef = useRef<any>(null)
   const [isValid, setIsValid] = useState(true)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
@@ -78,15 +88,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   // 获取应用主题
   const { theme } = useAppStore()
 
-  // Monaco编辑器配置
-  const editorOptions = {
+  // Monaco编辑器默认配置
+  const defaultEditorOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
     minimap: { enabled: false },
     fontSize: 14,
-    lineNumbers: showLineNumbers ? 'on' : 'off',
-    wordWrap: wordWrap ? 'on' : 'off',
+    lineNumbers: (showLineNumbers ? 'on' : 'off') as monaco.editor.LineNumbersType,
+    wordWrap: (wordWrap ? 'on' : 'off') as monaco.editor.IEditorOptions['wordWrap'],
     scrollBeyondLastLine: false,
     automaticLayout: true,
-    readOnly: readonly,
+    readOnly: isReadOnly,
     suggestOnTriggerCharacters: true,
     acceptSuggestionOnEnter: 'on',
     tabSize: 2,
@@ -104,8 +114,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     smoothScrolling: true,
     contextmenu: true,
     mouseWheelZoom: true,
-    // 主题配置
-    theme: theme === 'dark' ? 'vs-dark' : 'vs', // 根据应用主题动态切换
     // 代码折叠
     folding: true,
     foldingStrategy: 'indentation',
@@ -113,6 +121,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     // 错误标记
     renderValidationDecorations: 'on'
   }
+
+  // 合并外部传入的选项
+  const editorOptions = externalOptions 
+    ? { ...defaultEditorOptions, ...externalOptions }
+    : defaultEditorOptions
 
   // 验证JSON内容
   const validateJSON = useCallback((content: string) => {
@@ -135,15 +148,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       onValidate?.(false, [errorMessage])
     }
   }, [onValidate])
-
-  // 安全的JSON字符串转义
-  const safeStringify = (obj: any): string => {
-    try {
-      return JSON.stringify(obj, null, 2)
-    } catch (error) {
-      return '{}'
-    }
-  }
 
   // 自动修正功能已移除，仅保留错误提示
   const autoFixJSON = useCallback(() => {
@@ -185,7 +189,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         validateJSON(formatted)
       } else if (language === 'markdown') {
         // 简单的Markdown格式化
-        const lines = content.split('\n').filter(line => line.trim())
+        const lines = content.split('\n').filter((line: string) => line.trim())
         model.setValue(lines.join('\n\n'))
       }
     } catch (error) {
@@ -200,15 +204,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     // 检查是否有可能的格式问题
     if (content.includes('```') && content.split('```').length % 2 === 0) {
-      errors.push('代码块标记不匹配')
+      errors.push(t('codeEditor.validation.codeBlockMismatch'))
     }
 
     if (content.includes('**') && content.split('**').length % 2 === 0) {
-      errors.push('粗体标记不匹配')
+      errors.push(t('codeEditor.validation.boldMismatch'))
     }
 
     if (content.includes('*') && content.split('*').filter(s => s).length % 2 === 0) {
-      errors.push('斜体标记不匹配')
+      errors.push(t('codeEditor.validation.italicMismatch'))
     }
 
     if (errors.length > 0) {
@@ -268,10 +272,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     )
   }
 
-  // 处理预览模式切换
-  const handlePreviewModeChange = (mode: 'raw' | 'rendered') => {
-    setPreviewMode(mode)
-  }
 
   return (
     <div className="code-editor-container" style={{ display: 'flex', flexDirection: 'column', height: typeof height === 'number' ? `${height + 100}px` : `calc(${height} + 100px)` }}>
@@ -290,15 +290,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
               size="small"
               checked={showLineNumbers}
               onChange={setShowLineNumbers}
-              checkedChildren="行号"
-              unCheckedChildren="无行号"
+              checkedChildren={t('codeEditor.options.lineNumbers')}
+              unCheckedChildren={t('codeEditor.options.noLineNumbers')}
             />
             <Switch
               size="small"
               checked={wordWrap}
               onChange={setWordWrap}
-              checkedChildren="换行"
-              unCheckedChildren="不换行"
+              checkedChildren={t('codeEditor.options.wrap')}
+              unCheckedChildren={t('codeEditor.options.noWrap')}
             />
           </div>
 
@@ -311,7 +311,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
               icon={<FormatPainterOutlined />}
               onClick={formatCode}
             >
-              格式化
+              {t('codeEditor.actions.format')}
             </Button>
 
             {showPreview && language === 'markdown' && (
@@ -321,8 +321,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                 onChange={setPreviewMode}
                 style={{ width: 100 }}
               >
-                <Option value="raw">原始</Option>
-                <Option value="rendered">渲染</Option>
+                <Option value="raw">{t('codeEditor.preview.raw')}</Option>
+                <Option value="rendered">{t('codeEditor.preview.rendered')}</Option>
               </Select>
             )}
           </Space>
@@ -332,11 +332,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <div className="validation-status">
           {isValid ? (
             <Text type="success">
-              <CheckCircleOutlined /> 格式正确
+              <CheckCircleOutlined /> {t('codeEditor.validation.valid')}
             </Text>
           ) : (
-            <Text type="error">
-              <ExclamationCircleOutlined /> 格式错误
+            <Text type="danger">
+              <ExclamationCircleOutlined /> {t('codeEditor.validation.invalid')}
             </Text>
           )}
         </div>
@@ -345,7 +345,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       {/* 验证错误提示 */}
       {!isValid && validationErrors.length > 0 && (
         <Alert
-          message="格式验证失败"
+          message={t('codeEditor.validation.failed')}
           description={
             <ul>
               {validationErrors.map((error, index) => (
@@ -359,7 +359,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           action={
             language === 'json' && (
               <Button size="small" onClick={autoFixJSON}>
-                自动修正
+                {t('codeEditor.actions.autoFix')}
               </Button>
             )
           }
@@ -376,15 +376,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             onChange={handleEditorChange}
             onMount={handleEditorDidMount}
             options={editorOptions}
-            theme="vs-light"
-            loading={<div>加载编辑器...</div>}
+            theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+            loading={<div>{t('codeEditor.loading')}</div>}
           />
         </div>
 
         {showPreview && (
           <div className="preview-panel">
             <div className="preview-header">
-              <Text strong>预览</Text>
+              <Text strong>{t('codeEditor.preview.title')}</Text>
             </div>
             <div className="preview-content">
               {renderPreview()}

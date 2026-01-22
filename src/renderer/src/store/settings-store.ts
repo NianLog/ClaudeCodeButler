@@ -9,9 +9,46 @@ import {
   AppSettings,
   SettingsTab,
   SettingsModuleState,
-  SettingsSaveOptions,
-  SettingsChangeEvent
+  SettingsSaveOptions
 } from '@shared/types/settings'
+
+const DEFAULT_SETTINGS: AppSettings = {
+  basic: {
+    language: 'zh-CN',
+    theme: 'light',
+    autoSave: true,
+    startupCheck: true
+  },
+  editor: {
+    fontSize: 14,
+    tabSize: 2,
+    wordWrap: false,
+    minimap: true,
+    lineNumbers: true
+  },
+  notifications: {
+    enabled: true,
+    sound: true,
+    configChanges: true,
+    errors: true,
+    startupCheckUpdate: true,
+    silentUpdateCheck: true
+  },
+  advanced: {
+    logLevel: 'info',
+    cacheSize: 100,
+    autoBackup: true,
+    telemetry: false
+  },
+  window: {
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    rememberPosition: true
+  },
+  about: {}
+}
 
 // 设置操作接口
 interface SettingsStore extends SettingsModuleState {
@@ -51,14 +88,8 @@ interface SettingsStore extends SettingsModuleState {
 export const useSettingsStore = create<SettingsStore>()(
   devtools(
     (set, get) => ({
-      // 初始状态 - 不包含硬编码默认值，等待从文件加载
-      settings: {
-        basic: {},
-        editor: {},
-        notifications: {},
-        advanced: {},
-        window: {}
-      },
+      // 初始状态
+      settings: { ...DEFAULT_SETTINGS },
       isLoading: false,
       isSaving: false,
       lastError: null,
@@ -67,42 +98,7 @@ export const useSettingsStore = create<SettingsStore>()(
       isInitialized: false,
 
       // 获取默认设置备份（仅在重置时使用）
-      getDefaultSettings: () => ({
-        basic: {
-          language: 'zh-CN',
-          theme: 'light',
-          autoSave: true,
-          startupCheck: true
-        },
-        editor: {
-          fontSize: 14,
-          tabSize: 2,
-          wordWrap: false,
-          minimap: true,
-          lineNumbers: true
-        },
-        notifications: {
-          enabled: true,
-          sound: true,
-          configChanges: true,
-          errors: true,
-          startupCheckUpdate: true,
-          silentUpdateCheck: true
-        },
-        advanced: {
-          logLevel: 'info',
-          cacheSize: 100,
-          autoBackup: true,
-          telemetry: false
-        },
-        window: {
-          width: 1200,
-          height: 800,
-          minWidth: 800,
-          minHeight: 600,
-          rememberPosition: true
-        }
-      }),
+      getDefaultSettings: () => ({ ...DEFAULT_SETTINGS }),
 
       // 基础操作
       setSettings: (newSettings) => {
@@ -150,7 +146,18 @@ export const useSettingsStore = create<SettingsStore>()(
             console.log('🔧 [loadSettings] 提取的settings:', JSON.stringify(loadedSettings, null, 2))
             console.log('🔧 [loadSettings] window设置:', loadedSettings?.window)
 
-            set({ settings: loadedSettings, isLoading: false, lastError: null })
+            const mergedSettings: AppSettings = {
+              ...DEFAULT_SETTINGS,
+              ...loadedSettings,
+              basic: { ...DEFAULT_SETTINGS.basic, ...loadedSettings?.basic },
+              editor: { ...DEFAULT_SETTINGS.editor, ...loadedSettings?.editor },
+              notifications: { ...DEFAULT_SETTINGS.notifications, ...loadedSettings?.notifications },
+              advanced: { ...DEFAULT_SETTINGS.advanced, ...loadedSettings?.advanced },
+              window: { ...DEFAULT_SETTINGS.window, ...loadedSettings?.window },
+              about: DEFAULT_SETTINGS.about
+            }
+
+            set({ settings: mergedSettings, isLoading: false, lastError: null })
 
             // 验证store是否更新
             const currentState = get()
@@ -158,42 +165,7 @@ export const useSettingsStore = create<SettingsStore>()(
             console.log('🔧 [loadSettings] store中的window:', currentState.settings?.window)
           } else {
             // 后备方案：从 localStorage 加载设置
-            const defaultSettings = {
-              basic: {
-                language: 'zh-CN',
-                theme: 'light',
-                autoSave: true,
-                startupCheck: true
-              },
-              editor: {
-                fontSize: 14,
-                tabSize: 2,
-                wordWrap: false,
-                minimap: true,
-                lineNumbers: true
-              },
-              notifications: {
-                enabled: true,
-                sound: true,
-                configChanges: true,
-                errors: true,
-                startupCheckUpdate: true,
-                silentUpdateCheck: true
-              },
-              advanced: {
-                logLevel: 'info',
-                cacheSize: 100,
-                autoBackup: true,
-                telemetry: false
-              },
-              window: {
-                width: 1200,
-                height: 800,
-                minWidth: 800,
-                minHeight: 600,
-                rememberPosition: true
-              }
-            }
+            const defaultSettings = { ...DEFAULT_SETTINGS }
 
             try {
               // 尝试从 localStorage 加载
@@ -205,10 +177,11 @@ export const useSettingsStore = create<SettingsStore>()(
                   editor: { ...defaultSettings.editor, ...parsed.editor },
                   notifications: { ...defaultSettings.notifications, ...parsed.notifications },
                   advanced: { ...defaultSettings.advanced, ...parsed.advanced },
-                  window: { ...defaultSettings.window, ...parsed.window }
+                  window: { ...defaultSettings.window, ...parsed.window },
+                  about: defaultSettings.about
                 }
 
-                set((state) => ({
+                set(() => ({
                   settings: mergedSettings,
                   isLoading: false,
                   lastError: null,
@@ -216,7 +189,7 @@ export const useSettingsStore = create<SettingsStore>()(
                 }))
               } else {
                 // 使用默认设置
-                set((state) => ({
+                set(() => ({
                   settings: defaultSettings,
                   isLoading: false,
                   lastError: null,
@@ -225,7 +198,7 @@ export const useSettingsStore = create<SettingsStore>()(
               }
             } catch (localError) {
               // 使用默认设置
-              set((state) => ({
+              set(() => ({
                 settings: defaultSettings,
                 isLoading: false,
                 lastError: null,
@@ -235,7 +208,7 @@ export const useSettingsStore = create<SettingsStore>()(
           }
         } catch (error) {
           console.error('加载设置失败:', error)
-          set((state) => ({
+          set(() => ({
             isLoading: false,
             lastError: error instanceof Error ? error.message : String(error)
           }))
@@ -273,7 +246,7 @@ export const useSettingsStore = create<SettingsStore>()(
             // 保存所有设置
             if (window.electronAPI?.settings?.saveAll) {
               await window.electronAPI.settings.saveAll(currentSettings)
-              set((state) => ({
+              set(() => ({
                 unsavedChanges: new Set()
               }))
               console.log('所有设置保存成功')
@@ -281,14 +254,14 @@ export const useSettingsStore = create<SettingsStore>()(
               // 后备方案：保存到 localStorage
               try {
                 localStorage.setItem('ccb-settings', JSON.stringify(currentSettings))
-                set((state) => ({
+                set(() => ({
                   unsavedChanges: new Set()
                 }))
                 console.log('所有设置保存成功（使用 localStorage 后备方案）')
               } catch (localError) {
                 console.warn('localStorage 保存失败:', localError)
                 // 即使保存失败，也不抛出错误
-                set((state) => ({
+                set(() => ({
                   unsavedChanges: new Set()
                 }))
                 console.log('设置已标记为已保存')
@@ -296,7 +269,7 @@ export const useSettingsStore = create<SettingsStore>()(
             }
           }
 
-          set((state) => ({
+          set(() => ({
             isSaving: false,
             lastError: null,
             lastSaved: new Date()
@@ -304,7 +277,7 @@ export const useSettingsStore = create<SettingsStore>()(
 
         } catch (error) {
           console.error('保存设置失败:', error)
-          set((state) => ({
+          set(() => ({
             isSaving: false,
             lastError: error instanceof Error ? error.message : String(error)
           }))
@@ -349,7 +322,7 @@ export const useSettingsStore = create<SettingsStore>()(
               }))
             } else {
               // 重置所有设置
-              set((state) => ({
+              set(() => ({
                 settings: defaultSettings,
                 isLoading: false,
                 lastError: null,
@@ -362,7 +335,7 @@ export const useSettingsStore = create<SettingsStore>()(
 
         } catch (error) {
           console.error('重置设置失败:', error)
-          set((state) => ({
+          set(() => ({
             isLoading: false,
             lastError: error instanceof Error ? error.message : String(error)
           }))
@@ -382,7 +355,7 @@ export const useSettingsStore = create<SettingsStore>()(
           }
         } catch (error) {
           console.error('导出设置失败:', error)
-          set((state) => ({
+          set(() => ({
             lastError: error instanceof Error ? error.message : String(error)
           }))
           throw error
@@ -407,7 +380,7 @@ export const useSettingsStore = create<SettingsStore>()(
 
         } catch (error) {
           console.error('导入设置失败:', error)
-          set((state) => ({
+          set(() => ({
             isLoading: false,
             lastError: error instanceof Error ? error.message : String(error)
           }))
@@ -452,31 +425,31 @@ export const useSettingsStore = create<SettingsStore>()(
 export const useBasicSettings = () => useSettingsStore((state) =>
   state.settings?.basic && Object.keys(state.settings.basic).length > 0
     ? state.settings.basic
-    : {}
+    : DEFAULT_SETTINGS.basic
 )
 
 export const useEditorSettings = () => useSettingsStore((state) =>
   state.settings?.editor && Object.keys(state.settings.editor).length > 0
     ? state.settings.editor
-    : {}
+    : DEFAULT_SETTINGS.editor
 )
 
 export const useNotificationSettings = () => useSettingsStore((state) =>
   state.settings?.notifications && Object.keys(state.settings.notifications).length > 0
     ? state.settings.notifications
-    : {}
+    : DEFAULT_SETTINGS.notifications
 )
 
 export const useAdvancedSettings = () => useSettingsStore((state) =>
   state.settings?.advanced && Object.keys(state.settings.advanced).length > 0
     ? state.settings.advanced
-    : {}
+    : DEFAULT_SETTINGS.advanced
 )
 
 export const useWindowSettings = () => useSettingsStore((state) => {
   const windowSettings = state.settings?.window && Object.keys(state.settings.window).length > 0
     ? state.settings.window
-    : {}
+    : DEFAULT_SETTINGS.window
   console.log('🪟 [useWindowSettings] 选择器返回:', windowSettings)
   return windowSettings
 })

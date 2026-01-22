@@ -36,10 +36,11 @@ import {
   UpOutlined
 } from '@ant-design/icons'
 import { useAppStore } from '../../store/app-store'
-import { useBasicSettings } from '../../store/settings-store'
+import { useNotificationSettings } from '../../store/settings-store'
 import { useConfigListWithNotification } from '../../hooks/useConfigListWithNotification'
 import { initializeManagedModeLogListener } from '../../store/managed-mode-log-store'
 import { versionService } from '../../services/version-service'
+import { useTranslation } from '../../locales/useTranslation'
 import UpdateModal from '../Common/UpdateModal'
 import type { VersionInfo } from '../../services/version-service'
 import './ModernLayout.css'
@@ -58,6 +59,7 @@ interface ModernLayoutProps {
  * 现代化布局组件
  */
 const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
+  const { t } = useTranslation()
   const {
     version,
     notifications,
@@ -73,9 +75,9 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     refreshAll
   } = useAppStore()
 
-  const basicSettings = useBasicSettings()
+  const notificationSettings = useNotificationSettings()
   // 使用默认值防止设置未加载时出现错误
-  const { startupCheckUpdate = true, silentUpdateCheck = true } = basicSettings || {}
+  const { startupCheckUpdate = true, silentUpdateCheck = true } = notificationSettings || {}
 
   const [searchVisible, setSearchVisible] = useState(false)
   const [updateModalVisible, setUpdateModalVisible] = useState(false)
@@ -86,7 +88,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
   } | null>(null)
 
   // 使用带通知功能的配置列表store
-  const configListStore = useConfigListWithNotification()
+  useConfigListWithNotification()
   const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   // 初始化版本号
@@ -117,8 +119,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
             if (!silentUpdateCheck) {
               addNotification({
                 type: 'warning',
-                title: '发现新版本',
-                message: `新版本 ${result.latestVersion} 可用，点击查看详情`
+                title: t('layout.update.newVersionTitle'),
+                message: t('layout.update.newVersionMessage', { version: result.latestVersion })
               })
             }
             setUpdateInfo({
@@ -131,8 +133,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
             if (!silentUpdateCheck) {
               addNotification({
                 type: 'success',
-                title: '已是最新版本',
-                message: '当前版本已是最新版本'
+                title: t('layout.update.latestTitle'),
+                message: t('layout.update.latestMessage')
               })
             }
           }
@@ -141,8 +143,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
           if (!silentUpdateCheck) {
             addNotification({
               type: 'error',
-              title: '检查更新失败',
-              message: '无法连接到更新服务器，请稍后重试'
+              title: t('layout.update.checkFailedTitle'),
+              message: t('layout.update.checkFailedMessage')
             })
           }
         } finally {
@@ -182,14 +184,14 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
       await refreshAll()
       addNotification({
         type: 'success',
-        title: '刷新成功',
-        message: '所有数据已更新'
+        title: t('layout.refresh.successTitle'),
+        message: t('layout.refresh.successMessage')
       })
     } catch (error) {
       addNotification({
         type: 'error',
-        title: '刷新失败',
-        message: error instanceof Error ? error.message : '未知错误'
+        title: t('layout.refresh.failedTitle'),
+        message: error instanceof Error ? error.message : t('common.unknownError')
       })
     }
   }
@@ -198,7 +200,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
   const handleCheckUpdate = async () => {
     try {
       setCheckingUpdate(true)
-      message.loading({ content: '正在检查更新...', key: 'checkUpdate' })
+      message.loading({ content: t('layout.update.checking'), key: 'checkUpdate' })
 
       const result = await versionService.checkForUpdates()
 
@@ -211,12 +213,12 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
         })
         setUpdateModalVisible(true)
       } else {
-        message.success({ content: '当前已是最新版本', key: 'checkUpdate' })
+        message.success({ content: t('layout.update.latestShort'), key: 'checkUpdate' })
       }
     } catch (error) {
       console.log('Error in handleCheckUpdate:', error);
       message.error({
-        content: error instanceof Error ? error.message : '检查更新失败',
+        content: error instanceof Error ? error.message : t('layout.update.checkFailedShort'),
         key: 'checkUpdate'
       })
     } finally {
@@ -229,9 +231,9 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     try {
       await versionService.openDownloadPage(downloadUrl)
       setUpdateModalVisible(false)
-      message.success('已在浏览器中打开下载页面')
+      message.success(t('update.openDownloadSuccess'))
     } catch (error) {
-      message.error('打开下载页面失败')
+      message.error(t('update.openDownloadFailed'))
     }
   }
 
@@ -241,7 +243,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
       await versionService.openDownloadPage()
       setUpdateModalVisible(false)
     } catch (error) {
-      message.error('打开官网失败')
+      message.error(t('update.openWebsiteFailed'))
     }
   }
 
@@ -250,36 +252,36 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     {
       key: 'docs',
       icon: <QuestionCircleOutlined />,
-      label: '使用文档',
+      label: t('layout.help.docs'),
       onClick: async () => {
         try {
           await versionService.openDocsPage()
         } catch (error) {
-          message.error('打开文档失败')
+          message.error(t('update.openDocsFailed'))
         }
       }
     },
     {
       key: 'homepage',
       icon: <ProjectOutlined />,
-      label: '访问官网',
+      label: t('layout.help.homepage'),
       onClick: async () => {
         try {
           await versionService.openDownloadPage()
         } catch (error) {
-          message.error('打开官网失败')
+          message.error(t('update.openWebsiteFailed'))
         }
       }
     },
     {
       key: 'github',
       icon: <GithubOutlined />,
-      label: '作者 GitHub',
+      label: t('layout.help.github'),
       onClick: async () => {
         try {
           await versionService.openGitHubPage()
         } catch (error) {
-          message.error('打开 GitHub 失败')
+          message.error(t('update.openGitHubFailed'))
         }
       }
     },
@@ -289,13 +291,13 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     {
       key: 'checkUpdate',
       icon: <CloudDownloadOutlined />,
-      label: '检查更新',
+      label: t('layout.help.checkUpdate'),
       onClick: handleCheckUpdate,
       disabled: checkingUpdate
     },
     {
       key: 'about',
-      label: `版本 ${version}`,
+      label: t('layout.help.versionLabel', { version }),
       disabled: true
     }
   ]
@@ -305,12 +307,12 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     {
       key: 'profile',
       icon: <UserOutlined />,
-      label: '个人设置'
+      label: t('layout.user.profile')
     },
     {
       key: 'preferences',
       icon: <SettingOutlined />,
-      label: '偏好设置'
+      label: t('layout.user.preferences')
     },
     {
       type: 'divider' as const
@@ -318,7 +320,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     {
       key: 'logout',
       icon: <LogoutOutlined />,
-      label: '退出登录',
+      label: t('layout.user.logout'),
       danger: true
     }
   ]
@@ -355,7 +357,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 <div className="nav-icon">
                   <FileTextOutlined />
                 </div>
-                {!sidebarCollapsed && <span className="nav-label">配置管理</span>}
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.configs')}</span>}
               </div>
               <div
                 className={`nav-item ${activeMainTab === 'automation' ? 'active' : ''}`}
@@ -364,7 +366,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 <div className="nav-icon">
                   <RobotOutlined />
                 </div>
-                {!sidebarCollapsed && <span className="nav-label">自动化规则</span>}
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.automation')}</span>}
               </div>
               <div
                 className={`nav-item ${activeMainTab === 'statistics' ? 'active' : ''}`}
@@ -373,7 +375,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 <div className="nav-icon">
                   <BarChartOutlined />
                 </div>
-                {!sidebarCollapsed && <span className="nav-label">统计信息</span>}
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.statistics')}</span>}
               </div>
               <div
                 className={`nav-item ${activeMainTab === 'projects' ? 'active' : ''}`}
@@ -382,7 +384,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 <div className="nav-icon">
                   <ProjectOutlined />
                 </div>
-                {!sidebarCollapsed && <span className="nav-label">项目管理</span>}
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.projects')}</span>}
               </div>
             </div>
 
@@ -394,7 +396,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
               >
                 {!sidebarCollapsed && (
                   <>
-                    <span>高级功能</span>
+                    <span>{t('layout.nav.advanced')}</span>
                     {expandedMenuGroups.advanced ? <UpOutlined /> : <DownOutlined />}
                   </>
                 )}
@@ -409,7 +411,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                     <div className="nav-icon">
                       <ToolOutlined />
                     </div>
-                    {!sidebarCollapsed && <span className="nav-label">MCP管理</span>}
+                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.mcp')}</span>}
                   </div>
                   <div
                     className={`nav-item ${activeMainTab === 'agents-management' ? 'active' : ''}`}
@@ -418,7 +420,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                     <div className="nav-icon">
                       <AgentOutlined />
                     </div>
-                    {!sidebarCollapsed && <span className="nav-label">子Agent管理</span>}
+                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.agents')}</span>}
                   </div>
                   <div
                     className={`nav-item ${activeMainTab === 'skills-management' ? 'active' : ''}`}
@@ -427,7 +429,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                     <div className="nav-icon">
                       <SkillsOutlined />
                     </div>
-                    {!sidebarCollapsed && <span className="nav-label">Skills管理</span>}
+                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.skills')}</span>}
                   </div>
                   <div
                     className={`nav-item ${activeMainTab === 'environment-check' ? 'active' : ''}`}
@@ -436,7 +438,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                     <div className="nav-icon">
                       <CheckCircleOutlined />
                     </div>
-                    {!sidebarCollapsed && <span className="nav-label">环境排查</span>}
+                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.environmentCheck')}</span>}
                   </div>
                   <div
                     className={`nav-item ${activeMainTab === 'managed-mode' ? 'active' : ''}`}
@@ -445,7 +447,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                     <div className="nav-icon">
                       <ApiOutlined />
                     </div>
-                    {!sidebarCollapsed && <span className="nav-label">托管模式</span>}
+                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.managedMode')}</span>}
                   </div>
                 </>
               )}
@@ -453,7 +455,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
 
             <div className="nav-section">
               <div className="nav-section-title">
-                {!sidebarCollapsed && <span>工具</span>}
+                {!sidebarCollapsed && <span>{t('layout.nav.tools')}</span>}
               </div>
               <div
                 className={`nav-item ${activeMainTab === 'settings' ? 'active' : ''}`}
@@ -462,7 +464,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 <div className="nav-icon">
                   <SettingOutlined />
                 </div>
-                {!sidebarCollapsed && <span className="nav-label">设置</span>}
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.settings')}</span>}
               </div>
             </div>
           </div>
@@ -481,29 +483,29 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
           <div className="header-left">
             <div className="breadcrumb">
               <Text className="breadcrumb-item">
-                {activeMainTab === 'configs' && '配置管理'}
-                {activeMainTab === 'automation' && '自动化规则'}
-                {activeMainTab === 'statistics' && '统计信息'}
-                {activeMainTab === 'projects' && '项目管理'}
-                {activeMainTab === 'mcp-management' && 'MCP管理'}
-                {activeMainTab === 'agents-management' && '子Agent管理'}
-                {activeMainTab === 'skills-management' && 'Skills管理'}
-                {activeMainTab === 'environment-check' && '环境排查'}
-                {activeMainTab === 'managed-mode' && '托管模式'}
-                {activeMainTab === 'settings' && '设置'}
+                {activeMainTab === 'configs' && t('layout.breadcrumb.configs')}
+                {activeMainTab === 'automation' && t('layout.breadcrumb.automation')}
+                {activeMainTab === 'statistics' && t('layout.breadcrumb.statistics')}
+                {activeMainTab === 'projects' && t('layout.breadcrumb.projects')}
+                {activeMainTab === 'mcp-management' && t('layout.breadcrumb.mcp')}
+                {activeMainTab === 'agents-management' && t('layout.breadcrumb.agents')}
+                {activeMainTab === 'skills-management' && t('layout.breadcrumb.skills')}
+                {activeMainTab === 'environment-check' && t('layout.breadcrumb.environmentCheck')}
+                {activeMainTab === 'managed-mode' && t('layout.breadcrumb.managedMode')}
+                {activeMainTab === 'settings' && t('layout.breadcrumb.settings')}
               </Text>
               <Text className="breadcrumb-separator">/</Text>
               <Text className="breadcrumb-item active">
-                {activeMainTab === 'configs' && '所有配置'}
-                {activeMainTab === 'automation' && '规则列表'}
-                {activeMainTab === 'statistics' && '数据概览'}
-                {activeMainTab === 'projects' && 'Claude Code 项目'}
-                {activeMainTab === 'mcp-management' && 'MCP服务器管理'}
-                {activeMainTab === 'agents-management' && 'Agent文件管理'}
-                {activeMainTab === 'skills-management' && 'Skill目录管理'}
-                {activeMainTab === 'environment-check' && '环境检查'}
-                {activeMainTab === 'managed-mode' && 'API服务管理'}
-                {activeMainTab === 'settings' && '应用设置'}
+                {activeMainTab === 'configs' && t('layout.breadcrumb.configsSub')}
+                {activeMainTab === 'automation' && t('layout.breadcrumb.automationSub')}
+                {activeMainTab === 'statistics' && t('layout.breadcrumb.statisticsSub')}
+                {activeMainTab === 'projects' && t('layout.breadcrumb.projectsSub')}
+                {activeMainTab === 'mcp-management' && t('layout.breadcrumb.mcpSub')}
+                {activeMainTab === 'agents-management' && t('layout.breadcrumb.agentsSub')}
+                {activeMainTab === 'skills-management' && t('layout.breadcrumb.skillsSub')}
+                {activeMainTab === 'environment-check' && t('layout.breadcrumb.environmentCheckSub')}
+                {activeMainTab === 'managed-mode' && t('layout.breadcrumb.managedModeSub')}
+                {activeMainTab === 'settings' && t('layout.breadcrumb.settingsSub')}
               </Text>
             </div>
           </div>
@@ -515,7 +517,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                   <SearchOutlined className="search-icon" />
                   <input
                     type="text"
-                    placeholder="搜索配置..."
+                    placeholder={t('layout.search.placeholder')}
                     className="search-input"
                     autoFocus
                   />
@@ -534,7 +536,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
           <div className="header-right">
             <Space size="small">
               {/* 全局刷新 */}
-              <Tooltip title="刷新所有数据">
+              <Tooltip title={t('layout.tooltip.refreshAll')}>
                 <Button
                   type="text"
                   icon={<ReloadOutlined />}
@@ -543,7 +545,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
               </Tooltip>
 
               {/* 搜索按钮 */}
-              <Tooltip title="搜索">
+              <Tooltip title={t('common.search')}>
                 <Button
                   type="text"
                   icon={<SearchOutlined />}
@@ -552,14 +554,14 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
               </Tooltip>
 
               {/* 通知 */}
-              <Tooltip title="通知">
+              <Tooltip title={t('layout.tooltip.notifications')}>
                 <Badge count={notifications.length} size="small">
                   <Button type="text" icon={<BellOutlined />} />
                 </Badge>
               </Tooltip>
 
               {/* 主题切换 */}
-              <Tooltip title={theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'}>
+              <Tooltip title={theme === 'light' ? t('layout.tooltip.themeDark') : t('layout.tooltip.themeLight')}>
                 <Button
                   type="text"
                   icon={theme === 'light' ? <MoonOutlined /> : <SunOutlined />}
@@ -587,7 +589,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
 
               {/* 窗口控制 */}
               <div className="window-controls">
-                <Tooltip title="最小化">
+                <Tooltip title={t('layout.window.minimize')}>
                   <Button
                     type="text"
                     size="small"
@@ -595,7 +597,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                     onClick={handleMinimize}
                   />
                 </Tooltip>
-                <Tooltip title="最大化">
+                <Tooltip title={t('layout.window.maximize')}>
                   <Button
                     type="text"
                     size="small"
@@ -603,7 +605,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                     onClick={handleMaximize}
                   />
                 </Tooltip>
-                <Tooltip title="关闭">
+                <Tooltip title={t('layout.window.close')}>
                   <Button
                     type="text"
                     size="small"

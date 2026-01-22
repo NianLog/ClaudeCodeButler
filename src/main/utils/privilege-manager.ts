@@ -302,7 +302,6 @@ export class PrivilegeManager {
     try {
       const isWindows = process.platform === 'win32'
       const isMacOS = process.platform === 'darwin'
-      const isLinux = process.platform === 'linux'
 
       const currentExecutable = process.execPath
       const currentArgs = process.argv.slice(1)
@@ -399,7 +398,7 @@ export class PrivilegeManager {
       }
 
       // 方法2: 使用 whoami /priv 检查权限
-      exec('whoami /priv', (error: any, stdout: string, stderr: string) => {
+      exec('whoami /priv', (error: any, stdout: string, _stderr: string) => {
         if (!error) {
           // 检查是否包含 SeShutdownPrivilege 等管理员权限
           const adminPrivileges = [
@@ -419,7 +418,7 @@ export class PrivilegeManager {
         }
 
         // 方法3: 检查管理员组SID
-        exec('whoami /groups', (error: any, stdout: string, stderr: string) => {
+        exec('whoami /groups', (error: any, stdout: string, _stderr: string) => {
           if (!error) {
             const adminIndicators = [
               'S-1-5-32-544', // Administrators group SID
@@ -440,7 +439,7 @@ export class PrivilegeManager {
           }
 
           // 方法4: 尝试 net session 命令
-          exec('net session', (netError: any, netStdout: string, netStderr: string) => {
+          exec('net session', (netError: any, _netStdout: string, _netStderr: string) => {
             if (!netError) {
               logger.debug('方法4成功: net session 命令执行成功')
               resolve(true)
@@ -574,7 +573,7 @@ export class PrivilegeManager {
    */
   private async executeElevatedCommand(command: string, args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      exec(`${command} ${args.join(' ')}`, (error: any, stdout: string, stderr: string) => {
+      exec(`${command} ${args.join(' ')}`, (error: any, _stdout: string, stderr: string) => {
         if (error) {
           reject(new Error(`执行命令失败: ${stderr}`))
         } else {

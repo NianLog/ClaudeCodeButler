@@ -276,7 +276,7 @@ export class ConfigService {
         }
       } else {
         // 没有模板时，使用默认内容
-        content = fileName.endsWith('.md') ? '' : this.getDefaultContent(fileName)
+        content = fileName.endsWith('.md') ? '' : this.getDefaultContent()
       }
 
       // 保存文件（不需要传递metadata，因为这是首次创建）
@@ -694,7 +694,6 @@ export class ConfigService {
    * 判断是否为配置文件
    */
   private isConfigFile(filePath: string): boolean {
-    const fileName = basename(filePath)
     const ext = extname(filePath).toLowerCase()
 
     // JSON 文件
@@ -914,87 +913,6 @@ export class ConfigService {
   }
 
   /**
-   * 获取模板内容
-   */
-  private async getTemplateContent(templateName: string): Promise<any> {
-    const templates: Record<string, any> = {
-      'basic': {
-        model: 'claude-3-sonnet',
-        max_tokens: 4096,
-        temperature: 0.7
-      },
-      'development': {
-        model: 'claude-3-sonnet',
-        max_tokens: 8192,
-        temperature: 0.3,
-        top_p: 0.9
-      },
-      'creative': {
-        model: 'claude-3-opus',
-        max_tokens: 4096,
-        temperature: 0.9,
-        top_p: 1.0,
-        top_k: 250
-      },
-      'efficient': {
-        model: 'claude-3-haiku',
-        max_tokens: 2048,
-        temperature: 0.5
-      }
-    }
-
-    return templates[templateName] || templates.basic
-  }
-
-  /**
-   * 验证是否为有效的CCB配置结构
-   */
-  private isValidCCBConfig(content: any): boolean {
-    try {
-      // CCB配置支持多种格式：
-      // 1. 标准CCB settings.json格式：{env: {...}, permissions: {...}}
-      // 2. Claude Code配置格式：{model, max_tokens, temperature, ...}
-      // 3. 自定义JSON配置格式
-
-      if (!content || typeof content !== 'object') {
-        return false
-      }
-
-      // 检查是否为CCB标准配置格式
-      if (content.env && typeof content.env === 'object') {
-        // 验证env字段中的必需配置
-        const env = content.env
-        if (env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_BASE_URL) {
-          // 这是CCB标准配置，验证permissions字段
-          if (content.permissions && typeof content.permissions === 'object') {
-            const permissions = content.permissions
-            if (Array.isArray(permissions.allow) && Array.isArray(permissions.deny)) {
-              return true
-            }
-          }
-          return true // 即使没有permissions字段也接受
-        }
-      }
-
-      // 检查是否为Claude Code配置格式
-      if (content.model || content.max_tokens || content.temperature) {
-        return true // 这是Claude Code配置格式
-      }
-
-      // 检查是否为其他有效的配置对象
-      if (Object.keys(content).length > 0) {
-        // 任何非空对象都可能是有效配置
-        return true
-      }
-
-      return false
-    } catch (error) {
-      logger.error('CCB配置验证失败:', error)
-      return false
-    }
-  }
-
-  /**
    * 比较配置文件内容
    */
   async compareConfigs(config1Path: string, config2Path: string): Promise<boolean> {
@@ -1121,7 +1039,7 @@ export class ConfigService {
   /**
    * 获取默认配置内容
    */
-  private getDefaultContent(fileName: string): any {
+  private getDefaultContent(): any {
     // 所有配置文件统一使用标准的 Claude Code settings 配置模板
     return {
       env: {

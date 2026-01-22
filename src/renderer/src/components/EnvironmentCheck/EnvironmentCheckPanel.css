@@ -5,8 +5,8 @@
 /* 页面容器 */
 .environment-check-panel {
   padding: 24px;
-  background: #fafafa;
-  min-height: 100vh;
+  background: transparent;
+  min-height: 100%;
 }
 
 /* 页面头部 */
@@ -156,7 +156,7 @@
 
 /* Modal样式优化 */
 .environment-check-panel .ant-modal-content {
-  borderRadius: 8px;
+  border-radius: 8px;
 }
 
 .environment-check-panel .ant-modal-header {

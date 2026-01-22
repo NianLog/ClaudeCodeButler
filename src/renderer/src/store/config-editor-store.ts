@@ -91,7 +91,10 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
   saveConfig: async (config, content) => {
     try {
       set({ isLoading: true, error: null })
-      await window.electronAPI.config.save(config.path, content)
+      const saveResult = await window.electronAPI.config.save(config.path, content)
+      if (!saveResult?.success) {
+        throw new Error(saveResult?.error || '保存配置失败')
+      }
 
       set({
         hasUnsavedChanges: false,
@@ -157,7 +160,7 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
 
       const response = await window.electronAPI.config.create(configName, templateContent)
 
-      if (response && response.data && response.data.path) {
+      if (response?.success && response.data?.path) {
         // 保存元数据到.meta文件
         const metadata = {
           name: configData.metadata?.name || configData.name,
@@ -166,7 +169,10 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
           isActive: configData.metadata?.isActive !== undefined ? configData.metadata.isActive : (configData.isActive || false)
         }
 
-        await window.electronAPI.config.saveMetadata(response.data.path, metadata)
+        const saveMetaResult = await window.electronAPI.config.saveMetadata(response.data.path, metadata)
+        if (!saveMetaResult?.success) {
+          throw new Error(saveMetaResult?.error || '保存配置元数据失败')
+        }
 
         // 设置编辑器状态
         set({
@@ -253,7 +259,7 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
 
       const response = await window.electronAPI.config.create(configName, templateContent)
 
-      if (response && response.data && response.data.path) {
+      if (response?.success && response.data?.path) {
         // 保存元数据到.meta文件
         const metadata = {
           name: configData.metadata?.name || configData.name,
@@ -262,7 +268,10 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
           isActive: configData.metadata?.isActive !== undefined ? configData.metadata.isActive : (configData.isActive || false)
         }
 
-        await window.electronAPI.config.saveMetadata(response.data.path, metadata)
+        const saveMetaResult = await window.electronAPI.config.saveMetadata(response.data.path, metadata)
+        if (!saveMetaResult?.success) {
+          throw new Error(saveMetaResult?.error || '保存配置元数据失败')
+        }
 
         // 设置编辑器状态
         set({

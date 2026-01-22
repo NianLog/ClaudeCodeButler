@@ -3,10 +3,11 @@
  * 负责创建和管理系统托盘图标及菜单
  */
 
-import { Tray, Menu, nativeImage, BrowserWindow, Notification } from 'electron'
+import { Tray, Menu, nativeImage, BrowserWindow, Notification, type NativeImage } from 'electron'
 import { join } from 'path'
 import { APP_INFO } from '@shared/constants'
 import { logger } from './utils/logger'
+import { configService } from './ipc-handlers'
 
 export class TrayManager {
   private tray: Tray | null = null
@@ -40,7 +41,7 @@ export class TrayManager {
   /**
    * 获取托盘图标
    */
-  private getTrayIcon(): nativeImage {
+  private getTrayIcon(): NativeImage {
     try {
       const fs = require('fs')
       const { nativeImage } = require('electron')
@@ -161,8 +162,6 @@ export class TrayManager {
    */
   private async loadClaudeCodeConfigs(): Promise<Array<{ name: string; path: string; isInUse: boolean }>> {
     try {
-      // 动态导入 configService 以避免循环依赖问题
-      const { configService } = await import('./ipc-handlers')
       const allConfigs = await configService.scanConfigs()
 
       // 只返回 claude-code 类型的配置，包括 isInUse 状态
@@ -222,9 +221,6 @@ export class TrayManager {
    */
   private async switchConfig(configName: string, configPath: string): Promise<void> {
     try {
-      // 动态导入 configService 以实际激活配置
-      const { configService } = await import('./ipc-handlers')
-
       // activateConfig 返回 void，如果没有抛出异常就表示成功
       await configService.activateConfig(configPath)
 
@@ -346,8 +342,9 @@ export class TrayManager {
    */
   setFlashing(flash: boolean): void {
     if (this.tray && process.platform === 'win32') {
-      // Windows 支持托盘图标闪烁
-      this.tray.setHighlightMode(flash ? 'always' : 'never')
+      // Windows 支持托盘图标闪烁（类型声明不包含此方法，使用运行时检测）
+      const trayWithHighlight = this.tray as unknown as { setHighlightMode?: (mode: 'always' | 'never') => void }
+      trayWithHighlight.setHighlightMode?.(flash ? 'always' : 'never')
     }
   }
 

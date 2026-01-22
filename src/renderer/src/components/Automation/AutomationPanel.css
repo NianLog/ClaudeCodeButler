@@ -1,0 +1,89 @@
+/**
+ * 自动化规则面板样式
+ */
+
+.automation-panel {
+  padding: 24px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.automation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.automation-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.automation-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.automation-content {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+}
+
+.automation-list-card,
+.automation-detail-card {
+  flex: 1;
+  border-radius: 12px;
+}
+
+.automation-rule-card {
+  margin-bottom: 8px;
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.automation-rule-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.automation-rule-card.is-selected {
+  border: 1px solid #7C3AED;
+  box-shadow: 0 2px 12px rgba(124, 58, 237, 0.15);
+}
+
+@media (max-width: 1024px) {
+  .automation-content {
+    flex-direction: column;
+  }
+
+  .automation-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .automation-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .automation-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .automation-header-actions .ant-input-search {
+    width: 100% !important;
+  }
+
+  .automation-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

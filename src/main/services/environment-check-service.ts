@@ -9,8 +9,6 @@
  * - 使用配置的终端执行命令
  */
 
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
@@ -29,7 +27,6 @@ import type {
   ClaudeCodeVersionInfo
 } from '@shared/types/environment'
 
-const execAsync = promisify(exec)
 
 /**
  * 环境检测服务类

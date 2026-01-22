@@ -3,10 +3,8 @@
  * 提供使用统计和分析功能
  */
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, Suspense } from 'react'
 import {
-  Card,
-  Row,
   Col,
   Statistic,
   Select,
@@ -14,19 +12,19 @@ import {
   Space,
   Table,
   Progress,
+  Row,
   Tag,
   Empty,
   Typography,
   Button,
   Spin,
-  message,
   App,
-  Tabs
+  Tabs,
+  Card
 } from 'antd'
 import {
   BarChartOutlined,
   LineChartOutlined,
-  PieChartOutlined,
   TrophyOutlined,
   ClockCircleOutlined,
   FireOutlined,
@@ -39,13 +37,14 @@ import {
   RobotOutlined
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import dayjs, { Dayjs } from 'dayjs'
-import ClaudeCodeAnalytics from './ClaudeCodeAnalytics'
+import type { RangePickerProps } from 'antd/es/date-picker'
+import dayjs from 'dayjs'
+import { useTranslation } from '../../locales/useTranslation'
 
-const { RangePicker } = DatePicker
 const { Option } = Select
-const { Title, Text } = Typography
-
+const { RangePicker } = DatePicker
+const { Text, Title } = Typography
+const ClaudeCodeAnalytics = React.lazy(() => import('./ClaudeCodeAnalytics'))
 /**
  * 统计数据接口
  */
@@ -89,10 +88,11 @@ interface StatisticsData {
  */
 const StatisticsPanel: React.FC = () => {
   const { message: antdMessage } = App.useApp()
+  const { t } = useTranslation()
 
   const [loading, setLoading] = useState(false)
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'custom'>('30d')
-  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null)
+  const [dateRange, setDateRange] = useState<RangePickerProps['value']>(null)
   const [statistics, setStatistics] = useState<StatisticsData | null>(null)
 
   useEffect(() => {
@@ -105,14 +105,14 @@ const StatisticsPanel: React.FC = () => {
   const getTimeRange = (): { start: number; end: number } | undefined => {
     const now = Date.now()
 
-    if (timeRange === 'custom' && dateRange) {
+    if (timeRange === 'custom' && dateRange && dateRange[0] && dateRange[1]) {
       return {
         start: dateRange[0].valueOf(),
         end: dateRange[1].valueOf()
       }
     }
 
-    const ranges = {
+    const ranges: Record<string, number> = {
       '7d': 7 * 24 * 60 * 60 * 1000,
       '30d': 30 * 24 * 60 * 60 * 1000,
       '90d': 90 * 24 * 60 * 60 * 1000
@@ -120,7 +120,7 @@ const StatisticsPanel: React.FC = () => {
 
     if (timeRange in ranges) {
       return {
-        start: now - ranges[timeRange],
+        start: now - ranges[timeRange as keyof typeof ranges],
         end: now
       }
     }
@@ -140,11 +140,11 @@ const StatisticsPanel: React.FC = () => {
       if (response && response.success) {
         setStatistics(response.data)
       } else {
-        antdMessage.error(response?.error || '加载统计数据失败')
+        antdMessage.error(response?.error || t('statistics.messages.loadFailed'))
       }
     } catch (error) {
-      console.error('加载统计数据失败:', error)
-      antdMessage.error('加载统计数据失败')
+      console.error(t('statistics.messages.loadFailed'), error)
+      antdMessage.error(t('statistics.messages.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -155,7 +155,7 @@ const StatisticsPanel: React.FC = () => {
    */
   const handleRefresh = async () => {
     await loadStatistics()
-    antdMessage.success('统计数据已刷新')
+    antdMessage.success(t('statistics.messages.refreshed'))
   }
 
   /**
@@ -165,10 +165,10 @@ const StatisticsPanel: React.FC = () => {
     try {
       const exportPath = `statistics_${Date.now()}.json`
       await window.electronAPI.statistics.export(exportPath)
-      antdMessage.success('统计数据已导出')
+      antdMessage.success(t('statistics.messages.exported'))
     } catch (error) {
-      console.error('导出统计数据失败:', error)
-      antdMessage.error('导出统计数据失败')
+      console.error(t('statistics.messages.exportFailed'), error)
+      antdMessage.error(t('statistics.messages.exportFailed'))
     }
   }
 
@@ -185,9 +185,9 @@ const StatisticsPanel: React.FC = () => {
   /**
    * 处理日期范围变化
    */
-  const handleDateRangeChange = (dates: [Dayjs, Dayjs] | null) => {
+  const handleDateRangeChange = (dates: RangePickerProps['value']) => {
     setDateRange(dates)
-    if (dates) {
+    if (dates && dates[0] && dates[1]) {
       setTimeRange('custom')
     }
   }
@@ -201,10 +201,10 @@ const StatisticsPanel: React.FC = () => {
     const hours = Math.floor(minutes / 60)
     const days = Math.floor(hours / 24)
 
-    if (days > 0) return `${days}天${hours % 24}小时`
-    if (hours > 0) return `${hours}小时${minutes % 60}分钟`
-    if (minutes > 0) return `${minutes}分钟`
-    return `${seconds}秒`
+    if (days > 0) return t('statistics.uptime.daysHours', { days, hours: hours % 24 })
+    if (hours > 0) return t('statistics.uptime.hoursMinutes', { hours, minutes: minutes % 60 })
+    if (minutes > 0) return t('statistics.uptime.minutes', { minutes })
+    return t('statistics.uptime.seconds', { seconds })
   }
 
   /**
@@ -212,7 +212,7 @@ const StatisticsPanel: React.FC = () => {
    */
   const configColumns: ColumnsType<any> = [
     {
-      title: '配置名称',
+      title: t('statistics.config.columns.name'),
       dataIndex: 'configName',
       key: 'configName',
       render: (text: string) => (
@@ -223,31 +223,31 @@ const StatisticsPanel: React.FC = () => {
       )
     },
     {
-      title: '切换次数',
+      title: t('statistics.config.columns.switchCount'),
       dataIndex: 'switchCount',
       key: 'switchCount',
       sorter: (a, b) => a.switchCount - b.switchCount,
       render: (value: number) => (
-        <Tag color="blue">{value} 次</Tag>
+        <Tag color="blue">{t('statistics.units.times', { count: value })}</Tag>
       )
     },
     {
-      title: '编辑次数',
+      title: t('statistics.config.columns.editCount'),
       dataIndex: 'editCount',
       key: 'editCount',
       sorter: (a, b) => a.editCount - b.editCount,
       render: (value: number) => (
-        <Tag color="green">{value} 次</Tag>
+        <Tag color="green">{t('statistics.units.times', { count: value })}</Tag>
       )
     },
     {
-      title: '最后使用',
+      title: t('statistics.config.columns.lastUsed'),
       dataIndex: 'lastUsed',
       key: 'lastUsed',
       sorter: (a, b) => a.lastUsed - b.lastUsed,
       render: (timestamp: number) => (
         <Text type="secondary">
-          {timestamp > 0 ? dayjs(timestamp).format('YYYY-MM-DD HH:mm') : '未使用'}
+          {timestamp > 0 ? dayjs(timestamp).format('YYYY-MM-DD HH:mm') : t('statistics.messages.neverUsed')}
         </Text>
       )
     }
@@ -258,7 +258,7 @@ const StatisticsPanel: React.FC = () => {
    */
   const ruleColumns: ColumnsType<any> = [
     {
-      title: '规则名称',
+      title: t('statistics.rules.columns.name'),
       dataIndex: 'ruleName',
       key: 'ruleName',
       render: (text: string) => (
@@ -269,16 +269,16 @@ const StatisticsPanel: React.FC = () => {
       )
     },
     {
-      title: '执行次数',
+      title: t('statistics.rules.columns.totalExecutions'),
       dataIndex: 'totalExecutions',
       key: 'totalExecutions',
       sorter: (a, b) => a.totalExecutions - b.totalExecutions,
       render: (value: number) => (
-        <Tag color="blue">{value} 次</Tag>
+        <Tag color="blue">{t('statistics.units.times', { count: value })}</Tag>
       )
     },
     {
-      title: '成功率',
+      title: t('statistics.rules.columns.successRate'),
       dataIndex: 'successRate',
       key: 'successRate',
       sorter: (a, b) => {
@@ -305,13 +305,13 @@ const StatisticsPanel: React.FC = () => {
       }
     },
     {
-      title: '最后执行',
+      title: t('statistics.rules.columns.lastExecuted'),
       dataIndex: 'lastExecuted',
       key: 'lastExecuted',
       sorter: (a, b) => a.lastExecuted - b.lastExecuted,
       render: (timestamp: number) => (
         <Text type="secondary">
-          {timestamp > 0 ? dayjs(timestamp).format('YYYY-MM-DD HH:mm') : '未执行'}
+          {timestamp > 0 ? dayjs(timestamp).format('YYYY-MM-DD HH:mm') : t('statistics.messages.neverExecuted')}
         </Text>
       )
     }
@@ -340,10 +340,10 @@ const StatisticsPanel: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
-            刷新
+            {t('statistics.actions.refresh')}
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExport}>
-            导出
+            {t('statistics.actions.export')}
           </Button>
         </Space>
       </div>
@@ -351,22 +351,22 @@ const StatisticsPanel: React.FC = () => {
       {/* 时间范围选择 */}
       <Card style={{ borderRadius: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <Text strong>时间范围：</Text>
+          <Text strong>{t('statistics.timeRange.label')}</Text>
           <Select
             value={timeRange}
             onChange={handleTimeRangeChange}
             style={{ width: 120 }}
           >
-            <Option value="7d">最近7天</Option>
-            <Option value="30d">最近30天</Option>
-            <Option value="90d">最近90天</Option>
-            <Option value="custom">自定义</Option>
+            <Option value="7d">{t('statistics.timeRange.last7Days')}</Option>
+            <Option value="30d">{t('statistics.timeRange.last30Days')}</Option>
+            <Option value="90d">{t('statistics.timeRange.last90Days')}</Option>
+            <Option value="custom">{t('statistics.timeRange.custom')}</Option>
           </Select>
           {timeRange === 'custom' && (
             <RangePicker
               value={dateRange}
               onChange={handleDateRangeChange}
-              placeholder={['开始日期', '结束日期']}
+              placeholder={[t('statistics.timeRange.startDate'), t('statistics.timeRange.endDate')]}
               format="YYYY-MM-DD"
             />
           )}
@@ -380,7 +380,7 @@ const StatisticsPanel: React.FC = () => {
             <Col xs={24} sm={12} md={6}>
               <Card style={{ borderRadius: '12px', textAlign: 'center' }}>
                 <Statistic
-                  title="配置总数"
+                  title={t('statistics.metrics.totalConfigs')}
                   value={statistics.system.totalConfigs}
                   prefix={<FileTextOutlined style={{ color: '#1890ff' }} />}
                   valueStyle={{ color: '#1890ff' }}
@@ -390,9 +390,9 @@ const StatisticsPanel: React.FC = () => {
             <Col xs={24} sm={12} md={6}>
               <Card style={{ borderRadius: '12px', textAlign: 'center' }}>
                 <Statistic
-                  title="配置切换"
+                  title={t('statistics.metrics.configSwitches')}
                   value={statistics.system.totalConfigSwitches}
-                  suffix="次"
+                  suffix={t('statistics.units.timesSuffix')}
                   prefix={<FireOutlined style={{ color: '#ff4d4f' }} />}
                   valueStyle={{ color: '#ff4d4f' }}
                 />
@@ -401,7 +401,7 @@ const StatisticsPanel: React.FC = () => {
             <Col xs={24} sm={12} md={6}>
               <Card style={{ borderRadius: '12px', textAlign: 'center' }}>
                 <Statistic
-                  title="规则总数"
+                  title={t('statistics.metrics.totalRules')}
                   value={statistics.system.totalRules}
                   prefix={<ThunderboltOutlined style={{ color: '#52c41a' }} />}
                   valueStyle={{ color: '#52c41a' }}
@@ -411,9 +411,9 @@ const StatisticsPanel: React.FC = () => {
             <Col xs={24} sm={12} md={6}>
               <Card style={{ borderRadius: '12px', textAlign: 'center' }}>
                 <Statistic
-                  title="规则执行"
+                  title={t('statistics.metrics.ruleExecutions')}
                   value={statistics.system.totalRuleExecutions}
-                  suffix="次"
+                  suffix={t('statistics.units.timesSuffix')}
                   prefix={<TrophyOutlined style={{ color: '#faad14' }} />}
                   valueStyle={{ color: '#faad14' }}
                 />
@@ -431,7 +431,7 @@ const StatisticsPanel: React.FC = () => {
                   </div>
                   <div style={{ color: '#666', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                     <CheckCircleOutlined />
-                    应用启动次数
+                    {t('statistics.metrics.appStarts')}
                   </div>
                 </div>
               </Card>
@@ -444,7 +444,7 @@ const StatisticsPanel: React.FC = () => {
                   </div>
                   <div style={{ color: '#666', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                     <ClockCircleOutlined />
-                    运行时长
+                    {t('statistics.metrics.uptime')}
                   </div>
                 </div>
               </Card>
@@ -457,7 +457,7 @@ const StatisticsPanel: React.FC = () => {
                   </div>
                   <div style={{ color: '#666', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                     {statistics.system.totalErrors > 0 ? <CloseCircleOutlined /> : <CheckCircleOutlined />}
-                    错误数量
+                    {t('statistics.metrics.errorCount')}
                   </div>
                 </div>
               </Card>
@@ -470,7 +470,7 @@ const StatisticsPanel: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <BarChartOutlined />
-                  <span>配置使用统计</span>
+                  <span>{t('statistics.sections.configUsage')}</span>
                 </div>
               }
               style={{ borderRadius: '12px' }}
@@ -491,7 +491,7 @@ const StatisticsPanel: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <LineChartOutlined />
-                  <span>规则执行统计</span>
+                  <span>{t('statistics.sections.ruleExecution')}</span>
                 </div>
               }
               style={{ borderRadius: '12px' }}
@@ -510,12 +510,14 @@ const StatisticsPanel: React.FC = () => {
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="暂无统计数据"
-            extra={
-              <Button type="primary" onClick={handleRefresh}>
-                刷新数据
-              </Button>
-            }
+              description={
+                <div>
+                  <div style={{ marginBottom: 12 }}>{t('statistics.empty.description')}</div>
+                  <Button type="primary" onClick={handleRefresh}>
+                    {t('statistics.empty.refresh')}
+                  </Button>
+                </div>
+              }
           />
         </div>
       )}
@@ -526,8 +528,8 @@ const StatisticsPanel: React.FC = () => {
     <div style={{ padding: '24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 头部 */}
       <div style={{ marginBottom: '24px' }}>
-        <Title level={3} style={{ margin: 0, marginBottom: '8px' }}>统计信息</Title>
-        <Text type="secondary">查看Claude Code Butler和Claude Code使用情况</Text>
+        <Title level={3} style={{ margin: 0, marginBottom: '8px' }}>{t('statistics.title')}</Title>
+        <Text type="secondary">{t('statistics.subtitle')}</Text>
       </div>
 
       {/* 标签页 */}
@@ -540,7 +542,7 @@ const StatisticsPanel: React.FC = () => {
             label: (
               <span>
                 <BarChartOutlined />
-                应用统计
+                {t('statistics.tabs.app')}
               </span>
             ),
             children: loading && !statistics ? (
@@ -550,7 +552,7 @@ const StatisticsPanel: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <Spin size="large" spinning={true} tip="加载统计数据中..." />
+                <Spin size="large" spinning={true} tip={t('statistics.messages.loading')} />
               </div>
             ) : (
               <div style={{ height: 'calc(100vh - 200px)', overflow: 'auto', paddingRight: '8px' }}>
@@ -563,12 +565,14 @@ const StatisticsPanel: React.FC = () => {
             label: (
               <span>
                 <RobotOutlined />
-                Claude Code分析
+                {t('statistics.tabs.claudeCode')}
               </span>
             ),
             children: (
               <div style={{ height: 'calc(100vh - 200px)', overflow: 'auto', paddingRight: '8px' }}>
-                <ClaudeCodeAnalytics />
+                <Suspense fallback={<Spin size="large" />}>
+                  <ClaudeCodeAnalytics />
+                </Suspense>
               </div>
             )
           }

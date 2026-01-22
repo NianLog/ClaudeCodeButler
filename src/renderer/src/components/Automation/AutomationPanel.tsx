@@ -4,13 +4,15 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Space, Input, Select, Switch, Modal, message, Empty, Spin } from 'antd';
-import { PlusOutlined, SearchOutlined, PlayCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, Button, Input, Switch, Modal, message, Empty, Spin, Tag, Typography } from 'antd';
+import { PlusOutlined, PlayCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useRuleStore } from '../../store/rule-store';
 import RuleEditor from './RuleEditor';
+import './AutomationPanel.css'
+import { useTranslation } from '../../locales/useTranslation'
 
 const { Search } = Input;
-const { Option } = Select;
+const { Text } = Typography
 
 
 /**
@@ -22,12 +24,9 @@ const AutomationPanel: React.FC = () => {
     selectedRule,
     isLoading,
     error,
-    executionLogs,
     stats,
     setSelectedRule,
     refreshRules,
-    createRule,
-    updateRule,
     deleteRule,
     toggleRule,
     executeRule,
@@ -35,8 +34,20 @@ const AutomationPanel: React.FC = () => {
     loadStats
   } = useRuleStore()
 
+  const { t } = useTranslation()
+
   const [searchText, setSearchText] = useState('')
   const [editorVisible, setEditorVisible] = useState(false)
+
+  const weekdayMap: Record<number, string> = {
+    0: t('automation.weekday.sun'),
+    1: t('automation.weekday.mon'),
+    2: t('automation.weekday.tue'),
+    3: t('automation.weekday.wed'),
+    4: t('automation.weekday.thu'),
+    5: t('automation.weekday.fri'),
+    6: t('automation.weekday.sat')
+  }
 
   useEffect(() => {
     refreshRules()
@@ -58,19 +69,35 @@ const AutomationPanel: React.FC = () => {
   const handleToggleRule = async (ruleId: string, enabled: boolean) => {
     try {
       await toggleRule(ruleId, enabled)
-      message.success(`规则已${enabled ? '启用' : '禁用'}`)
+      message.success(enabled ? t('automation.messages.enabled') : t('automation.messages.disabled'))
     } catch (error) {
-      message.error('操作失败')
+      message.error(t('automation.messages.toggleFailed'))
     }
   }
 
   // 处理规则执行
   const handleExecuteRule = async (ruleId: string) => {
     try {
-      await executeRule(ruleId)
-      message.success('规则执行成功')
+      const result = await executeRule(ruleId)
+      const stdout = result?.result?.stdout
+      const stderr = result?.result?.stderr
+      const hasOutput = (stdout && String(stdout).trim().length > 0) || (stderr && String(stderr).trim().length > 0)
+
+      if (hasOutput) {
+        Modal.info({
+          title: t('automation.executeResult'),
+          width: 640,
+          content: (
+            <pre style={{ maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+              {[stdout, stderr].filter(Boolean).join('\n')}
+            </pre>
+          )
+        })
+      } else {
+        message.success(t('automation.executeCompleted'))
+      }
     } catch (error) {
-      message.error('规则执行失败')
+      message.error(t('automation.executeFailed'))
     }
   }
 
@@ -78,9 +105,9 @@ const AutomationPanel: React.FC = () => {
   const handleDeleteRule = async (ruleId: string) => {
     try {
       await deleteRule(ruleId)
-      message.success('规则删除成功')
+      message.success(t('automation.messages.deleteSuccess'))
     } catch (error) {
-      message.error('规则删除失败')
+      message.error(t('automation.messages.deleteFailed'))
     }
   }
 
@@ -100,11 +127,13 @@ const AutomationPanel: React.FC = () => {
       <div style={{ padding: '24px', textAlign: 'center' }}>
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={error}
-          extra={
-            <Button type="primary" onClick={refreshRules}>
-              重新加载
-            </Button>
+          description={
+            <div>
+              <div>{error}</div>
+              <Button type="primary" onClick={refreshRules} style={{ marginTop: 16 }}>
+                {t('automation.actions.reload')}
+              </Button>
+            </div>
           }
         />
       </div>
@@ -112,33 +141,36 @@ const AutomationPanel: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="automation-panel">
       {/* 头部 */}
-      <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ margin: 0, marginBottom: '16px' }}>自动化规则</h2>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="automation-header">
+        <div>
+          <h2 style={{ margin: 0, marginBottom: 8 }}>{t('automation.title')}</h2>
+          <Text type="secondary">{t('automation.subtitle')}</Text>
+        </div>
+        <div className="automation-header-actions">
           <Search
-            placeholder="搜索规则..."
+            placeholder={t('automation.searchPlaceholder')}
             allowClear
             style={{ width: 300 }}
             onSearch={handleSearch}
             onChange={(e) => !e.target.value && setSearchText('')}
           />
           <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor(null)}>
-            新建规则
+            {t('automation.createRule')}
           </Button>
         </div>
       </div>
 
       {/* 统计信息 */}
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+      <div className="automation-stats">
+        <div className="automation-stats-grid">
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '24px', fontWeight: 600, color: '#1890ff', marginBottom: '4px' }}>
                 {stats.totalRules || rules.length}
               </div>
-              <div style={{ color: '#666', fontSize: '12px' }}>总规则数</div>
+              <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.totalRules')}</div>
             </div>
           </Card>
           <Card size="small">
@@ -146,7 +178,7 @@ const AutomationPanel: React.FC = () => {
               <div style={{ fontSize: '24px', fontWeight: 600, color: '#52c41a', marginBottom: '4px' }}>
                 {stats.activeRules || rules.filter(r => r.enabled).length}
               </div>
-              <div style={{ color: '#666', fontSize: '12px' }}>活跃规则</div>
+              <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.activeRules')}</div>
             </div>
           </Card>
           <Card size="small">
@@ -154,7 +186,7 @@ const AutomationPanel: React.FC = () => {
               <div style={{ fontSize: '24px', fontWeight: 600, color: '#faad14', marginBottom: '4px' }}>
                 {stats.totalExecutions || 0}
               </div>
-              <div style={{ color: '#666', fontSize: '12px' }}>总执行次数</div>
+              <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.totalExecutions')}</div>
             </div>
           </Card>
           <Card size="small">
@@ -162,46 +194,58 @@ const AutomationPanel: React.FC = () => {
               <div style={{ fontSize: '24px', fontWeight: 600, color: '#f5222d', marginBottom: '4px' }}>
                 {stats.failedExecutions || 0}
               </div>
-              <div style={{ color: '#666', fontSize: '12px' }}>失败次数</div>
+              <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.failedExecutions')}</div>
             </div>
           </Card>
         </div>
       </div>
 
       {/* 规则列表 */}
-      <div style={{ flex: 1, display: 'flex', gap: '16px' }}>
-        <div style={{ flex: 1, background: 'white', borderRadius: '8px', padding: '16px', overflowY: 'auto' }}>
+      <div className="automation-content">
+        <Card className="automation-list-card">
           {isLoading ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <Spin size="large" />
             </div>
           ) : filteredRules.length === 0 ? (
-            <Empty description="暂无规则" />
+            <Empty description={t('automation.empty')} />
           ) : (
             <div>
               {filteredRules.map(rule => (
                 <Card
                   key={rule.id}
                   size="small"
-                  style={{
-                    marginBottom: '8px',
-                    cursor: 'pointer',
-                    border: selectedRule?.id === rule.id ? '1px solid #1890ff' : '1px solid #e8e8e8'
-                  }}
+                  className={selectedRule?.id === rule.id ? 'automation-rule-card is-selected' : 'automation-rule-card'}
                   onClick={() => handleRuleSelect(rule)}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontWeight: 500, marginBottom: '4px' }}>{rule.name}</div>
                       <div style={{ color: '#666', fontSize: '12px', marginBottom: '8px' }}>
-                        {rule.trigger.time} - {rule.trigger.days.map(d => `周${d}`).join(', ')}
+                        {rule.trigger.time} - {rule.trigger.days.map(d => weekdayMap[d] ?? String(d)).join(', ')}
+                      </div>
+                      <div>
+                        <Tag color={rule.action.type === 'custom-command' ? 'purple' : 'blue'}>
+                          {rule.action.type === 'custom-command'
+                            ? t('automation.action.command')
+                            : t('automation.action.switchConfig')}
+                        </Tag>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Switch
                         checked={rule.enabled}
                         onChange={(checked) => handleToggleRule(rule.id, checked)}
-                        onClick={(checked, e) => e.stopPropagation()}
+                        onClick={(_checked, e) => e.stopPropagation()}
+                      />
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<PlayCircleOutlined />}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleExecuteRule(rule.id)
+                        }}
                       />
                       <Button
                         type="text"
@@ -228,24 +272,36 @@ const AutomationPanel: React.FC = () => {
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
-        <div style={{ flex: 1, background: 'white', borderRadius: '8px', padding: '16px' }}>
+        <Card className="automation-detail-card">
           {selectedRule ? (
             <div>
-              <h3>{selectedRule.name}</h3>
-              <p><strong>动作:</strong> 切换到 {selectedRule.action.targetConfigPath.split('\\').pop()}</p>
+              <h3 style={{ marginBottom: 8 }}>{selectedRule.name}</h3>
+              {selectedRule.action.type === 'switch-config' ? (
+                <p>
+                  <strong>{t('automation.detail.action')}:</strong> {t('automation.detail.switchTo')} {selectedRule.action.targetConfigPath.split('\\').pop()}
+                </p>
+              ) : (
+                <>
+                  <p><strong>{t('automation.detail.action')}:</strong> {t('automation.action.command')}</p>
+                  <p><strong>{t('automation.detail.command')}:</strong> <Text code>{selectedRule.action.command}</Text></p>
+                  {selectedRule.action.workingDirectory && (
+                    <p><strong>{t('automation.detail.cwd')}:</strong> <Text code>{selectedRule.action.workingDirectory}</Text></p>
+                  )}
+                </>
+              )}
               <div style={{ marginTop: '16px' }}>
-                <p><strong>触发器:</strong> {selectedRule.trigger.time} at {selectedRule.trigger.days.map(d => `周${d}`).join(', ')}</p>
-                <p><strong>状态:</strong> {selectedRule.enabled ? '启用' : '禁用'}</p>
+                <p><strong>{t('automation.detail.trigger')}:</strong> {selectedRule.trigger.time} {t('automation.detail.at')} {selectedRule.trigger.days.map(d => weekdayMap[d] ?? String(d)).join(', ')}</p>
+                <p><strong>{t('automation.detail.status')}:</strong> {selectedRule.enabled ? t('automation.status.enabled') : t('automation.status.disabled')}</p>
               </div>
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-              选择一个规则查看详情
+              {t('automation.selectRule')}
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* 规则编辑器模态框 */}

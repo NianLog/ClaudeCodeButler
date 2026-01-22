@@ -53,7 +53,7 @@ export class GeminiTransformer extends BaseTransformer {
   /**
    * 转换请求格式
    */
-  async transformRequest(request: ClaudeRequest, provider: ApiProvider): Promise<any> {
+  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<any> {
     const transformed: any = {}
 
     // 映射模型名称
@@ -148,7 +148,7 @@ export class GeminiTransformer extends BaseTransformer {
   /**
    * 转换响应格式
    */
-  async transformResponse(response: any, provider: ApiProvider): Promise<ClaudeResponse> {
+  async transformResponse(response: any, _provider: ApiProvider): Promise<ClaudeResponse> {
     const transformed: ClaudeResponse = {
       id: `msg_${Date.now()}`,
       type: 'message',
@@ -216,7 +216,7 @@ export class GeminiTransformer extends BaseTransformer {
   /**
    * 转换流式响应数据块
    */
-  transformStreamChunk(chunk: string, provider: ApiProvider): string | null {
+  transformStreamChunk(chunk: string, _provider: ApiProvider): string | null {
     try {
       // Gemini的流式响应格式
       if (chunk.includes('"candidates"')) {
@@ -265,7 +265,7 @@ export class GeminiTransformer extends BaseTransformer {
   /**
    * 转换错误格式
    */
-  transformError(error: any, provider: ApiProvider): any {
+  transformError(error: any, _provider: ApiProvider): any {
     // Gemini错误格式
     if (error.error) {
       const geminiError = error.error

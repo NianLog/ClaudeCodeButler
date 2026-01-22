@@ -12,6 +12,7 @@ import {
   CloseCircleOutlined,
   CloseOutlined
 } from '@ant-design/icons'
+import { useTranslation } from '../../locales/useTranslation'
 
 /**
  * 通知项类型
@@ -52,7 +53,7 @@ const getNotificationIcon = (type: NotificationItem['type']) => {
 /**
  * 格式化时间
  */
-const formatTime = (date: Date) => {
+const formatTime = (date: Date, t: (key: string, vars?: Record<string, string | number>) => string) => {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const seconds = Math.floor(diff / 1000)
@@ -60,11 +61,11 @@ const formatTime = (date: Date) => {
   const hours = Math.floor(minutes / 60)
 
   if (seconds < 60) {
-    return '刚刚'
+    return t('notifications.time.justNow')
   } else if (minutes < 60) {
-    return `${minutes}分钟前`
+    return t('notifications.time.minutesAgo', { minutes })
   } else if (hours < 24) {
-    return `${hours}小时前`
+    return t('notifications.time.hoursAgo', { hours })
   } else {
     return date.toLocaleDateString()
   }
@@ -78,6 +79,7 @@ const NotificationContainer: React.FC<NotificationContainerProps> = ({
   onRemove
 }) => {
   const { notification } = App.useApp()
+  const { t } = useTranslation()
   
   // 显示单个通知
   const showNotification = (item: NotificationItem) => {
@@ -92,7 +94,7 @@ const NotificationContainer: React.FC<NotificationContainerProps> = ({
       description: (
         <div className="notification-content">
           <p className="notification-message">{item.message}</p>
-          <span className="notification-time">{formatTime(item.timestamp)}</span>
+          <span className="notification-time">{formatTime(item.timestamp, t)}</span>
         </div>
       ),
       duration: 5,
@@ -110,22 +112,17 @@ const NotificationContainer: React.FC<NotificationContainerProps> = ({
     })
   }
 
+  const displayedRef = React.useRef<Set<string>>(new Set())
+
   // 当通知列表变化时，显示通知
   React.useEffect(() => {
     notifications.forEach(item => {
-      // 检查通知是否已经显示
-      if (!notification[item.id]) {
+      if (!displayedRef.current.has(item.id)) {
         showNotification(item)
+        displayedRef.current.add(item.id)
       }
     })
   }, [notifications])
-
-  // 清除所有通知
-  const clearAllNotifications = () => {
-    notifications.forEach(item => {
-      notification.destroy(item.id)
-    })
-  }
 
   return (
     <div className="notification-container">

@@ -95,20 +95,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // 初始化应用信息
   initialize: async () => {
     try {
-      // 获取应用版本
-      const version = await window.electronAPI.app.getVersion()
+      // 检查 electronAPI 是否可用
+      if (!window.electronAPI) {
+        console.warn('electronAPI not available, using default values')
+        set({
+          version: '0.0.0',
+          platform: 'unknown'
+        })
+        return
+      }
 
-      // 获取系统信息
-      const systemInfo = await window.electronAPI.system.getInfo()
+      // 获取应用版本（带错误保护）
+      let version = '0.0.0'
+      try {
+        if (window.electronAPI.app?.getVersion) {
+          version = await window.electronAPI.app.getVersion()
+        }
+      } catch (e) {
+        console.warn('Failed to get app version:', e)
+      }
+
+      // 获取系统信息（带错误保护）
+      let platform = 'unknown'
+      try {
+        if (window.electronAPI.system?.getInfo) {
+          const systemInfo = await window.electronAPI.system.getInfo()
+          platform = systemInfo.platform
+        }
+      } catch (e) {
+        console.warn('Failed to get system info:', e)
+      }
 
       set({
         version,
-        platform: systemInfo.platform
+        platform
       })
 
-      console.log('App initialized:', { version, platform: systemInfo.platform })
+      console.log('App initialized:', { version, platform })
     } catch (error) {
       console.error('Failed to initialize app:', error)
+      // 设置默认值，确保应用可以继续运行
+      set({
+        version: '0.0.0',
+        platform: 'unknown'
+      })
     }
   },
 

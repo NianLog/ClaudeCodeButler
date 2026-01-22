@@ -3,7 +3,7 @@
  * @description 针对托管模式的专用配置编辑器，支持GUI和JSON源视图模式
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import {
   Card,
   Form,
@@ -39,8 +39,10 @@ import {
   SafetyCertificateOutlined
 } from '@ant-design/icons'
 import { useConfigListStore } from '../../store/config-list-store'
-import type { ConfigFile, ManagedModeConfig } from '@shared/types'
-import CodeEditor from '../Common/CodeEditor'
+import type { ConfigFile } from '@shared/types'
+import type { ApiProvider, ManagedModeConfig } from '@shared/types/managed-mode'
+const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
+import { useTranslation } from '../../locales/useTranslation'
 import './ManagedModeConfigEditor.css'
 
 const { TextArea } = Input
@@ -86,6 +88,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   onConfigChange,
   onRestartService
 }) => {
+  const { t } = useTranslation()
   // 状态管理
   const [configMode, setConfigMode] = useState<'gui' | 'json'>('gui')
   const [form] = Form.useForm()
@@ -194,8 +197,8 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
 
       // 找到选中的 provider
       const selectedProvider = availableProviders.find(p => p.id === providerId)
-      if (!selectedProvider) {
-        message.error('未找到选中的配置')
+        if (!selectedProvider) {
+          message.error(t('managedMode.config.switch.notFound'))
         return
       }
 
@@ -210,7 +213,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       }, 1000)
     } catch (error) {
       console.error('切换配置失败:', error)
-      message.error('切换配置失败')
+        message.error(t('managedMode.config.switch.failed'))
     } finally {
       setLoading(false)
     }
@@ -446,9 +449,9 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       message.success({
         content: (
           <div>
-            <div>托管模式配置已保存并重启服务</div>
+            <div>{t('managedMode.config.saveSuccess')}</div>
             <div style={{ fontSize: '12px', marginTop: '8px', color: '#faad14' }}>
-              ⚠️ 重要提示：配置已更新settings.json，请在所有使用此配置的Claude Code终端中执行重启命令，新配置才能生效。
+              {t('managedMode.config.saveTip')}
             </div>
           </div>
         ),
@@ -456,7 +459,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       })
     } catch (error: any) {
       console.error('保存配置失败:', error)
-      message.error(`保存失败: ${error.message}`)
+      message.error(t('managedMode.config.saveFailed', { error: error.message }))
     } finally {
       setLoading(false)
     }
@@ -469,9 +472,9 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
     try {
       const config = configMode === 'gui' ? form.getFieldsValue() : JSON.parse(jsonContent)
       await navigator.clipboard.writeText(JSON.stringify(cleanEmptyFields(config), null, 2))
-      message.success('配置已复制到剪贴板')
+      message.success(t('managedMode.config.copySuccess'))
     } catch (error) {
-      message.error('复制失败')
+      message.error(t('managedMode.config.copyFailed'))
     }
   }
 
@@ -494,8 +497,8 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
           title={
             <Space>
               <ApiOutlined />
-              <span>环境变量 (env)</span>
-              <Badge status="processing" text="必填" />
+              <span>{t('managedMode.config.env.title')}</span>
+              <Badge status="processing" text={t('managedMode.config.required')} />
             </Space>
           }
           className="config-section"
@@ -506,7 +509,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                 label={
                   <Space>
                     <span>ANTHROPIC_BASE_URL</span>
-                    <Tooltip title="代理服务的基础URL">
+                    <Tooltip title={t('managedMode.config.env.baseUrlTip')}>
                       <InfoCircleOutlined />
                     </Tooltip>
                   </Space>
@@ -516,7 +519,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                   value={`http://127.0.0.1:${servicePort}`}
                   disabled
                   addonAfter={
-                    <Tooltip title="端口号可在基础配置中修改">
+                    <Tooltip title={t('managedMode.config.env.portTip')}>
                       <SettingOutlined />
                     </Tooltip>
                   }
@@ -528,7 +531,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                 label={
                   <Space>
                     <span>ANTHROPIC_AUTH_TOKEN</span>
-                    <Tooltip title="访问令牌，用于验证托管服务请求">
+                    <Tooltip title={t('managedMode.config.env.tokenTip')}>
                       <SafetyCertificateOutlined />
                     </Tooltip>
                   </Space>
@@ -539,7 +542,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                   readOnly
                   addonAfter={
                     <Space>
-                      <Tooltip title="生成新令牌">
+                      <Tooltip title={t('managedMode.config.env.generateToken')}>
                         <Button
                           type="link"
                           size="small"
@@ -547,7 +550,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                           onClick={generateAccessToken}
                         />
                       </Tooltip>
-                      <Tooltip title="复制令牌">
+                      <Tooltip title={t('managedMode.config.env.copyToken')}>
                         <Button
                           type="link"
                           size="small"
@@ -572,31 +575,31 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
           title={
             <Space>
               <LockOutlined />
-              <span>权限配置 (permissions)</span>
-              <Badge status="default" text="选填" />
+              <span>{t('managedMode.config.permissions.title')}</span>
+              <Badge status="default" text={t('managedMode.config.optional')} />
             </Space>
           }
           className="config-section"
         >
           <Form.Item
             name={['permissions', 'defaultMode']}
-            label="默认模式"
+            label={t('managedMode.config.permissions.defaultMode')}
             initialValue="bypassPermissions"
-            tooltip="选择Claude Code的权限模式，控制AI的操作权限范围"
+            tooltip={t('managedMode.config.permissions.defaultModeTip')}
           >
             <Select>
-              <Option value="default">Default模式 - 谨慎小心的AI编程安全专家</Option>
-              <Option value="acceptEdits">AcceptEdits模式 - 果断高效的代码协作伙伴</Option>
-              <Option value="plan">Plan模式 - 只分析不执行的智能顾问</Option>
-              <Option value="bypassPermissions">BypassPermissions模式 - 完全自主的AI编程执行专家</Option>
+              <Option value="default">{t('managedMode.config.permissions.mode.default')}</Option>
+              <Option value="acceptEdits">{t('managedMode.config.permissions.mode.acceptEdits')}</Option>
+              <Option value="plan">{t('managedMode.config.permissions.mode.plan')}</Option>
+              <Option value="bypassPermissions">{t('managedMode.config.permissions.mode.bypass')}</Option>
             </Select>
           </Form.Item>
           <Form.Item
             name={['permissions', 'customMode']}
-            label="自定义模式"
-            tooltip="如果需要使用自定义权限模式，请在此输入模式名称"
+            label={t('managedMode.config.permissions.customMode')}
+            tooltip={t('managedMode.config.permissions.customModeTip')}
           >
-            <Input placeholder="输入自定义权限模式名称（可选）" allowClear />
+            <Input placeholder={t('managedMode.config.permissions.customModePlaceholder')} allowClear />
           </Form.Item>
         </Card>
 
@@ -605,8 +608,8 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
           title={
             <Space>
               <EyeOutlined />
-              <span>状态行配置 (statusLine)</span>
-              <Badge status="default" text="选填" />
+              <span>{t('managedMode.config.statusLine.title')}</span>
+              <Badge status="default" text={t('managedMode.config.optional')} />
             </Space>
           }
           className="config-section"
@@ -615,20 +618,20 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
             <Col span={8}>
               <Form.Item
                 name={['statusLine', 'type']}
-                label="类型"
+                label={t('managedMode.config.statusLine.type')}
                 initialValue="command"
               >
                 <Select>
-                  <Option value="command">命令</Option>
-                  <Option value="text">文本</Option>
-                  <Option value="hidden">隐藏</Option>
+                  <Option value="command">{t('managedMode.config.statusLine.type.command')}</Option>
+                  <Option value="text">{t('managedMode.config.statusLine.type.text')}</Option>
+                  <Option value="hidden">{t('managedMode.config.statusLine.type.hidden')}</Option>
                 </Select>
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item
                 name={['statusLine', 'command']}
-                label="命令"
+                label={t('managedMode.config.statusLine.command')}
                 initialValue="ccline"
               >
                 <Input />
@@ -637,7 +640,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
             <Col span={8}>
               <Form.Item
                 name={['statusLine', 'padding']}
-                label="内边距"
+                label={t('managedMode.config.statusLine.padding')}
                 initialValue={0}
               >
                 <InputNumber
@@ -654,8 +657,8 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
           title={
             <Space>
               <SettingOutlined />
-              <span>自定义字段</span>
-              <Badge status="default" text="选填" />
+              <span>{t('managedMode.config.customFields.title')}</span>
+              <Badge status="default" text={t('managedMode.config.optional')} />
             </Space>
           }
           className="config-section"
@@ -664,7 +667,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
             <Row key={index} gutter={16} style={{ marginBottom: 16 }}>
               <Col span={6}>
                 <Input
-                  placeholder="字段名"
+                  placeholder={t('managedMode.config.customFields.keyPlaceholder')}
                   value={field.key}
                   onChange={(e) => updateCustomField(index, 'key', e.target.value)}
                 />
@@ -675,15 +678,15 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                   onChange={(value) => updateCustomField(index, 'type', value)}
                   style={{ width: '100%' }}
                 >
-                  <Option value="string">字符串</Option>
-                  <Option value="number">数字</Option>
-                  <Option value="boolean">布尔值</Option>
-                  <Option value="object">对象</Option>
+                  <Option value="string">{t('managedMode.config.customFields.type.string')}</Option>
+                  <Option value="number">{t('managedMode.config.customFields.type.number')}</Option>
+                  <Option value="boolean">{t('managedMode.config.customFields.type.boolean')}</Option>
+                  <Option value="object">{t('managedMode.config.customFields.type.object')}</Option>
                 </Select>
               </Col>
               <Col span={10}>
                 <Input
-                  placeholder="字段值"
+                  placeholder={t('managedMode.config.customFields.valuePlaceholder')}
                   value={field.value}
                   onChange={(e) => updateCustomField(index, 'value', e.target.value)}
                 />
@@ -705,7 +708,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
             onClick={addCustomField}
             style={{ width: '100%' }}
           >
-            添加自定义字段
+            {t('managedMode.config.customFields.add')}
           </Button>
         </Card>
       </Form>
@@ -719,18 +722,20 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
     <div className="managed-mode-json-editor">
       <Alert
         type="info"
-        message="JSON源视图"
-        description="直接编辑JSON格式的配置。保存后将自动清理空字段。"
+        message={t('managedMode.config.jsonViewTitle')}
+        description={t('managedMode.config.jsonViewDesc')}
         style={{ marginBottom: 16 }}
       />
 
       <div className="json-editor-container">
-        <CodeEditor
-          value={jsonContent}
-          onChange={handleJsonContentChange}
-          language="json"
-          height="400px"
-        />
+        <Suspense fallback={<div style={{ padding: 12 }}><Badge status="processing" /> {t('common.loading')}</div>}>
+          <CodeEditor
+            value={jsonContent}
+            onChange={handleJsonContentChange}
+            language="json"
+            height="400px"
+          />
+        </Suspense>
       </div>
     </div>
   )
@@ -741,9 +746,9 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
         title={
           <Space>
             <SettingOutlined />
-            <span>托管模式配置</span>
+            <span>{t('managedMode.config.title')}</span>
             {managedModeConfig?.enabled && (
-              <Badge status="processing" text="已启用" />
+              <Badge status="processing" text={t('managedMode.status.enabled')} />
             )}
           </Space>
         }
@@ -753,7 +758,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               icon={<CopyOutlined />}
               onClick={copyConfig}
             >
-              复制配置
+              {t('managedMode.config.copyButton')}
             </Button>
             <Button
               type="primary"
@@ -761,7 +766,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               loading={loading}
               onClick={handleSave}
             >
-              保存并重启服务
+              {t('managedMode.config.saveButton')}
             </Button>
           </Space>
         }
@@ -770,7 +775,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
         <div className="basic-config">
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item label="服务端口">
+              <Form.Item label={t('managedMode.config.basic.port')}>
                 <InputNumber
                   value={servicePort}
                   onChange={(value) => setServicePort(value || 8487)}
@@ -781,34 +786,34 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item label="调试模式">
+              <Form.Item label={t('managedMode.config.basic.debugMode')}>
                 <Switch
                   checked={debugMode}
                   onChange={setDebugMode}
-                  checkedChildren="开启"
-                  unCheckedChildren="关闭"
+                  checkedChildren={t('managedMode.config.switch.on')}
+                  unCheckedChildren={t('managedMode.config.switch.off')}
                 />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item label="网络代理">
+              <Form.Item label={t('managedMode.config.basic.networkProxy')}>
                 <Switch
                   checked={networkProxyEnabled}
                   onChange={setNetworkProxyEnabled}
-                  checkedChildren="启用"
-                  unCheckedChildren="禁用"
+                  checkedChildren={t('managedMode.config.switch.enable')}
+                  unCheckedChildren={t('managedMode.config.switch.disable')}
                 />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16} style={{ marginTop: 16 }}>
             <Col span={24}>
-              <Form.Item label="当前服务配置">
+              <Form.Item label={t('managedMode.config.basic.currentConfig')}>
                 <Select
                   value={selectedProviderId}
                   onChange={handleConfigSwitch}
                   onOpenChange={handleDropdownOpen}
-                  placeholder="选择要使用的配置"
+                  placeholder={t('managedMode.config.basic.currentConfigPlaceholder')}
                   style={{ width: '100%' }}
                   optionFilterProp="children"
                   showSearch
@@ -830,23 +835,23 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
           {networkProxyEnabled && (
             <Row gutter={16} style={{ marginTop: 16 }}>
               <Col span={12}>
-                <Form.Item label="代理主机">
+                <Form.Item label={t('managedMode.config.proxy.host')}>
                   <Input
                     value={networkProxyHost}
                     onChange={(e) => setNetworkProxyHost(e.target.value)}
-                    placeholder="代理服务器地址"
+                    placeholder={t('managedMode.config.proxy.hostPlaceholder')}
                   />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="代理端口">
+                <Form.Item label={t('managedMode.config.proxy.port')}>
                   <InputNumber
                     value={networkProxyPort}
                     onChange={(value) => setNetworkProxyPort(value || 8080)}
                     min={1}
                     max={65535}
                     style={{ width: '100%' }}
-                    placeholder="代理服务器端口"
+                    placeholder={t('managedMode.config.proxy.portPlaceholder')}
                   />
                 </Form.Item>
               </Col>
@@ -858,16 +863,16 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
 
         <Alert
           type="info"
-          message="配置说明"
+          message={t('managedMode.config.alert.title')}
           description={
             <Space direction="vertical" size="small">
-              <Text>• GUI配置模式：使用表单界面编辑托管模式的settings.json配置，支持标准字段的可视化编辑</Text>
-              <Text>• JSON源码模式：直接编辑JSON格式配置，支持高级自定义字段</Text>
+              <Text>{t('managedMode.config.alert.gui')}</Text>
+              <Text>{t('managedMode.config.alert.json')}</Text>
               <Text strong style={{ color: '#1890ff' }}>
-                💡 提示：GUI和JSON作为独立编辑器，互不干扰。点击"保存并重启服务"按钮后，会自动同步两种视图并应用配置。
+                {t('managedMode.config.alert.tip')}
               </Text>
               <Text strong style={{ color: '#fa8c16' }}>
-                ⚠️ 重要：保存后会更新settings.json，需要在所有使用此配置的Claude Code终端中执行重启命令，新配置才能生效。
+                {t('managedMode.config.alert.warning')}
               </Text>
             </Space>
           }
@@ -886,7 +891,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               label: (
                 <Space>
                   <SettingOutlined />
-                  <span>GUI配置</span>
+                  <span>{t('managedMode.config.tabs.gui')}</span>
                 </Space>
               ),
               children: renderGuiEditor()
@@ -896,7 +901,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               label: (
                 <Space>
                   <CodeOutlined />
-                  <span>JSON源码</span>
+                  <span>{t('managedMode.config.tabs.json')}</span>
                 </Space>
               ),
               children: renderJsonEditor()

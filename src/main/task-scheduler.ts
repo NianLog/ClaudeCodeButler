@@ -5,7 +5,7 @@
 
 import * as cron from 'node-cron'
 import { EventEmitter } from 'events'
-import { Rule, RuleExecution, RuleCondition } from '@shared/types'
+import { Rule, RuleExecution, RuleCondition } from '@shared/types/rule'
 import { logger } from './utils/logger'
 
 export class TaskScheduler extends EventEmitter {
@@ -323,7 +323,7 @@ export class TaskScheduler extends EventEmitter {
 
     const [startTime, endTime] = condition.value
     const [startHour, startMin] = startTime.split(':').map(Number)
-    const [endHour, endMin] = endTime.split(':').map(Number)
+    const [endHour] = endTime.split(':').map(Number)
 
     // 每分钟检查一次是否在时间范围内
     return `${startMin} ${startHour}-${endHour} * * *`
@@ -351,8 +351,7 @@ export class TaskScheduler extends EventEmitter {
     }
 
     const [startDate, endDate] = condition.value
-    const [startYear, startMonth, startDay] = startDate.split('-').map(Number)
-    const [endYear, endMonth, endDay] = endDate.split('-').map(Number)
+    const [, startMonth, startDay] = startDate.split('-').map(Number)
 
     // 如果开始和结束是同一天
     if (startDate === endDate) {

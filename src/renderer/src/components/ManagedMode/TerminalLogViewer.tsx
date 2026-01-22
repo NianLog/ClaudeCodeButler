@@ -8,7 +8,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { VariableSizeList } from 'react-window'
 import {
-  Card,
   Input,
   Button,
   Space,
@@ -17,29 +16,26 @@ import {
   Typography,
   Select,
   Switch,
-  Badge,
   Empty,
   Alert
 } from 'antd'
 import {
   ClearOutlined,
   DownloadOutlined,
-  SearchOutlined,
   CopyOutlined,
   PauseOutlined,
   PlayCircleOutlined,
-  FilterOutlined,
   EyeOutlined,
   BugOutlined,
   InfoCircleOutlined,
   ExclamationCircleOutlined,
   CloseCircleOutlined,
-  CheckCircleOutlined,
   ClockCircleOutlined,
   ApiOutlined
 } from '@ant-design/icons'
 import type { LogLevel } from '@shared/types/managed-mode'
 import { useManagedModeLogStore, type LogEntry } from '../../store/managed-mode-log-store'
+import { useTranslation } from '../../locales/useTranslation'
 import './TerminalLogViewer.css'
 
 const { Text } = Typography
@@ -67,7 +63,6 @@ interface TerminalLogViewerProps {
  */
 const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   debugMode = false,
-  maxEntries = 1000,
   height = '400px',
   logTypeFilter = 'all'
 }) => {
@@ -76,10 +71,11 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
 
   // 本地状态管理（仅用于UI控制和过滤）
   const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>([])
+    const { t } = useTranslation()
   const [searchText, setSearchText] = useState('')
-  const [logFilter, setLogFilter] = useState<LogLevel | 'all'>('all')
+    const [logFilter] = useState<LogLevel | 'all'>('all')
   const [typeFilter, setTypeFilter] = useState<'all' | 'request' | 'response' | 'system' | 'error'>('all')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+    const [statusFilter] = useState<string>('all')
   const [isPaused, setIsPaused] = useState(false)
   const [autoScroll, setAutoScroll] = useState(true)
   // 展开状态管理：使用Set存储已展开的日志ID
@@ -306,14 +302,14 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       <div style={{ ...style, padding: '0 8px' }} className={`log-entry log-${log.type} log-${log.level}`}>
         <div className="log-header">
           <Space className="log-meta">
-            <Tag color={getLogLevelColor(log.level)} size="small" icon={getLogLevelIcon(log.level)}>
+            <Tag color={getLogLevelColor(log.level)} icon={getLogLevelIcon(log.level)}>
               {log.level.toUpperCase()}
             </Tag>
-            <Tag color={getLogTypeColor(log.type)} size="small" icon={getLogTypeIcon(log.type)}>
+            <Tag color={getLogTypeColor(log.type)} icon={getLogTypeIcon(log.type)}>
               {log.type.toUpperCase()}
             </Tag>
             {log.data?.statusCode && (
-              <Tag color={getStatusCodeColor(log.data.statusCode)} size="small">
+              <Tag color={getStatusCodeColor(log.data.statusCode)}>
                 {log.data.statusCode}
               </Tag>
             )}
@@ -328,7 +324,7 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
                 {log.data.duration}ms
               </Text>
             )}
-            <Tooltip title="复制日志">
+            <Tooltip title={t('managedMode.logs.copy')}>
               <Button
                 type="text"
                 size="small"
@@ -355,7 +351,7 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               onClick={() => toggleLogExpand(log.id, index)}
               style={{ cursor: 'pointer' }}
             >
-              <EyeOutlined /> {isExpanded ? '收起详情' : '查看详情'}
+              <EyeOutlined /> {isExpanded ? t('managedMode.logs.collapse') : t('managedMode.logs.expand')}
             </div>
             {isExpanded && (
               <pre className="log-details-content">
@@ -373,8 +369,8 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       <div className="terminal-log-viewer">
         <Alert
           type="info"
-          message="调试模式未开启"
-          description="开启调试模式后，此页面将显示托管模式的实时API请求和响应日志。"
+          message={t('managedMode.logs.debugOffTitle')}
+          description={t('managedMode.logs.debugOffDesc')}
           icon={<BugOutlined />}
         />
       </div>
@@ -396,10 +392,10 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       }}>
         <div className="log-stats">
           <Space split={<span>|</span>}>
-            <Text type="secondary">总计: {logs.length}</Text>
-            <Text type="secondary">已过滤: {filteredLogs.length}</Text>
-            <Text type="secondary">错误: {logs.filter(log => log.level === 'error').length}</Text>
-            {isPaused && <Text type="warning">已暂停</Text>}
+            <Text type="secondary">{t('managedMode.logs.stats.total', { count: logs.length })}</Text>
+            <Text type="secondary">{t('managedMode.logs.stats.filtered', { count: filteredLogs.length })}</Text>
+            <Text type="secondary">{t('managedMode.logs.stats.errors', { count: logs.filter(log => log.level === 'error').length })}</Text>
+            {isPaused && <Text type="warning">{t('managedMode.logs.stats.paused')}</Text>}
           </Space>
         </div>
 
@@ -410,15 +406,15 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
             style={{ width: 90 }}
             size="small"
           >
-            <Option value="all">全部类型</Option>
-            <Option value="request">请求</Option>
-            <Option value="response">响应</Option>
-            <Option value="system">系统</Option>
-            <Option value="error">错误</Option>
+            <Option value="all">{t('managedMode.logs.filter.allTypes')}</Option>
+            <Option value="request">{t('managedMode.logs.filter.request')}</Option>
+            <Option value="response">{t('managedMode.logs.filter.response')}</Option>
+            <Option value="system">{t('managedMode.logs.filter.system')}</Option>
+            <Option value="error">{t('managedMode.logs.filter.error')}</Option>
           </Select>
 
           <Search
-            placeholder="搜索..."
+            placeholder={t('managedMode.logs.search.placeholder')}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             style={{ width: 120 }}
@@ -430,11 +426,11 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
             checked={autoScroll}
             onChange={setAutoScroll}
             size="small"
-            checkedChildren="自动"
-            unCheckedChildren="手动"
+            checkedChildren={t('managedMode.logs.auto')}
+            unCheckedChildren={t('managedMode.logs.manual')}
           />
 
-          <Tooltip title={isPaused ? "继续接收日志" : "暂停接收日志"}>
+          <Tooltip title={isPaused ? t('managedMode.logs.resume') : t('managedMode.logs.pause')}>
             <Button
               type={isPaused ? 'primary' : 'default'}
               size="small"
@@ -471,7 +467,7 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       >
         {filteredLogs.length === 0 ? (
           <Empty
-            description="暂无日志"
+            description={t('managedMode.logs.empty')}
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (

@@ -21,7 +21,7 @@ interface ConfigBackupStore {
 
   // 备份操作
   loadBackups: (configPath: string) => Promise<void>
-  createBackup: (configPath: string, description?: string) => Promise<void>
+  createBackup: (configPath: string) => Promise<void>
   restoreBackup: (backup: BackupInfo) => Promise<void>
   deleteBackup: (backupId: string) => Promise<void>
 }
@@ -43,7 +43,8 @@ export const useConfigBackupStore = create<ConfigBackupStore>((set, get) => ({
   loadBackups: async (configPath) => {
     try {
       set({ isLoading: true, error: null })
-      const backups = await window.electronAPI.config.listBackups(configPath)
+      const response = await window.electronAPI.config.listBackups(configPath)
+      const backups = response?.data || []
       set({ backups })
     } catch (error) {
       console.error('Failed to load backups:', error)
@@ -54,10 +55,15 @@ export const useConfigBackupStore = create<ConfigBackupStore>((set, get) => ({
   },
 
   // 创建备份
-  createBackup: async (configPath, description) => {
+  createBackup: async (configPath) => {
     try {
       set({ isLoading: true, error: null })
-      const backup = await window.electronAPI.config.createBackup(configPath)
+      const response = await window.electronAPI.config.createBackup(configPath)
+      const backup = response?.data
+
+      if (!backup) {
+        throw new Error(response?.error || '创建备份失败')
+      }
       
       // 添加到备份列表
       set(state => ({
@@ -75,7 +81,10 @@ export const useConfigBackupStore = create<ConfigBackupStore>((set, get) => ({
   restoreBackup: async (backup) => {
     try {
       set({ isLoading: true, error: null })
-      await window.electronAPI.config.restoreBackup(backup.id)
+      const response = await window.electronAPI.config.restoreBackup(backup.id)
+      if (!response?.success) {
+        throw new Error(response?.error || '恢复备份失败')
+      }
       
       // 刷新备份列表
       await get().loadBackups(backup.configPath)

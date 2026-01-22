@@ -16,7 +16,6 @@ import {
   Button,
   Spin,
   message,
-  Progress,
   Tooltip,
   Space,
   Alert
@@ -37,6 +36,7 @@ import {
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import { useTranslation } from '../../locales/useTranslation'
 
 const { Title, Text } = Typography
 
@@ -82,6 +82,7 @@ const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4'
  * Claude Code分析组件
  */
 const ClaudeCodeAnalytics: React.FC = () => {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [analytics, setAnalytics] = useState<ClaudeCodeAnalytics | null>(null)
   const [versionInfo, setVersionInfo] = useState<any>(null)
@@ -104,14 +105,14 @@ const ClaudeCodeAnalytics: React.FC = () => {
       if (result.success) {
         setAnalytics(result.data)
         if (forceRefresh) {
-          message.success('Claude Code使用数据已刷新')
+          message.success(t('claudeAnalytics.messages.refreshed'))
         }
       } else {
-        throw new Error(result.error || '获取数据失败')
+        throw new Error(result.error || t('claudeAnalytics.messages.fetchFailed'))
       }
     } catch (error) {
-      console.error('加载Claude Code分析数据失败:', error)
-      message.error(`加载失败: ${error instanceof Error ? error.message : String(error)}`)
+      console.error(t('claudeAnalytics.messages.loadFailed'), error)
+      message.error(`${t('claudeAnalytics.messages.loadFailed')}: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setLoading(false)
     }
@@ -123,11 +124,11 @@ const ClaudeCodeAnalytics: React.FC = () => {
   const clearCache = async () => {
     try {
       await window.electronAPI.claudeCode.clearCache()
-      message.success('缓存已清除')
+      message.success(t('claudeAnalytics.messages.cacheCleared'))
       await loadAnalytics(true)
     } catch (error) {
-      console.error('清除缓存失败:', error)
-      message.error('清除缓存失败')
+      console.error(t('claudeAnalytics.messages.clearCacheFailed'), error)
+      message.error(t('claudeAnalytics.messages.clearCacheFailed'))
     }
   }
 
@@ -142,10 +143,10 @@ const ClaudeCodeAnalytics: React.FC = () => {
       if (result.success) {
         setVersionInfo(result.data)
       } else {
-        console.error('获取版本信息失败:', result.error)
+        console.error(t('claudeAnalytics.messages.versionFetchFailed'), result.error)
       }
     } catch (error) {
-      console.error('加载版本信息失败:', error)
+      console.error(t('claudeAnalytics.messages.versionLoadFailed'), error)
     } finally {
       setVersionLoading(false)
     }
@@ -161,18 +162,18 @@ const ClaudeCodeAnalytics: React.FC = () => {
 
       if (result.success) {
         if (result.data.success) {
-          message.success(result.data.message || '更新成功')
+          message.success(result.data.message || t('claudeAnalytics.messages.updateSuccess'))
           // 更新完成后刷新版本信息
           await loadVersionInfo(true)
         } else {
-          message.error(result.data.message || '更新失败')
+          message.error(result.data.message || t('claudeAnalytics.messages.updateFailed'))
         }
       } else {
-        message.error(result.error || '更新失败')
+        message.error(result.error || t('claudeAnalytics.messages.updateFailed'))
       }
     } catch (error) {
-      console.error('更新失败:', error)
-      message.error(`更新失败: ${error instanceof Error ? error.message : String(error)}`)
+      console.error(t('claudeAnalytics.messages.updateFailed'), error)
+      message.error(`${t('claudeAnalytics.messages.updateFailed')}: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setUpdating(false)
     }
@@ -264,7 +265,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
    */
   const modelColumns: ColumnsType<any> = [
     {
-      title: '模型名称',
+      title: t('claudeAnalytics.models.columns.name'),
       dataIndex: 'modelName',
       key: 'modelName',
       render: (name: string) => (
@@ -277,37 +278,37 @@ const ClaudeCodeAnalytics: React.FC = () => {
       )
     },
     {
-      title: '使用次数',
+      title: t('claudeAnalytics.models.columns.usageCount'),
       dataIndex: 'usageCount',
       key: 'usageCount',
       sorter: (a, b) => a.usageCount - b.usageCount,
       render: (count: number) => (
-        <Tag color="blue">{formatNumber(count)} 次</Tag>
+        <Tag color="blue">{t('claudeAnalytics.units.times', { count: formatNumber(count) })}</Tag>
       )
     },
     {
-      title: 'Input Tokens',
+      title: t('claudeAnalytics.models.columns.inputTokens'),
       dataIndex: 'totalInputTokens',
       key: 'totalInputTokens',
       sorter: (a, b) => a.totalInputTokens - b.totalInputTokens,
       render: (tokens: number) => formatNumber(tokens)
     },
     {
-      title: 'Output Tokens',
+      title: t('claudeAnalytics.models.columns.outputTokens'),
       dataIndex: 'totalOutputTokens',
       key: 'totalOutputTokens',
       sorter: (a, b) => a.totalOutputTokens - b.totalOutputTokens,
       render: (tokens: number) => formatNumber(tokens)
     },
     {
-      title: 'Cache Tokens',
+      title: t('claudeAnalytics.models.columns.cacheTokens'),
       dataIndex: 'totalCacheReadTokens',
       key: 'cacheTokens',
       sorter: (a, b) => (a.totalCacheReadTokens + a.totalCacheCreationTokens) - (b.totalCacheReadTokens + b.totalCacheCreationTokens),
       render: (_, record) => formatNumber(record.totalCacheReadTokens + record.totalCacheCreationTokens)
     },
     {
-      title: '最后使用',
+      title: t('claudeAnalytics.models.columns.lastUsed'),
       dataIndex: 'lastUsed',
       key: 'lastUsed',
       sorter: (a, b) => new Date(a.lastUsed).getTime() - new Date(b.lastUsed).getTime(),
@@ -320,7 +321,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
    */
   const projectColumns: ColumnsType<any> = [
     {
-      title: '项目名称',
+      title: t('claudeAnalytics.projects.columns.name'),
       dataIndex: 'projectName',
       key: 'projectName',
       render: (name: string, record) => (
@@ -334,41 +335,41 @@ const ClaudeCodeAnalytics: React.FC = () => {
       )
     },
     {
-      title: '会话数',
+      title: t('claudeAnalytics.projects.columns.sessionCount'),
       dataIndex: 'sessionCount',
       key: 'sessionCount',
       sorter: (a, b) => a.sessionCount - b.sessionCount,
-      render: (count: number) => <Tag color="purple">{count} 个</Tag>
+      render: (count: number) => <Tag color="purple">{t('claudeAnalytics.units.items', { count })}</Tag>
     },
     {
-      title: '消息数',
+      title: t('claudeAnalytics.projects.columns.messageCount'),
       dataIndex: 'totalMessages',
       key: 'totalMessages',
       sorter: (a, b) => a.totalMessages - b.totalMessages,
       render: (count: number) => formatNumber(count)
     },
     {
-      title: 'Token总计',
+      title: t('claudeAnalytics.projects.columns.totalTokens'),
       dataIndex: 'totalTokens',
       key: 'totalTokens',
       sorter: (a, b) => a.totalTokens - b.totalTokens,
       render: (tokens: number) => formatNumber(tokens)
     },
     {
-      title: '使用的模型',
+      title: t('claudeAnalytics.projects.columns.models'),
       dataIndex: 'models',
       key: 'models',
       render: (models: Record<string, number>) => (
         <Space wrap>
           {Object.entries(models).slice(0, 2).map(([model, count]) => (
-            <Tooltip key={model} title={`${model}: ${count}次`}>
+            <Tooltip key={model} title={`${model}: ${t('claudeAnalytics.units.times', { count })}`}>
               <Tag color="geekblue" style={{ fontSize: '11px' }}>
                 {formatModelName(model)}
               </Tag>
             </Tooltip>
           ))}
           {Object.keys(models).length > 2 && (
-            <Tooltip title={Object.entries(models).slice(2).map(([m, c]) => `${m}: ${c}次`).join('\n')}>
+            <Tooltip title={Object.entries(models).slice(2).map(([m, c]) => `${m}: ${t('claudeAnalytics.units.times', { count: c })}`).join('\n')}>
               <Tag style={{ fontSize: '11px' }}>+{Object.keys(models).length - 2}</Tag>
             </Tooltip>
           )}
@@ -376,7 +377,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
       )
     },
     {
-      title: '最后使用',
+      title: t('claudeAnalytics.projects.columns.lastUsed'),
       dataIndex: 'lastUsed',
       key: 'lastUsed',
       sorter: (a, b) => new Date(a.lastUsed).getTime() - new Date(b.lastUsed).getTime(),
@@ -401,7 +402,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
   if (!analytics) {
     return (
       <Empty
-        description="暂无Claude Code使用数据"
+        description={t('claudeAnalytics.empty.description')}
         style={{ padding: '48px' }}
       />
     )
@@ -427,10 +428,10 @@ const ClaudeCodeAnalytics: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space>
           <Title level={4} style={{ margin: 0 }}>
-            <RobotOutlined /> Claude Code 使用分析
+            <RobotOutlined /> {t('claudeAnalytics.title')}
           </Title>
           <Text type="secondary">
-            最后更新: {dayjs(analytics.lastUpdated).format('YYYY-MM-DD HH:mm:ss')}
+            {t('claudeAnalytics.lastUpdated')}: {dayjs(analytics.lastUpdated).format('YYYY-MM-DD HH:mm:ss')}
           </Text>
         </Space>
         <Space>
@@ -438,7 +439,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
             icon={<ClearOutlined />}
             onClick={clearCache}
           >
-            清除缓存
+            {t('claudeAnalytics.actions.clearCache')}
           </Button>
           <Button
             type="primary"
@@ -446,7 +447,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
             loading={loading}
             onClick={() => loadAnalytics(true)}
           >
-            刷新数据
+            {t('claudeAnalytics.actions.refresh')}
           </Button>
         </Space>
       </div>
@@ -458,18 +459,18 @@ const ClaudeCodeAnalytics: React.FC = () => {
             <Space direction="vertical" size={4}>
               <Space>
                 <RobotOutlined style={{ fontSize: '20px', color: '#3b82f6' }} />
-                <Text strong style={{ fontSize: '16px' }}>Claude Code 版本</Text>
+                <Text strong style={{ fontSize: '16px' }}>{t('claudeAnalytics.version.title')}</Text>
               </Space>
 
               {versionInfo.current ? (
                 <Space size="large">
                   <div>
-                    <Text type="secondary">当前版本: </Text>
+                    <Text type="secondary">{t('claudeAnalytics.version.current')}: </Text>
                     <Tag color="blue">{versionInfo.current}</Tag>
                   </div>
                   {versionInfo.latest && (
                     <div>
-                      <Text type="secondary">最新版本: </Text>
+                      <Text type="secondary">{t('claudeAnalytics.version.latest')}: </Text>
                       <Tag color={versionInfo.updateAvailable ? 'orange' : 'green'}>
                         {versionInfo.latest}
                       </Tag>
@@ -478,8 +479,8 @@ const ClaudeCodeAnalytics: React.FC = () => {
                 </Space>
               ) : (
                 <Alert
-                  message="未检测到Claude Code"
-                  description="系统未检测到Claude Code CLI工具,请确认已安装"
+                  message={t('claudeAnalytics.version.notDetected')}
+                  description={t('claudeAnalytics.version.notDetectedDesc')}
                   type="warning"
                   showIcon
                   icon={<WarningOutlined />}
@@ -496,7 +497,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
                   loading={updating}
                   onClick={handleUpdate}
                 >
-                  更新到 {versionInfo.latest}
+                  {t('claudeAnalytics.version.updateTo', { version: versionInfo.latest })}
                 </Button>
               )}
               {versionInfo.current && !versionInfo.updateAvailable && (
@@ -504,7 +505,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
                   icon={<CheckCircleOutlined />}
                   disabled
                 >
-                  已是最新版本
+                  {t('claudeAnalytics.version.upToDate')}
                 </Button>
               )}
               <Button
@@ -512,7 +513,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
                 loading={versionLoading}
                 onClick={() => loadVersionInfo(true)}
               >
-                检查更新
+                {t('claudeAnalytics.version.checkUpdates')}
               </Button>
             </Space>
           </div>
@@ -524,7 +525,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="总会话数"
+              title={t('claudeAnalytics.metrics.totalSessions')}
               value={analytics.totalSessions}
               prefix={<DatabaseOutlined />}
               valueStyle={{ color: '#3b82f6' }}
@@ -534,7 +535,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="总消息数"
+              title={t('claudeAnalytics.metrics.totalMessages')}
               value={analytics.totalMessages}
               prefix={<FireOutlined />}
               valueStyle={{ color: '#8b5cf6' }}
@@ -544,7 +545,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="Input Tokens"
+              title={t('claudeAnalytics.metrics.inputTokens')}
               value={formatNumber(analytics.totalInputTokens)}
               prefix={<ThunderboltOutlined />}
               valueStyle={{ color: '#10b981' }}
@@ -554,7 +555,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="Output Tokens"
+              title={t('claudeAnalytics.metrics.outputTokens')}
               value={formatNumber(analytics.totalOutputTokens)}
               prefix={<ThunderboltOutlined />}
               valueStyle={{ color: '#f59e0b' }}
@@ -567,7 +568,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
       <Row gutter={[16, 16]}>
         {/* 模型使用分布 */}
         <Col xs={24} lg={12}>
-          <Card title="模型使用分布" variant="borderless">
+          <Card title={t('claudeAnalytics.sections.modelDistribution')} variant="borderless">
             {modelChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -589,14 +590,14 @@ const ClaudeCodeAnalytics: React.FC = () => {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <Empty description="暂无模型使用数据" />
+              <Empty description={t('claudeAnalytics.empty.modelUsage')} />
             )}
           </Card>
         </Col>
 
         {/* Token使用对比 */}
         <Col xs={24} lg={12}>
-          <Card title="Token使用对比" variant="borderless">
+          <Card title={t('claudeAnalytics.sections.tokenComparison')} variant="borderless">
             {tokenChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={tokenChartData}>
@@ -605,36 +606,36 @@ const ClaudeCodeAnalytics: React.FC = () => {
                   <YAxis tickFormatter={formatYAxisNumber} />
                   <RechartsTooltip formatter={(value: number) => formatNumber(value)} />
                   <Legend />
-                  <Bar dataKey="input" fill="#3b82f6" name="Input" />
-                  <Bar dataKey="output" fill="#10b981" name="Output" />
-                  <Bar dataKey="cache" fill="#8b5cf6" name="Cache" />
+                  <Bar dataKey="input" fill="#3b82f6" name={t('claudeAnalytics.charts.input')} />
+                  <Bar dataKey="output" fill="#10b981" name={t('claudeAnalytics.charts.output')} />
+                  <Bar dataKey="cache" fill="#8b5cf6" name={t('claudeAnalytics.charts.cache')} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <Empty description="暂无Token使用数据" />
+              <Empty description={t('claudeAnalytics.empty.tokenUsage')} />
             )}
           </Card>
         </Col>
       </Row>
 
       {/* 模型使用详情表格 */}
-      <Card title="模型使用详情" variant="borderless">
+      <Card title={t('claudeAnalytics.sections.modelDetails')} variant="borderless">
         <Table
           dataSource={analytics.modelStats}
           columns={modelColumns}
           rowKey="modelName"
-          pagination={{ pageSize: 5, showSizeChanger: true, showTotal: (total) => `共 ${total} 个模型` }}
+          pagination={{ pageSize: 5, showSizeChanger: true, showTotal: (total) => t('claudeAnalytics.pagination.modelsTotal', { total }) }}
           scroll={{ x: 'max-content' }}
         />
       </Card>
 
       {/* 项目使用详情表格 */}
-      <Card title="项目使用详情" variant="borderless">
+      <Card title={t('claudeAnalytics.sections.projectDetails')} variant="borderless">
         <Table
           dataSource={analytics.projectStats}
           columns={projectColumns}
           rowKey="projectPath"
-          pagination={{ pageSize: 5, showSizeChanger: true, showTotal: (total) => `共 ${total} 个项目` }}
+          pagination={{ pageSize: 5, showSizeChanger: true, showTotal: (total) => t('claudeAnalytics.pagination.projectsTotal', { total }) }}
           scroll={{ x: 'max-content' }}
         />
       </Card>
@@ -645,15 +646,15 @@ const ClaudeCodeAnalytics: React.FC = () => {
           <Space direction="vertical" style={{ width: '100%' }}>
             <Space>
               <ClockCircleOutlined />
-              <Text strong>活动时间范围</Text>
+              <Text strong>{t('claudeAnalytics.sections.activityRange')}</Text>
             </Space>
             <Row gutter={16}>
               <Col span={12}>
-                <Text type="secondary">首次活动: </Text>
+                <Text type="secondary">{t('claudeAnalytics.sections.firstActivity')}: </Text>
                 <Text>{dayjs(analytics.firstActivity).format('YYYY-MM-DD HH:mm:ss')}</Text>
               </Col>
               <Col span={12}>
-                <Text type="secondary">最后活动: </Text>
+                <Text type="secondary">{t('claudeAnalytics.sections.lastActivity')}: </Text>
                 <Text>{dayjs(analytics.lastActivity).format('YYYY-MM-DD HH:mm:ss')}</Text>
               </Col>
             </Row>

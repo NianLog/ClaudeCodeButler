@@ -53,6 +53,7 @@ import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useTerminalStore } from '@/store/terminal-store'
+import { useTranslation } from '../../locales/useTranslation'
 import type { TerminalConfig, TerminalType } from '@shared/types/terminal'
 import './ProjectManagement.css'
 
@@ -130,6 +131,7 @@ const TerminalConfigModal: React.FC<{
   terminals: TerminalConfig[]
   defaultTerminal: TerminalType
 }> = ({ visible, onCancel, onConfirm, terminals, defaultTerminal }) => {
+  const { t } = useTranslation()
   const [terminal, setTerminal] = useState<TerminalType>(defaultTerminal)
   const [asAdmin, setAsAdmin] = useState(false)
 
@@ -144,7 +146,7 @@ const TerminalConfigModal: React.FC<{
       label: item.name || item.type,
       value: item.type
     }))
-    : [{ label: '自动检测', value: 'auto' }]
+    : [{ label: t('projects.terminal.autoDetect'), value: 'auto' }]
 
   const handleConfirm = () => {
     onConfirm({ terminal, asAdmin })
@@ -155,18 +157,18 @@ const TerminalConfigModal: React.FC<{
       title={
         <Space>
           <ConsoleSqlOutlined />
-          <span>选择终端类型</span>
+          <span>{t('projects.terminal.selectTitle')}</span>
         </Space>
       }
       open={visible}
       onCancel={onCancel}
       onOk={handleConfirm}
-      okText="继续"
-      cancelText="取消"
+      okText={t('projects.actions.continue')}
+      cancelText={t('common.cancel')}
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         <div>
-          <Text strong>终端类型:</Text>
+          <Text strong>{t('projects.terminal.typeLabel')}</Text>
           <Select
             value={terminal}
             onChange={setTerminal}
@@ -176,7 +178,7 @@ const TerminalConfigModal: React.FC<{
         </div>
         <div>
           <Checkbox checked={asAdmin} onChange={(e) => setAsAdmin(e.target.checked)}>
-            以管理员身份运行
+            {t('projects.terminal.runAsAdmin')}
           </Checkbox>
         </div>
       </Space>
@@ -190,6 +192,7 @@ const TerminalConfigModal: React.FC<{
 const ProjectManagement: React.FC = () => {
   const { message } = App.useApp()
   const { terminals, defaultTerminal, loadTerminals } = useTerminalStore()
+  const { t } = useTranslation()
 
   // 状态管理
   const [projects, setProjects] = useState<ClaudeProject[]>([])
@@ -228,7 +231,7 @@ const ProjectManagement: React.FC = () => {
     if (type === 'powershell') return 'PowerShell'
     if (type === 'cmd') return 'CMD'
     if (type === 'wsl') return 'WSL'
-    if (type === 'auto') return '系统默认终端'
+    if (type === 'auto') return t('projects.terminal.systemDefault')
     return type
   }
 
@@ -245,10 +248,10 @@ const ProjectManagement: React.FC = () => {
       if (result.success) {
         setProjects(result.data || [])
       } else {
-        message.error(`加载项目失败: ${result.error}`)
+        message.error(t('projects.messages.loadProjectsFailed', { error: result.error }))
       }
     } catch (error) {
-      message.error(`加载项目失败: ${error instanceof Error ? error.message : '未知错误'}`)
+      message.error(t('projects.messages.loadProjectsFailed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
     } finally {
       setLoading(false)
     }
@@ -263,10 +266,10 @@ const ProjectManagement: React.FC = () => {
       if (result.success) {
         setSessions(result.data || [])
       } else {
-        message.error(`加载会话失败: ${result.error}`)
+        message.error(t('projects.messages.loadSessionsFailed', { error: result.error }))
       }
     } catch (error) {
-      message.error(`加载会话失败: ${error instanceof Error ? error.message : '未知错误'}`)
+      message.error(t('projects.messages.loadSessionsFailed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
     } finally {
       setLoadingSessions(false)
     }
@@ -294,7 +297,7 @@ const ProjectManagement: React.FC = () => {
 
       // 检查是否被取消
       if (abortController.signal.aborted) {
-        message.info('已取消加载')
+        message.info(t('projects.messages.loadCancelled'))
         return
       }
 
@@ -303,15 +306,15 @@ const ProjectManagement: React.FC = () => {
         startTransition(() => {
           setConversation(result.data)
         })
-        message.success(`成功加载 ${result.data?.totalMessages || 0} 条消息`)
+        message.success(t('projects.messages.loadConversationSuccess', { count: result.data?.totalMessages || 0 }))
       } else {
-        message.error(`加载对话失败: ${result.error}`)
+        message.error(t('projects.messages.loadConversationFailed', { error: result.error }))
       }
     } catch (error) {
       if (abortController.signal.aborted) {
-        message.info('已取消加载')
+        message.info(t('projects.messages.loadCancelled'))
       } else {
-        message.error(`加载对话失败: ${error instanceof Error ? error.message : '未知错误'}`)
+        message.error(t('projects.messages.loadConversationFailed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
       }
     } finally {
       setLoadingConversation(false)
@@ -324,7 +327,7 @@ const ProjectManagement: React.FC = () => {
     if (loadingAbortController) {
       loadingAbortController.abort()
       setLoadingAbortController(null)
-      message.info('正在取消加载...')
+      message.info(t('projects.messages.cancellingLoad'))
     }
   }
 
@@ -348,12 +351,15 @@ const ProjectManagement: React.FC = () => {
       )
 
       if (result.success) {
-        message.success(`已在新${getTerminalDisplayName(config.terminal)}窗口中打开会话${config.asAdmin ? '(管理员模式)' : ''}`)
+        message.success(t('projects.messages.continueSuccess', {
+          terminal: getTerminalDisplayName(config.terminal),
+          adminSuffix: config.asAdmin ? t('projects.messages.adminSuffix') : ''
+        }))
       } else {
-        message.error(`继续会话失败: ${result.error}`)
+        message.error(t('projects.messages.continueFailed', { error: result.error }))
       }
     } catch (error) {
-      message.error(`继续会话失败: ${error instanceof Error ? error.message : '未知错误'}`)
+      message.error(t('projects.messages.continueFailed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
     } finally {
       setTerminalModalVisible(false)
       setPendingSessionInfo(null)
@@ -593,7 +599,7 @@ const ProjectManagement: React.FC = () => {
   // 项目表格列定义
   const projectColumns = [
     {
-      title: '项目名称',
+      title: t('projects.columns.projectName'),
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record: ClaudeProject) => (
@@ -607,21 +613,21 @@ const ProjectManagement: React.FC = () => {
       )
     },
     {
-      title: '会话数',
+      title: t('projects.columns.sessionCount'),
       dataIndex: 'sessionCount',
       key: 'sessionCount',
       width: 100,
       render: (count: number) => <Badge count={count} showZero color="blue" />
     },
     {
-      title: '消息数',
+      title: t('projects.columns.messageCount'),
       dataIndex: 'totalMessages',
       key: 'totalMessages',
       width: 100,
       render: (count: number) => <Text>{count.toLocaleString()}</Text>
     },
     {
-      title: 'Token消耗',
+      title: t('projects.columns.totalTokens'),
       dataIndex: 'totalTokens',
       key: 'totalTokens',
       width: 120,
@@ -630,19 +636,19 @@ const ProjectManagement: React.FC = () => {
       )
     },
     {
-      title: '最后使用',
+      title: t('projects.columns.lastUsed'),
       dataIndex: 'lastUsed',
       key: 'lastUsed',
       width: 180,
       render: (time: string) => (
         <Space size="small">
           <ClockCircleOutlined />
-          <Text>{time ? new Date(time).toLocaleString('zh-CN') : '-'}</Text>
+          <Text>{time ? new Date(time).toLocaleString() : '-'}</Text>
         </Space>
       )
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       width: 120,
       render: (_: any, record: ClaudeProject) => (
@@ -653,7 +659,7 @@ const ProjectManagement: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleViewSessions(record)}
           >
-            查看会话
+            {t('projects.actions.viewSessions')}
           </Button>
         </Space>
       )
@@ -663,7 +669,7 @@ const ProjectManagement: React.FC = () => {
   // 会话表格列定义
   const sessionColumns = [
     {
-      title: '会话ID',
+      title: t('projects.columns.sessionId'),
       dataIndex: 'sessionId',
       key: 'sessionId',
       ellipsis: true,
@@ -674,7 +680,7 @@ const ProjectManagement: React.FC = () => {
       )
     },
     {
-      title: '模型',
+      title: t('projects.columns.model'),
       dataIndex: 'model',
       key: 'model',
       width: 180,
@@ -683,7 +689,7 @@ const ProjectManagement: React.FC = () => {
       )
     },
     {
-      title: '消息数',
+      title: t('projects.columns.messageCount'),
       dataIndex: 'messageCount',
       key: 'messageCount',
       width: 100,
@@ -692,7 +698,7 @@ const ProjectManagement: React.FC = () => {
       )
     },
     {
-      title: 'Token',
+      title: t('projects.columns.tokens'),
       dataIndex: 'totalTokens',
       key: 'totalTokens',
       width: 100,
@@ -701,16 +707,16 @@ const ProjectManagement: React.FC = () => {
       )
     },
     {
-      title: '开始时间',
+      title: t('projects.columns.startTime'),
       dataIndex: 'startTime',
       key: 'startTime',
       width: 160,
       render: (time: string) => (
-        <Text>{new Date(time).toLocaleString('zh-CN')}</Text>
+        <Text>{new Date(time).toLocaleString()}</Text>
       )
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       width: 220,
       render: (_: any, record: ProjectSession) => (
@@ -720,7 +726,7 @@ const ProjectManagement: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleViewConversation(record)}
           >
-            查看对话
+            {t('projects.actions.viewConversation')}
           </Button>
           <Button
             size="small"
@@ -728,7 +734,7 @@ const ProjectManagement: React.FC = () => {
             icon={<PlayCircleOutlined />}
             onClick={() => showTerminalConfig(record.projectId, record.sessionId, record.projectPath)}
           >
-            继续
+            {t('projects.actions.continue')}
           </Button>
         </Space>
       )
@@ -737,7 +743,7 @@ const ProjectManagement: React.FC = () => {
 
   // 渲染消息内容
   const renderMessageContent = useCallback((msg: ConversationMessage) => {
-    if (!msg.content) return <Text type="secondary">无内容</Text>
+    if (!msg.content) return <Text type="secondary">{t('projects.messages.noContent')}</Text>
 
     const shouldHighlight = debouncedSearchText && debouncedSearchText.trim().length > 0
 
@@ -765,11 +771,12 @@ const ProjectManagement: React.FC = () => {
                     return <li>{children}</li>
                   },
                   // 代码块处理
-                  code({ node, inline, className, children, ...props }) {
+                  code({ className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '')
-                    return !inline && match ? (
+                    const isInline = Boolean(props.inline)
+                    return !isInline && match ? (
                       <SyntaxHighlighter
-                        style={vscDarkPlus}
+                        style={vscDarkPlus as Record<string, React.CSSProperties>}
                         language={match[1]}
                         PreTag="div"
                         {...props}
@@ -795,7 +802,7 @@ const ProjectManagement: React.FC = () => {
           return (
             <div key={`${msg.uuid}-tool-${index}`} className="message-tool-use">
               <Tag icon={<ThunderboltOutlined />} color="processing">
-                工具调用: {item.name}
+                {t('projects.messages.toolCall', { name: item.name })}
               </Tag>
             </div>
           )
@@ -833,7 +840,7 @@ const ProjectManagement: React.FC = () => {
     const filteredMessages = getFilteredMessages()
 
     if (!conversation || filteredMessages.length === 0) {
-      return <Empty description="暂无对话内容" />
+      return <Empty description={t('projects.empty.conversation')} />
     }
 
     return (
@@ -855,7 +862,7 @@ const ProjectManagement: React.FC = () => {
                   {msg.type === 'user' ? (
                     <>
                       <MessageOutlined />
-                      <Text strong>用户</Text>
+                      <Text strong>{t('projects.labels.user')}</Text>
                     </>
                   ) : (
                     <>
@@ -865,16 +872,16 @@ const ProjectManagement: React.FC = () => {
                     </>
                   )}
                   <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {new Date(msg.timestamp).toLocaleString('zh-CN')}
+                    {new Date(msg.timestamp).toLocaleString()}
                   </Text>
                 </Space>
                 {msg.usage && (
                   <Space size="small" style={{ marginLeft: 'auto' }}>
                     {msg.usage.input_tokens && (
-                      <Tag>输入: {msg.usage.input_tokens.toLocaleString()}</Tag>
+                      <Tag>{t('projects.labels.inputTokens', { count: msg.usage.input_tokens.toLocaleString() })}</Tag>
                     )}
                     {msg.usage.output_tokens && (
-                      <Tag>输出: {msg.usage.output_tokens.toLocaleString()}</Tag>
+                      <Tag>{t('projects.labels.outputTokens', { count: msg.usage.output_tokens.toLocaleString() })}</Tag>
                     )}
                   </Space>
                 )}
@@ -892,7 +899,7 @@ const ProjectManagement: React.FC = () => {
   // 渲染JSON视图 - 使用 deferredValue 避免阻塞
   const renderJsonView = useMemo(() => {
     if (!deferredConversation) {
-      return <Empty description="暂无对话内容" />
+      return <Empty description={t('projects.empty.conversation')} />
     }
 
     const jsonString = JSON.stringify(deferredConversation, null, 2)
@@ -1001,7 +1008,7 @@ const ProjectManagement: React.FC = () => {
         key: 'chat',
         label: (
           <span>
-            <MessageOutlined /> 对话视图
+            <MessageOutlined /> {t('projects.tabs.chat')}
           </span>
         ),
         children: (
@@ -1009,11 +1016,11 @@ const ProjectManagement: React.FC = () => {
             spinning={loadingConversation || isPending}
             tip={
               <div style={{ marginTop: 8 }}>
-                <div>{loadingConversation ? '正在加载对话数据...' : '正在渲染对话内容...'}</div>
+                <div>{loadingConversation ? t('projects.loading.conversation') : t('projects.loading.chatRender')}</div>
                 <div style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
                   {loadingConversation
-                    ? '大会话可能需要较长时间,您可以点击右上角"取消加载"按钮终止操作'
-                    : '大会话渲染中,请稍候...'
+                    ? t('projects.loading.conversationHint')
+                    : t('projects.loading.chatRenderHint')
                   }
                 </div>
               </div>
@@ -1027,7 +1034,7 @@ const ProjectManagement: React.FC = () => {
         key: 'json',
         label: (
           <span>
-            <CodeOutlined /> JSON 源码 {isStale && <Text type="secondary" style={{ fontSize: '12px' }}>(更新中...)</Text>}
+            <CodeOutlined /> {t('projects.tabs.json')} {isStale && <Text type="secondary" style={{ fontSize: '12px' }}>({t('projects.tabs.updating')})</Text>}
           </span>
         ),
         children: (
@@ -1035,11 +1042,11 @@ const ProjectManagement: React.FC = () => {
             spinning={loadingConversation || isPending}
             tip={
               <div style={{ marginTop: 8 }}>
-                <div>{loadingConversation ? '正在加载对话数据...' : '正在渲染JSON内容...'}</div>
+                <div>{loadingConversation ? t('projects.loading.conversation') : t('projects.loading.jsonRender')}</div>
                 <div style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
                   {loadingConversation
-                    ? '大会话可能需要较长时间,您可以点击右上角"取消加载"按钮终止操作'
-                    : '大JSON渲染中,请稍候...'
+                    ? t('projects.loading.conversationHint')
+                    : t('projects.loading.jsonRenderHint')
                   }
                 </div>
               </div>
@@ -1060,9 +1067,9 @@ const ProjectManagement: React.FC = () => {
       <div className="page-header">
         <div className="header-left">
           <Title level={3}>
-            <FolderOutlined /> Claude Code 项目管理
+            <FolderOutlined /> {t('projects.title')}
           </Title>
-          <Text type="secondary">查看和管理您的 Claude Code 项目及会话历史</Text>
+          <Text type="secondary">{t('projects.subtitle')}</Text>
         </div>
         <div className="header-actions">
           <Button
@@ -1071,7 +1078,7 @@ const ProjectManagement: React.FC = () => {
             onClick={loadProjects}
             loading={loading}
           >
-            刷新项目列表
+            {t('projects.actions.refreshProjects')}
           </Button>
         </div>
       </div>
@@ -1081,7 +1088,7 @@ const ProjectManagement: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="总项目数"
+              title={t('projects.stats.totalProjects')}
               value={projects.length}
               prefix={<FolderOutlined />}
               valueStyle={{ color: '#3f8600' }}
@@ -1091,7 +1098,7 @@ const ProjectManagement: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="总会话数"
+              title={t('projects.stats.totalSessions')}
               value={projects.reduce((sum, p) => sum + p.sessionCount, 0)}
               prefix={<MessageOutlined />}
               valueStyle={{ color: '#1890ff' }}
@@ -1101,7 +1108,7 @@ const ProjectManagement: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="总消息数"
+              title={t('projects.stats.totalMessages')}
               value={projects.reduce((sum, p) => sum + p.totalMessages, 0)}
               prefix={<FileTextOutlined />}
             />
@@ -1110,7 +1117,7 @@ const ProjectManagement: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="总Token消耗"
+              title={t('projects.stats.totalTokens')}
               value={projects.reduce((sum, p) => sum + p.totalTokens, 0)}
               prefix={<ThunderboltOutlined />}
               valueStyle={{ color: '#cf1322' }}
@@ -1129,7 +1136,7 @@ const ProjectManagement: React.FC = () => {
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 个项目`
+            showTotal: (total) => t('projects.pagination.projectsTotal', { total })
           }}
         />
       </Card>
@@ -1139,7 +1146,7 @@ const ProjectManagement: React.FC = () => {
         title={
           <Space>
             <FolderOutlined />
-            <span>项目会话列表</span>
+            <span>{t('projects.sessions.title')}</span>
             {selectedProject && <Text type="secondary">({selectedProject.name})</Text>}
           </Space>
         }
@@ -1150,16 +1157,16 @@ const ProjectManagement: React.FC = () => {
         {selectedProject && (
           <>
             <Descriptions bordered column={2} style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="项目名称">{selectedProject.name}</Descriptions.Item>
-              <Descriptions.Item label="会话总数">{selectedProject.sessionCount}</Descriptions.Item>
-              <Descriptions.Item label="项目路径" span={2}>{selectedProject.path}</Descriptions.Item>
-              <Descriptions.Item label="消息总数">{selectedProject.totalMessages.toLocaleString()}</Descriptions.Item>
-              <Descriptions.Item label="Token消耗">{selectedProject.totalTokens.toLocaleString()}</Descriptions.Item>
-              <Descriptions.Item label="首次使用">
-                {selectedProject.firstUsed ? new Date(selectedProject.firstUsed).toLocaleString('zh-CN') : '-'}
+              <Descriptions.Item label={t('projects.details.projectName')}>{selectedProject.name}</Descriptions.Item>
+              <Descriptions.Item label={t('projects.details.totalSessions')}>{selectedProject.sessionCount}</Descriptions.Item>
+              <Descriptions.Item label={t('projects.details.projectPath')} span={2}>{selectedProject.path}</Descriptions.Item>
+              <Descriptions.Item label={t('projects.details.totalMessages')}>{selectedProject.totalMessages.toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label={t('projects.details.totalTokens')}>{selectedProject.totalTokens.toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label={t('projects.details.firstUsed')}>
+                {selectedProject.firstUsed ? new Date(selectedProject.firstUsed).toLocaleString() : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="最后使用">
-                {selectedProject.lastUsed ? new Date(selectedProject.lastUsed).toLocaleString('zh-CN') : '-'}
+              <Descriptions.Item label={t('projects.details.lastUsed')}>
+                {selectedProject.lastUsed ? new Date(selectedProject.lastUsed).toLocaleString() : '-'}
               </Descriptions.Item>
             </Descriptions>
 
@@ -1170,7 +1177,7 @@ const ProjectManagement: React.FC = () => {
               loading={loadingSessions}
               pagination={{
                 pageSize: 10,
-                showTotal: (total) => `共 ${total} 个会话`
+                showTotal: (total) => t('projects.pagination.sessionsTotal', { total })
               }}
             />
           </>
@@ -1182,7 +1189,7 @@ const ProjectManagement: React.FC = () => {
         title={
           <Space>
             <MessageOutlined />
-            <span>会话对话内容</span>
+            <span>{t('projects.conversation.title')}</span>
             {selectedSession && (
               <Text type="secondary" code>
                 {selectedSession.sessionId.substring(0, 16)}...
@@ -1209,7 +1216,7 @@ const ProjectManagement: React.FC = () => {
                 icon={<ReloadOutlined />}
                 onClick={cancelLoadConversation}
               >
-                取消加载
+                {t('projects.actions.cancelLoad')}
               </Button>
             )}
             <Button
@@ -1225,7 +1232,7 @@ const ProjectManagement: React.FC = () => {
                 }
               }}
             >
-              在终端继续此对话
+              {t('projects.actions.continueInTerminal')}
             </Button>
           </Space>
         }
@@ -1233,17 +1240,17 @@ const ProjectManagement: React.FC = () => {
         {selectedSession && (
           <>
             <Descriptions bordered column={2} size="small" style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="模型">{selectedSession.model || '-'}</Descriptions.Item>
-              <Descriptions.Item label="消息数">{selectedSession.messageCount}</Descriptions.Item>
-              <Descriptions.Item label="Token消耗">{selectedSession.totalTokens.toLocaleString()}</Descriptions.Item>
-              <Descriptions.Item label="持续时间">
+              <Descriptions.Item label={t('projects.sessionDetails.model')}>{selectedSession.model || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('projects.sessionDetails.messageCount')}>{selectedSession.messageCount}</Descriptions.Item>
+              <Descriptions.Item label={t('projects.sessionDetails.totalTokens')}>{selectedSession.totalTokens.toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label={t('projects.sessionDetails.duration')}>
                 {Math.ceil(
                   (new Date(selectedSession.endTime).getTime() -
                    new Date(selectedSession.startTime).getTime()) / 60000
-                )} 分钟
+                )} {t('projects.units.minutes')}
               </Descriptions.Item>
               {selectedSession.summary && (
-                <Descriptions.Item label="会话摘要" span={2}>
+                <Descriptions.Item label={t('projects.sessionDetails.summary')} span={2}>
                   <Paragraph ellipsis={{ rows: 2, expandable: true }}>
                     {selectedSession.summary}
                   </Paragraph>
@@ -1256,11 +1263,11 @@ const ProjectManagement: React.FC = () => {
               <Space.Compact style={{ width: '100%' }}>
                 <Search
                   className="conversation-search-input"
-                  placeholder="搜索对话内容、模型名... (Ctrl+F)"
+                  placeholder={t('projects.search.placeholder')}
                   allowClear
                   enterButton={
                     <Button type="primary" icon={<SearchOutlined />}>
-                      搜索
+                      {t('projects.actions.search')}
                     </Button>
                   }
                   size="large"
@@ -1277,12 +1284,12 @@ const ProjectManagement: React.FC = () => {
                     <Button
                       icon={<UpOutlined />}
                       onClick={gotoPreviousResult}
-                      title="上一个结果 (Shift+Enter)"
+                      title={t('projects.search.prevResult')}
                     />
                     <Button
                       icon={<DownOutlined />}
                       onClick={gotoNextResult}
-                      title="下一个结果 (Enter)"
+                      title={t('projects.search.nextResult')}
                     />
                   </Space>
                 )}
@@ -1298,11 +1305,11 @@ const ProjectManagement: React.FC = () => {
                   conversation && (
                     <Space>
                       <Text type="secondary">
-                        共 {conversation.totalMessages} 条消息
+                        {t('projects.summary.totalMessages', { count: conversation.totalMessages })}
                       </Text>
                       <Text type="secondary">|</Text>
                       <Text type="secondary">
-                        {conversation.totalTokens.toLocaleString()} tokens
+                        {t('projects.summary.totalTokens', { count: conversation.totalTokens.toLocaleString() })}
                       </Text>
                     </Space>
                   )

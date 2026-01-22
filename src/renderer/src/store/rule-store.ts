@@ -4,32 +4,32 @@
  */
 
 import { create } from 'zustand'
-import { Rule, RuleExecution } from '@shared/types'
+import { AutomationRule, RuleExecutionLog } from '@shared/types/rules'
 
 interface RuleStore {
   // 状态
-  rules: Rule[]
-  selectedRule: Rule | null
+  rules: AutomationRule[]
+  selectedRule: AutomationRule | null
   isLoading: boolean
   error: string | null
-  executionLogs: RuleExecution[]
+  executionLogs: RuleExecutionLog[]
   stats: Record<string, any>
 
   // 操作
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
-  setRules: (rules: Rule[]) => void
-  setSelectedRule: (rule: Rule | null) => void
-  setExecutionLogs: (logs: RuleExecution[]) => void
+  setRules: (rules: AutomationRule[]) => void
+  setSelectedRule: (rule: AutomationRule | null) => void
+  setExecutionLogs: (logs: RuleExecutionLog[]) => void
   setStats: (stats: Record<string, any>) => void
 
   // 规则操作
   refreshRules: () => Promise<void>
-  createRule: (rule: Partial<Rule>) => Promise<void>
-  updateRule: (id: string, updates: Partial<Rule>) => Promise<void>
+  createRule: (rule: Partial<AutomationRule>) => Promise<void>
+  updateRule: (id: string, updates: Partial<AutomationRule>) => Promise<void>
   deleteRule: (id: string) => Promise<void>
   toggleRule: (id: string, enabled: boolean) => Promise<void>
-  executeRule: (id: string) => Promise<void>
+  executeRule: (id: string) => Promise<any>
 
   // 日志和统计
   loadExecutionLogs: () => Promise<void>
@@ -59,10 +59,10 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       set({ isLoading: true, error: null })
       const response = await window.electronAPI.rule.list()
 
-      if (response !== undefined) {
+      if ((response as any)?.success) {
         set({ rules: (response as any).data })
       } else {
-        set({ error: (response as any).error || '加载规则列表失败' })
+        set({ error: (response as any)?.error || '加载规则列表失败' })
       }
     } catch (error) {
       console.error('Failed to refresh rules:', error)
@@ -78,11 +78,10 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       set({ isLoading: true, error: null })
       const response = await window.electronAPI.rule.create(ruleData)
 
-      if (response !== undefined) {
-        // 刷新规则列表
+      if ((response as any)?.success) {
         await get().refreshRules()
       } else {
-        set({ error: (response as any).error || '创建规则失败' })
+        set({ error: (response as any)?.error || '创建规则失败' })
       }
     } catch (error) {
       console.error('Failed to create rule:', error)
@@ -98,17 +97,15 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       set({ isLoading: true, error: null })
       const response = await window.electronAPI.rule.update(id, updates)
 
-      if (response !== undefined) {
-        // 刷新规则列表
+      if ((response as any)?.success) {
         await get().refreshRules()
 
-        // 更新选中状态
         const updatedRule = get().rules.find(r => r.id === id)
         if (updatedRule && get().selectedRule?.id === id) {
           set({ selectedRule: updatedRule })
         }
       } else {
-        set({ error: (response as any).error || '更新规则失败' })
+        set({ error: (response as any)?.error || '更新规则失败' })
       }
     } catch (error) {
       console.error('Failed to update rule:', error)
@@ -124,16 +121,14 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       set({ isLoading: true, error: null })
       const response = await window.electronAPI.rule.delete(id)
 
-      if (response !== undefined) {
-        // 刷新规则列表
+      if ((response as any)?.success) {
         await get().refreshRules()
 
-        // 清除选中状态
         if (get().selectedRule?.id === id) {
           set({ selectedRule: null })
         }
       } else {
-        set({ error: (response as any).error || '删除规则失败' })
+        set({ error: (response as any)?.error || '删除规则失败' })
       }
     } catch (error) {
       console.error('Failed to delete rule:', error)
@@ -149,11 +144,10 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       set({ isLoading: true, error: null })
       const response = await window.electronAPI.rule.toggle(id, enabled)
 
-      if (response !== undefined) {
-        // 刷新规则列表
+      if ((response as any)?.success) {
         await get().refreshRules()
       } else {
-        set({ error: (response as any).error || '切换规则状态失败' })
+        set({ error: (response as any)?.error || '切换规则状态失败' })
       }
     } catch (error) {
       console.error('Failed to toggle rule:', error)
@@ -169,16 +163,19 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       set({ isLoading: true, error: null })
       const response = await window.electronAPI.rule.execute(id)
 
-      if (response !== undefined) {
-        // 刷新执行日志和统计
+      if ((response as any)?.success) {
         await get().loadExecutionLogs()
         await get().loadStats()
+        return (response as any).data
       } else {
-        set({ error: response.error || '执行规则失败' })
+        const errorMessage = (response as any)?.error || '执行规则失败'
+        set({ error: errorMessage })
+        throw new Error(errorMessage)
       }
     } catch (error) {
       console.error('Failed to execute rule:', error)
       set({ error: '执行规则失败' })
+      throw error
     } finally {
       set({ isLoading: false })
     }
@@ -189,7 +186,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
     try {
       const response = await window.electronAPI.rule.getExecutionLog(50)
 
-      if (response !== undefined) {
+      if ((response as any)?.success) {
         set({ executionLogs: (response as any).data })
       }
     } catch (error) {
@@ -202,8 +199,8 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
     try {
       const response = await window.electronAPI.rule.getStats()
 
-      if (response !== undefined) {
-        set({ stats: response.data })
+      if ((response as any)?.success) {
+        set({ stats: (response as any).data })
       }
     } catch (error) {
       console.error('Failed to load stats:', error)
