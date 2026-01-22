@@ -96,8 +96,7 @@
     "vitest": "^4.0.17"
   },
   "overrides": {
-    "@electron/rebuild": "^4.0.2",
-    "tar": "^7.5.6"
+    "@electron/rebuild": "^4.0.2"
   },
   "build": {
     "appId": "com.claudecode.butler",
