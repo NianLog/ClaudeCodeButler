@@ -71,17 +71,17 @@ CCB (Claude Code Butler) is a modern configuration management tool built with El
 ### 🎛️ Configuration & Management
 | Configuration Management | MCP Server Control |
 |:---:|:---:|
-| ![Config](web/images/config-management.png) | ![MCP](web/images/mcp-server.png) |
+| ![Config](resources/img/config-management.png) | ![MCP](resources/img/mcp-server.png) |
 
 ### 📊 Analytics & Projects
 | Usage Analytics | Project Management |
 |:---:|:---:|
-| ![Analytics](web/images/analytics.png) | ![Projects](web/images/project-management.png) |
+| ![Analytics](resources/img/analytics.png) | ![Projects](resources/img/project-management.png) |
 
 ### 🚀 Automation & Environment
 | Automation Rules | Environment Check |
 |:---:|:---:|
-| ![Automation](web/images/automation-rules.png) | ![Environment](web/images/environment-check.png) |
+| ![Automation](resources/img/automation-rules.png) | ![Environment](resources/img/environment-check.png) |
 
 </details>
 

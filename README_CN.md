@@ -71,17 +71,17 @@ CCB (Claude Code Butler) 是基于 Electron + React + TypeScript 构建的现代
 ### 🎛️ 配置与管理
 | 配置管理 | MCP 服务器控制 |
 |:---:|:---:|
-| ![配置](web/images/config-management.png) | ![MCP](web/images/mcp-server.png) |
+| ![配置](resources/img/config-management.png) | ![MCP](resources/img/mcp-server.png) |
 
 ### 📊 分析与项目
 | 用量分析 | 项目管理 |
 |:---:|:---:|
-| ![分析](web/images/analytics.png) | ![项目](web/images/project-management.png) |
+| ![分析](resources/img/analytics.png) | ![项目](resources/img/project-management.png) |
 
 ### 🚀 自动化与环境
 | 自动化规则 | 环境检查 |
 |:---:|:---:|
-| ![自动化](web/images/automation-rules.png) | ![环境](web/images/environment-check.png) |
+| ![自动化](resources/img/automation-rules.png) | ![环境](resources/img/environment-check.png) |
 
 </details>
 
