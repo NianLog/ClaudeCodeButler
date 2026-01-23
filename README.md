@@ -83,6 +83,11 @@ CCB (Claude Code Butler) is a modern configuration management tool built with El
 |:---:|:---:|
 | ![Automation](resources/img/automation-rules.png) | ![Environment](resources/img/environment-check.png) |
 
+### 🤖 Advanced Features
+| Sub-Agent Management | Skills Management |
+|:---:|:---:|
+| ![Sub-Agent](resources/img/sub-agent.png) | ![Skills](resources/img/skills.png) |
+
 </details>
 
 ---
@@ -91,7 +96,7 @@ CCB (Claude Code Butler) is a modern configuration management tool built with El
 
 ### Requirements
 
-- Node.js >= 18.0.0
+- Node.js >= 20.0.9
 - npm >= 9.0.0
 
 ### Installation

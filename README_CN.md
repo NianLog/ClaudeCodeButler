@@ -83,6 +83,11 @@ CCB (Claude Code Butler) 是基于 Electron + React + TypeScript 构建的现代
 |:---:|:---:|
 | ![自动化](resources/img/automation-rules.png) | ![环境](resources/img/environment-check.png) |
 
+### 🤖 高级功能
+| 子 Agent 管理 | 技能库管理 |
+|:---:|:---:|
+| ![子Agent](resources/img/sub-agent.png) | ![技能](resources/img/skills.png) |
+
 </details>
 
 ---
@@ -91,7 +96,7 @@ CCB (Claude Code Butler) 是基于 Electron + React + TypeScript 构建的现代
 
 ### 环境要求
 
-- Node.js >= 18.0.0
+- Node.js >= 20.0.9
 - npm >= 9.0.0
 
 ### 安装
