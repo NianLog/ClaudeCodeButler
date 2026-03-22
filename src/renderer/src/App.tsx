@@ -9,6 +9,7 @@ import { useAppStore } from './store/app-store'
 import { useSettingsStore } from './store/settings-store'
 import { useConfigListStore } from './store/config-list-store'
 import { useRuleStore } from './store/rule-store'
+import { useTranslation } from './locales/useTranslation'
 import ModernLayout from './components/Layout/ModernLayout'
 const ModernConfigPanel = React.lazy(() => import('./components/Config/ModernConfigPanel'))
 const AutomationPanel = React.lazy(() => import('./components/Automation/AutomationPanel'))
@@ -34,6 +35,7 @@ import './styles/design-system.css'
  */
 const AppContent: React.FC = () => {
   const { message } = AntdApp.useApp()
+  const { t } = useTranslation()
   const {
     activeMainTab,
     notifications,
@@ -73,9 +75,9 @@ const AppContent: React.FC = () => {
 
   // 应用初始化
   useEffect(() => {
-    const initApp = async () => {
-      let loadingMessage: (() => void) | null = null
+    let cancelled = false
 
+    const initApp = async () => {
       // 带超时的 Promise 包装
       const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> => {
         return Promise.race([
@@ -97,54 +99,49 @@ const AppContent: React.FC = () => {
       }
 
       try {
-        // 安全检查message API
-        if (!message || typeof message.loading !== 'function') {
-          console.error('Message API not available')
-          setIsAppLoading(false)
-          return
-        }
-
-        // 显示加载状态
-        loadingMessage = message.loading('正在初始化应用...', 0)
-
-        // 使用 Promise.allSettled 确保所有初始化都尝试执行
-        await Promise.allSettled([
+        // 首屏关键链路：仅保留应用基础信息和设置加载
+        const criticalTasks = [
           safeInit(initialize, 'AppStore'),
-          safeInit(initializeSettings, 'Settings'),
+          safeInit(initializeSettings, 'Settings')
+        ]
+
+        // 后台任务：不再阻塞首屏渲染
+        const backgroundTasks = [
           safeInit(refreshConfigs, 'Configs'),
           safeInit(refreshRules, 'Rules'),
           safeInit(loadExecutionLogs, 'ExecutionLogs'),
           safeInit(loadStats, 'Stats')
-        ])
+        ]
 
-        // 关闭加载消息
-        if (loadingMessage) loadingMessage()
-        
-        // 设置应用加载完成
-        setIsAppLoading(false)
+        void Promise.allSettled(backgroundTasks)
+        await Promise.allSettled(criticalTasks)
 
-        // 安全地调用message方法
-        if (message && typeof message.success === 'function') {
-          message.success('CCB 应用初始化完成')
+        if (cancelled) {
+          return
         }
+
+        setIsAppLoading(false)
       } catch (error) {
-        // 关闭加载消息
-        if (loadingMessage) loadingMessage()
-        
-        // 设置应用加载完成（即使失败也要关闭加载屏幕）
+        if (cancelled) {
+          return
+        }
+
         setIsAppLoading(false)
 
-        // 安全地调用message方法
-        if (message && typeof message.error === 'function') {
-          message.error(`应用初始化失败: ${error instanceof Error ? error.message : String(error)}`)
-        }
+        message?.error?.(t('app.init.startupFailed', {
+          error: error instanceof Error ? error.message : String(error)
+        }))
 
         console.error('Failed to initialize app:', error)
       }
     }
 
-    initApp()
-  }, [initialize, initializeSettings, refreshConfigs, refreshRules, loadExecutionLogs, loadStats])
+    void initApp()
+
+    return () => {
+      cancelled = true
+    }
+  }, [initialize, initializeSettings, loadExecutionLogs, loadStats, message, refreshConfigs, refreshRules, t])
 
   // 权限提升处理
   const handleElevatePrivileges = async (): Promise<boolean> => {
@@ -213,7 +210,10 @@ const AppContent: React.FC = () => {
       />
 
       {/* 全局加载屏幕 */}
-      <LoadingScreen visible={isAppLoading} />
+      <LoadingScreen
+        visible={isAppLoading}
+        text={t('app.init.loading')}
+      />
 
       {/* 权限警告模态框 */}
       <PrivilegeWarningModal

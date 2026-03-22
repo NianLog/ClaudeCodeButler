@@ -192,6 +192,8 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
           hasUnsavedChanges: false,
           activeTab: 'editor'
         })
+      } else {
+        throw new Error(response?.error || '创建配置文件失败')
       }
     } catch (error) {
       console.error('Failed to create config with data:', error)
@@ -291,6 +293,8 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
           hasUnsavedChanges: false,
           activeTab: 'editor'
         })
+      } else {
+        throw new Error(response?.error || '导入配置文件失败')
       }
     } catch (error) {
       console.error('Failed to import config:', error)

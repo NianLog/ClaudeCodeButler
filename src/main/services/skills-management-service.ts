@@ -20,6 +20,7 @@ import type {
   SkillImportOptions,
   SkillFileStructure
 } from '@shared/types/skills'
+import { ensureSafePathSegment, resolveSafeChildPath } from '../utils/path-security'
 
 /**
  * Skills管理服务类
@@ -30,6 +31,16 @@ class SkillsManagementService {
   constructor() {
     this.skillsDir = path.join(os.homedir(), '.claude', 'skills')
     this.initializeSkillsDir()
+  }
+
+  /**
+   * 根据 Skill ID 解析目录路径
+   * @param skillId Skill 标识
+   * @returns Skill 目录绝对路径
+   */
+  private resolveSkillDirectoryPath(skillId: string): string {
+    const safeSkillId = ensureSafePathSegment(skillId, 'Skill ID')
+    return path.join(this.skillsDir, safeSkillId)
   }
 
   /**
@@ -81,7 +92,7 @@ class SkillsManagementService {
    */
   public async getSkill(skillId: string): Promise<SkillDirectory | null> {
     try {
-      const dirPath = path.join(this.skillsDir, skillId)
+      const dirPath = this.resolveSkillDirectoryPath(skillId)
       return await this.parseSkillDirectory(dirPath)
     } catch (error) {
       logger.error(`获取Skill失败: ${skillId}`, error)
@@ -279,7 +290,7 @@ class SkillsManagementService {
    * @throws Skill不存在或删除失败时抛出错误
    */
   public async deleteSkill(skillId: string): Promise<void> {
-    const dirPath = path.join(this.skillsDir, skillId)
+    const dirPath = this.resolveSkillDirectoryPath(skillId)
 
     // 检查目录是否存在
     try {
@@ -367,7 +378,7 @@ class SkillsManagementService {
   ): Promise<string> {
     await this.initializeSkillsDir()
 
-    const rootDirName = payload.rootDirName
+    const rootDirName = ensureSafePathSegment(payload.rootDirName, 'Skill目录名')
     if (!rootDirName) {
       throw new Error('Skill目录名不能为空')
     }
@@ -389,7 +400,7 @@ class SkillsManagementService {
     await fs.mkdir(targetPath, { recursive: true })
 
     for (const file of payload.files) {
-      const targetFilePath = path.join(targetPath, file.relativePath)
+      const targetFilePath = resolveSafeChildPath(targetPath, file.relativePath, 'Skill文件路径')
       await fs.mkdir(path.dirname(targetFilePath), { recursive: true })
       const buffer = Buffer.from(file.contentBase64, 'base64')
       await fs.writeFile(targetFilePath, buffer)

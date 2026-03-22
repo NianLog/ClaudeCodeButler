@@ -15,7 +15,6 @@ import {
   Typography,
   Button,
   Spin,
-  message,
   Tooltip,
   Space,
   Alert
@@ -37,6 +36,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Toolti
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { useTranslation } from '../../locales/useTranslation'
+import { useMessage } from '../../hooks/useMessage'
 
 const { Title, Text } = Typography
 
@@ -82,6 +82,7 @@ const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4'
  * Claude Code分析组件
  */
 const ClaudeCodeAnalytics: React.FC = () => {
+  const message = useMessage()
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [analytics, setAnalytics] = useState<ClaudeCodeAnalytics | null>(null)

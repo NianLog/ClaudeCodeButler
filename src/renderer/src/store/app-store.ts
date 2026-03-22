@@ -5,6 +5,8 @@
 
 import { create } from 'zustand'
 
+const FALLBACK_APP_VERSION = '1.3.2'
+
 interface AppStore {
   // 应用信息
   version: string
@@ -48,7 +50,7 @@ interface AppStore {
 
 export const useAppStore = create<AppStore>((set, get) => ({
   // 初始状态
-  version: '1.0.0',
+  version: FALLBACK_APP_VERSION,
   platform: 'unknown',
   activeMainTab: 'configs',
   sidebarCollapsed: false,
@@ -99,14 +101,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       if (!window.electronAPI) {
         console.warn('electronAPI not available, using default values')
         set({
-          version: '0.0.0',
+          version: FALLBACK_APP_VERSION,
           platform: 'unknown'
         })
         return
       }
 
       // 获取应用版本（带错误保护）
-      let version = '0.0.0'
+      let version = FALLBACK_APP_VERSION
       try {
         if (window.electronAPI.app?.getVersion) {
           version = await window.electronAPI.app.getVersion()
@@ -136,7 +138,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       console.error('Failed to initialize app:', error)
       // 设置默认值，确保应用可以继续运行
       set({
-        version: '0.0.0',
+        version: FALLBACK_APP_VERSION,
         platform: 'unknown'
       })
     }

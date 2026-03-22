@@ -14,7 +14,6 @@ import {
   Input,
   Select,
   Typography,
-  message,
   Modal,
   Tag,
   Dropdown,
@@ -37,6 +36,7 @@ import {
 } from '@ant-design/icons'
 import { useMCPManagementStore } from '../../store/mcp-management-store'
 import { useTranslation } from '../../locales/useTranslation'
+import { useMessage } from '../../hooks/useMessage'
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 import type { MCPServerListItem } from '@shared/types/mcp'
 import './MCPManagementPanel.css'
@@ -49,6 +49,7 @@ const { Option } = Select
  * MCP管理面板组件
  */
 const MCPManagementPanel: React.FC = () => {
+  const message = useMessage()
   const { t } = useTranslation()
   // Zustand状态 - 使用selector避免类型错误,确保所有数组类型都有类型检查
   const servers = useMCPManagementStore(state => Array.isArray(state.servers) ? state.servers : [])
@@ -71,6 +72,28 @@ const MCPManagementPanel: React.FC = () => {
   const [editingJson, setEditingJson] = useState('')
   const [isEditModalVisible, setIsEditModalVisible] = useState(false)
   const [isAddMode, setIsAddMode] = useState(false)
+  const [validatingServerKey, setValidatingServerKey] = useState<string | null>(null)
+
+  /**
+   * 生成简洁的可用性校验提示文案
+   * @param result 可用性校验结果
+   * @returns 面向用户的提示文本
+   */
+  const getValidationFeedback = (result: { valid: boolean; statusCode?: number; exitCode?: number | null }) => {
+    if (result.valid) {
+      return t('mcp.messages.validateSuccessShort')
+    }
+
+    if (typeof result.statusCode === 'number') {
+      return t('mcp.messages.validateFailureWithStatus', { statusCode: result.statusCode })
+    }
+
+    if (typeof result.exitCode === 'number') {
+      return t('mcp.messages.validateFailureWithExitCode', { exitCode: result.exitCode })
+    }
+
+    return t('mcp.messages.validateFailureShort')
+  }
 
   // 组件挂载时加载数据
   useEffect(() => {
@@ -93,7 +116,8 @@ const MCPManagementPanel: React.FC = () => {
 
     const matchesKeyword = !searchKeyword ||
                            server.id.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-                           server.config.command.toLowerCase().includes(searchKeyword.toLowerCase())
+                           server.config.command?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+                           server.config.url?.toLowerCase().includes(searchKeyword.toLowerCase())
 
     return matchesScope && matchesKeyword
   })
@@ -117,31 +141,44 @@ const MCPManagementPanel: React.FC = () => {
   // 保存编辑
   const handleSaveEdit = async () => {
     try {
+      const normalizedServerId = editingServerId.trim()
+
       // 验证服务器ID
-      if (isAddMode && !editingServerId.trim()) {
+      if (isAddMode && !normalizedServerId) {
         message.error(t('mcp.validation.serverIdRequired'))
         return
       }
 
-      if (!/^[a-zA-Z0-9_-]+$/.test(editingServerId)) {
+      if (!/^[a-zA-Z0-9_-]+$/.test(normalizedServerId)) {
         message.error(t('mcp.validation.serverIdInvalid'))
         return
       }
 
       // 解析JSON
       const newConfig = JSON.parse(editingJson)
+      const transportType = newConfig.type === 'http' || newConfig.type === 'sse'
+        ? newConfig.type
+        : 'stdio'
+      const normalizedCommand = typeof newConfig.command === 'string' ? newConfig.command.trim() : ''
+      const normalizedUrl = typeof newConfig.url === 'string' ? newConfig.url.trim() : ''
 
       // 验证必填字段
-      if (!newConfig.command || !newConfig.command.trim()) {
+      if (transportType === 'stdio' && !normalizedCommand) {
         message.error(t('mcp.validation.commandRequired'))
         return
       }
 
+      if (transportType !== 'stdio' && !normalizedUrl) {
+        message.error(t('mcp.validation.urlRequired'))
+        return
+      }
+
       // 调用API更新服务器配置
-      await window.electronAPI.mcp.addOrUpdateServer({
-        id: editingServerId.trim(),
-        command: newConfig.command,
-        type: newConfig.type || 'stdio',
+      const saveResult = await window.electronAPI.mcp.addOrUpdateServer({
+        id: normalizedServerId,
+        command: normalizedCommand || undefined,
+        url: normalizedUrl || undefined,
+        type: transportType,
         argsText: newConfig.args ? newConfig.args.join('\n') : undefined,
         envText: newConfig.env ? JSON.stringify(newConfig.env, null, 2) : undefined,
         disabled: newConfig.disabled || false,
@@ -150,6 +187,13 @@ const MCPManagementPanel: React.FC = () => {
         fromGalleryId: newConfig.fromGalleryId,
         targetScope: editingServer?.scope || (selectedScope === 'all' ? 'global' : selectedScope)
       })
+
+      if (!saveResult.success) {
+        const detailMessage = (saveResult as any).details
+          ? Object.values((saveResult as any).details).filter(Boolean).join('；')
+          : ''
+        throw new Error(detailMessage || saveResult.error || t('mcp.errors.saveFailed', { error: t('common.unknownError') }))
+      }
 
       message.success(isAddMode ? t('mcp.messages.addSuccess') : t('mcp.messages.updateSuccess'))
       setIsEditModalVisible(false)
@@ -163,6 +207,28 @@ const MCPManagementPanel: React.FC = () => {
       } else {
         message.error(t('mcp.errors.saveFailed', { error: (error as Error).message }))
       }
+    }
+  }
+
+  // 验证服务器可用性
+  const handleValidateServer = async (server: MCPServerListItem) => {
+    const serverKey = `${server.scope}-${server.id}`
+    setValidatingServerKey(serverKey)
+    try {
+      const result = await window.electronAPI.mcp.validateServerAvailability(server.id, server.scope)
+      if (!result.success || !result.data) {
+        throw new Error(result.error || t('mcp.errors.validateFailed', { error: t('common.unknownError') }))
+      }
+
+      if (result.data.valid) {
+        message.success(getValidationFeedback(result.data))
+      } else {
+        message.error(getValidationFeedback(result.data))
+      }
+    } catch (error) {
+      message.error(t('mcp.messages.validateFailureShort'))
+    } finally {
+      setValidatingServerKey(null)
     }
   }
 
@@ -254,6 +320,13 @@ const MCPManagementPanel: React.FC = () => {
         onClick: () => handleDuplicateServer(server)
       },
       {
+        key: 'validate',
+        icon: <ApiOutlined />,
+        label: t('mcp.menu.validateServer'),
+        disabled: !isEnabled,
+        onClick: () => handleValidateServer(server)
+      },
+      {
         type: 'divider' as const
       },
       {
@@ -290,7 +363,7 @@ const MCPManagementPanel: React.FC = () => {
                   </Tag>
                 ) : (
                   <Tag icon={<FolderOutlined />} color="purple">
-                    {t('mcp.tags.project', { name: server.scope.split(/[\/\\]/).pop() || '' })}
+                    {t('mcp.tags.project', { name: server.scope.split(/[/\\]/).pop() || '' })}
                   </Tag>
                 )}
                 <Tag color={isEnabled ? 'success' : 'error'}>
@@ -303,6 +376,15 @@ const MCPManagementPanel: React.FC = () => {
             </div>
           </div>
           <div className="server-item-actions">
+            <Button
+              type="text"
+              size="small"
+              icon={<ApiOutlined />}
+              onClick={() => handleValidateServer(server)}
+              loading={validatingServerKey === `${server.scope}-${server.id}`}
+              disabled={!isEnabled}
+              title={t('mcp.actions.validate')}
+            />
             <Button
               type="text"
               size="small"
@@ -328,10 +410,13 @@ const MCPManagementPanel: React.FC = () => {
         </div>
         <div className="server-item-content">
           <div className="server-command">
-            <Text type="secondary" style={{ fontSize: 12 }}>{t('mcp.labels.command')}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {server.config.command ? t('mcp.labels.command') : t('mcp.labels.url')}
+            </Text>
             <Text code style={{ fontSize: 12, marginLeft: 8 }}>
-              {server.config.command}
-              {server.config.args && server.config.args.length > 0 && ` ${server.config.args.join(' ')}`}
+              {server.config.command
+                ? `${server.config.command}${server.config.args && server.config.args.length > 0 ? ` ${server.config.args.join(' ')}` : ''}`
+                : server.config.url || t('common.none')}
             </Text>
           </div>
           {server.config.env && Object.keys(server.config.env).length > 0 && (
@@ -511,9 +596,10 @@ const MCPManagementPanel: React.FC = () => {
             <div>
               <p>{t('mcp.alert.jsonDesc')}</p>
               <ul style={{ marginTop: 8, fontSize: 12 }}>
-                <li><code>command</code> {t('mcp.jsonFields.required')}: {t('mcp.jsonFields.commandDesc')}</li>
-                <li><code>args</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.argsDesc')}</li>
                 <li><code>type</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.typeDesc')}</li>
+                <li><code>command</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.commandDesc')}</li>
+                <li><code>url</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.urlDesc')}</li>
+                <li><code>args</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.argsDesc')}</li>
                 <li><code>env</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.envDesc')}</li>
                 <li><code>disabled</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.disabledDesc')}</li>
                 <li><code>timeout</code> {t('mcp.jsonFields.optional')}: {t('mcp.jsonFields.timeoutDesc')}</li>

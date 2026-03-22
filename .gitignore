@@ -149,6 +149,8 @@ ehthumbs.db
 Thumbs.db
 .ccb
 backup/
+release-storetest/
+release-installer/
 
 # Project specific
 *.backup
@@ -156,6 +158,8 @@ backup/
 temp/
 logs/
 tests/
+!tests/
+!tests/**
 test-*.js
 test-*.sh
 debug.log

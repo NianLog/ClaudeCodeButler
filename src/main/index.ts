@@ -45,6 +45,8 @@ class CCBApp {
       process.argv.includes('-debug') ||
       process.env.NODE_ENV === 'development'
 
+    this.windowManager.setDevToolsEnabled(this.enableDevTools)
+
     this.setupAppEvents()
     this.setupIpcHandlers()
   }

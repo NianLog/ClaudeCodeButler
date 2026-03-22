@@ -19,7 +19,6 @@ import {
   Col,
   Select,
   Tooltip,
-  message,
   Tabs,
   Badge
 } from 'antd'
@@ -34,20 +33,18 @@ import {
   DeleteOutlined,
   InfoCircleOutlined,
   LockOutlined,
-  UnlockOutlined,
   ApiOutlined,
   SafetyCertificateOutlined
 } from '@ant-design/icons'
-import { useConfigListStore } from '../../store/config-list-store'
 import type { ConfigFile } from '@shared/types'
 import type { ApiProvider, ManagedModeConfig } from '@shared/types/managed-mode'
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 import { useTranslation } from '../../locales/useTranslation'
+import { useMessage } from '../../hooks/useMessage'
 import './ManagedModeConfigEditor.css'
 
-const { TextArea } = Input
 const { Option } = Select
-const { Title, Text, Paragraph } = Typography
+const { Text } = Typography
 
 /**
  * 托管模式配置编辑器属性
@@ -60,23 +57,17 @@ interface ManagedModeConfigEditorProps {
 }
 
 /**
- * 生成基于配置内容的稳定MD5 ID
- * @description 使用配置的name、apiBaseUrl、apiKey拼接后计算MD5，确保ID稳定
+ * 规范化端口输入值
+ * @description 统一处理 `number | string | null` 输入，确保组件状态始终持有有效数字端口
  */
-const generateStableConfigId = (name: string, apiBaseUrl: string, apiKey: string): string => {
-  const content = `${name}|${apiBaseUrl}|${apiKey}`
-  const hash = Array.from(new TextEncoder().encode(content))
-    .reduce((acc, byte) => acc + byte.toString(16).padStart(2, '0'), '')
-
-  // 简化版MD5（使用Web Crypto API的SHA-256代替，因为浏览器环境更容易实现）
-  // 但为了保持简单，这里使用一个简单的哈希算法
-  let hashValue = 0
-  for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i)
-    hashValue = ((hashValue << 5) - hashValue) + char
-    hashValue = hashValue & hashValue // Convert to 32bit integer
-  }
-  return Math.abs(hashValue).toString(16).padStart(8, '0')
+const normalizePortValue = (
+  value: number | string | null | undefined,
+  fallback: number
+): number => {
+  const normalizedValue = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(normalizedValue) && normalizedValue > 0
+    ? normalizedValue
+    : fallback
 }
 
 /**
@@ -84,10 +75,11 @@ const generateStableConfigId = (name: string, apiBaseUrl: string, apiKey: string
  */
 const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   managedModeConfig,
-  configs,
+  configs: _configs,
   onConfigChange,
   onRestartService
 }) => {
+  const message = useMessage()
   const { t } = useTranslation()
   // 状态管理
   const [configMode, setConfigMode] = useState<'gui' | 'json'>('gui')
@@ -133,7 +125,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       if (managedModeConfig.networkProxy) {
         setNetworkProxyEnabled(managedModeConfig.networkProxy.enabled || false)
         setNetworkProxyHost(managedModeConfig.networkProxy.host || '127.0.0.1')
-        setNetworkProxyPort(managedModeConfig.networkProxy.port || 8080)
+        setNetworkProxyPort(normalizePortValue(managedModeConfig.networkProxy.port, 8080))
       }
 
       // 初始化配置内容
@@ -205,7 +197,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       // 切换到该provider（会自动重启服务）
       await window.electronAPI.managedMode.switchProvider(providerId)
 
-      message.success(`已切换到配置: ${selectedProvider.name}，服务正在重启`)
+      message.success(t('managedMode.config.switch.success', { name: selectedProvider.name }))
 
       // 等待服务重启完成后刷新状态
       setTimeout(() => {
@@ -387,7 +379,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
         try {
           configData = JSON.parse(jsonContent)
         } catch (error: any) {
-          message.error(`JSON格式错误: ${error.message}`)
+          message.error(t('managedMode.config.jsonInvalid', { error: error.message }))
           return
         }
 
@@ -425,7 +417,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       // 构建完整的托管模式配置
       const completeConfig = {
         port: servicePort,
-        accessToken: accessToken,
+        accessToken,
         logging: {
           enabled: debugMode,
           level: debugMode ? 'debug' : 'info'
@@ -491,7 +483,20 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
    */
   const renderGuiEditor = () => (
     <div className="managed-mode-gui-editor">
-      <Form form={form} layout="vertical">
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={{
+          permissions: {
+            defaultMode: 'bypassPermissions'
+          },
+          statusLine: {
+            type: 'command',
+            command: 'ccline',
+            padding: 0
+          }
+        }}
+      >
         {/* 环境变量配置 */}
         <Card
           title={
@@ -584,7 +589,6 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
           <Form.Item
             name={['permissions', 'defaultMode']}
             label={t('managedMode.config.permissions.defaultMode')}
-            initialValue="bypassPermissions"
             tooltip={t('managedMode.config.permissions.defaultModeTip')}
           >
             <Select>
@@ -619,7 +623,6 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               <Form.Item
                 name={['statusLine', 'type']}
                 label={t('managedMode.config.statusLine.type')}
-                initialValue="command"
               >
                 <Select>
                   <Option value="command">{t('managedMode.config.statusLine.type.command')}</Option>
@@ -632,7 +635,6 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               <Form.Item
                 name={['statusLine', 'command']}
                 label={t('managedMode.config.statusLine.command')}
-                initialValue="ccline"
               >
                 <Input />
               </Form.Item>
@@ -641,7 +643,6 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               <Form.Item
                 name={['statusLine', 'padding']}
                 label={t('managedMode.config.statusLine.padding')}
-                initialValue={0}
               >
                 <InputNumber
                   min={0}
@@ -778,7 +779,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               <Form.Item label={t('managedMode.config.basic.port')}>
                 <InputNumber
                   value={servicePort}
-                  onChange={(value) => setServicePort(value || 8487)}
+                  onChange={(value) => setServicePort(normalizePortValue(value, 8487))}
                   min={1024}
                   max={65535}
                   style={{ width: '100%' }}
@@ -818,7 +819,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                   optionFilterProp="children"
                   showSearch
                   filterOption={(input, option) =>
-                    option?.children?.toString().toLowerCase().includes(input.toLowerCase())
+                    String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
                   }
                 >
                   {availableProviders.map(provider => (
@@ -847,7 +848,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
                 <Form.Item label={t('managedMode.config.proxy.port')}>
                   <InputNumber
                     value={networkProxyPort}
-                    onChange={(value) => setNetworkProxyPort(value || 8080)}
+                    onChange={(value) => setNetworkProxyPort(normalizePortValue(value, 8080))}
                     min={1}
                     max={65535}
                     style={{ width: '100%' }}
@@ -883,7 +884,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
         {/* 配置编辑器 */}
         <Tabs
           activeKey={configMode}
-          onChange={setConfigMode}
+          onChange={(activeKey) => setConfigMode(activeKey === 'json' ? 'json' : 'gui')}
           type="card"
           items={[
             {

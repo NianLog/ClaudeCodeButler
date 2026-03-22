@@ -3,8 +3,7 @@
  * 支持语法高亮、自动修正、JSON/Markdown格式化
  */
 
-import React, { useRef, useState, useCallback } from 'react'
-import Editor, { loader } from '@monaco-editor/react'
+import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { Button, Space, Typography, Alert, Select, Switch } from 'antd'
 import { useAppStore } from '../../store/app-store'
 import {
@@ -14,19 +13,26 @@ import {
   FileTextOutlined
 } from '@ant-design/icons'
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
-import * as monaco from 'monaco-editor'
+import type * as monaco from 'monaco-editor'
 import { useTranslation } from '../../locales/useTranslation'
 
-// 配置Monaco Editor使用本地资源,避免CDN依赖
-loader.config({ monaco })
+const { Text } = Typography
+const { Option } = Select
+type MonacoRuntime = typeof import('monaco-editor')
+type MonacoEditorComponent = typeof import('@monaco-editor/react')['default']
 
-// 配置 Monaco Editor 的 worker 环境
-// 这对于 Electron 环境下的生产构建至关重要
-if (typeof window !== 'undefined') {
-  (window as any).MonacoEnvironment = {
+/**
+ * 配置 Monaco Editor 的 worker 环境
+ * @description 使用运行时配置，避免入口包静态引入 Monaco 运行时代码。
+ */
+const ensureMonacoEnvironment = (): void => {
+  if (typeof window === 'undefined' || (window as any).__CCB_MONACO_ENV_READY__) {
+    return
+  }
+
+  ;(window as any).__CCB_MONACO_ENV_READY__ = true
+  ;(window as any).MonacoEnvironment = {
     getWorker(_: any, _label: string) {
-      // 返回一个简单的 Worker,Monaco Editor 会在主线程中回退运行
-      // 这对于 Electron 应用是可以接受的性能折衷
       return new Worker(
         URL.createObjectURL(
           new Blob(['self.MonacoEnvironment = { baseUrl: "" };'], {
@@ -38,14 +44,11 @@ if (typeof window !== 'undefined') {
   }
 }
 
-const { Text } = Typography
-const { Option } = Select
-
 /**
  * 代码编辑器属性
  */
 interface CodeEditorProps {
-  value: string
+  value?: string
   onChange?: (value: string) => void
   language?: 'json' | 'markdown' | 'plaintext'
   height?: number | string
@@ -64,7 +67,7 @@ interface CodeEditorProps {
  * 代码编辑器组件
  */
 const CodeEditor: React.FC<CodeEditorProps> = ({
-  value,
+  value = '',
   onChange = () => {},
   language = 'json',
   height = 400,
@@ -79,14 +82,54 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const isReadOnly = readOnly ?? readonly
   const { t } = useTranslation()
   const editorRef = useRef<any>(null)
+  const monacoRef = useRef<MonacoRuntime | null>(null)
   const [isValid, setIsValid] = useState(true)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [showLineNumbers, setShowLineNumbers] = useState(true)
   const [wordWrap, setWordWrap] = useState(true)
   const [previewMode, setPreviewMode] = useState<'raw' | 'rendered'>('rendered')
+  const [EditorComponent, setEditorComponent] = useState<MonacoEditorComponent | null>(null)
+  const [editorRuntimeError, setEditorRuntimeError] = useState<string | null>(null)
   
   // 获取应用主题
   const { theme } = useAppStore()
+
+  useEffect(() => {
+    let cancelled = false
+
+    /**
+     * 按需加载 Monaco 运行时
+     * @description 仅在编辑器真正渲染时才下载 Monaco，避免其进入应用首屏依赖图。
+     */
+    const loadMonacoRuntime = async () => {
+      try {
+        const [{ default: MonacoEditor, loader }, monacoRuntime] = await Promise.all([
+          import('@monaco-editor/react'),
+          import('monaco-editor')
+        ])
+
+        ensureMonacoEnvironment()
+        loader.config({ monaco: monacoRuntime })
+        monacoRef.current = monacoRuntime
+
+        if (!cancelled) {
+          setEditorComponent(() => MonacoEditor)
+          setEditorRuntimeError(null)
+        }
+      } catch (error) {
+        console.error('Failed to load Monaco editor runtime:', error)
+        if (!cancelled) {
+          setEditorRuntimeError(error instanceof Error ? error.message : String(error))
+        }
+      }
+    }
+
+    void loadMonacoRuntime()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Monaco编辑器默认配置
   const defaultEditorOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
@@ -238,7 +281,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
 
     // 添加快捷键
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    const monacoRuntime = monacoRef.current
+    if (!monacoRuntime) {
+      return
+    }
+
+    editor.addCommand(monacoRuntime.KeyMod.CtrlCmd | monacoRuntime.KeyCode.KeyS, () => {
       formatCode()
     })
   }, [language, value, validateJSON, validateMarkdown, formatCode])
@@ -310,6 +358,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
               size="small"
               icon={<FormatPainterOutlined />}
               onClick={formatCode}
+              disabled={isReadOnly}
             >
               {t('codeEditor.actions.format')}
             </Button>
@@ -369,16 +418,22 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       {/* 编辑器和预览 */}
       <div className={`editor-content ${showPreview ? 'with-preview' : ''}`} style={{ flex: 1, minHeight: 0 }}>
         <div className="editor-panel">
-          <Editor
-            height="100%"
-            language={language}
-            value={value}
-            onChange={handleEditorChange}
-            onMount={handleEditorDidMount}
-            options={editorOptions}
-            theme={theme === 'dark' ? 'vs-dark' : 'vs'}
-            loading={<div>{t('codeEditor.loading')}</div>}
-          />
+          {EditorComponent ? (
+            <EditorComponent
+              height="100%"
+              language={language}
+              value={value}
+              onChange={handleEditorChange}
+              onMount={handleEditorDidMount}
+              options={editorOptions}
+              theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+              loading={<div>{t('codeEditor.loading')}</div>}
+            />
+          ) : (
+            <div className="editor-runtime-loading">
+              {editorRuntimeError || t('codeEditor.loading')}
+            </div>
+          )}
         </div>
 
         {showPreview && (
@@ -439,6 +494,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           height: 100%;
           position: relative;
           overflow: hidden;
+        }
+
+        .editor-runtime-loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          padding: 24px;
+          color: #6b7280;
+          background: #ffffff;
         }
 
         /* 强制Monaco Editor占据全部高度 */

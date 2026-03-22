@@ -19,6 +19,23 @@ import { PATHS, CONFIG_FILES } from '@shared/constants'
 import { logger } from '../utils/logger'
 import { ConfigMigrationService } from './config-migration'
 import { pathManager } from '../utils/path-manager'
+import {
+  ensurePathAllowed,
+  ensurePathWithinBase,
+  normalizePathForComparison
+} from '../utils/path-security'
+
+/**
+ * 备份元数据
+ * @description 用于稳定关联备份文件与原始配置路径，避免仅靠文件名推断目标路径
+ */
+interface BackupMetadata {
+  id: string
+  originalPath: string
+  backupPath: string
+  createdAt: string
+  description: string
+}
 
 export class ConfigService {
   // 使用 pathManager 获取 Claude 配置目录
@@ -28,6 +45,104 @@ export class ConfigService {
 
   constructor() {
     // 不再在构造函数中设置,使用 getter
+  }
+
+  /**
+   * 获取允许直接访问的系统配置文件路径列表
+   * @returns 系统配置文件绝对路径列表
+   */
+  private getAllowedSystemConfigPaths(): string[] {
+    const userHome = os.homedir()
+
+    return [
+      join(userHome, '.claude', 'settings.json'),
+      join(userHome, '.claude.json'),
+      join(userHome, '.claude', 'CLAUDE.md')
+    ]
+  }
+
+  /**
+   * 判断路径是否为系统配置文件
+   * @param filePath 配置文件路径
+   * @returns 是否为系统配置文件
+   */
+  private isSystemConfigPath(filePath: string): boolean {
+    const resolvedPath = this.validateConfigPath(filePath, '配置文件路径')
+    const fileName = basename(resolvedPath)
+
+    if (this.getAllowedSystemConfigPaths().some((allowedPath) =>
+      normalizePathForComparison(allowedPath) === normalizePathForComparison(resolvedPath)
+    )) {
+      return true
+    }
+
+    return (
+      fileName === CONFIG_FILES.SETTINGS ||
+      fileName === CONFIG_FILES.SETTINGS_LOCAL ||
+      fileName === CONFIG_FILES.CLAUDE_JSON ||
+      fileName === CONFIG_FILES.CLAUDE_MD
+    )
+  }
+
+  /**
+   * 校验配置路径是否在允许范围内
+   * @param filePath 待校验路径
+   * @param label 错误信息标签
+   * @returns 校验后的绝对路径
+   */
+  private validateConfigPath(filePath: string, label: string): string {
+    return ensurePathAllowed(
+      filePath,
+      [this.claudeDir],
+      this.getAllowedSystemConfigPaths(),
+      label
+    )
+  }
+
+  /**
+   * 校验用户配置路径是否在受管目录内
+   * @param filePath 待校验路径
+   * @param label 错误信息标签
+   * @returns 校验后的绝对路径
+   */
+  private validateUserConfigPath(filePath: string, label: string): string {
+    return ensurePathWithinBase(filePath, this.claudeDir, label)
+  }
+
+  /**
+   * 获取备份元数据文件路径
+   * @param backupPath 备份文件路径
+   * @returns 备份元数据文件路径
+   */
+  private getBackupMetadataPath(backupPath: string): string {
+    return `${backupPath}.meta.json`
+  }
+
+  /**
+   * 读取备份元数据
+   * @param metadataPath 元数据文件路径
+   * @returns 备份元数据
+   */
+  private async readBackupMetadata(metadataPath: string): Promise<BackupMetadata | null> {
+    try {
+      const content = await fs.readFile(metadataPath, 'utf8')
+      return JSON.parse(content) as BackupMetadata
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 解析旧版备份对应的原始配置路径
+   * @param originalFileName 旧版备份文件名中还原出的原始文件名
+   * @returns 原始配置文件路径
+   */
+  private resolveLegacyBackupOriginalPath(originalFileName: string): string {
+    const matchedSystemConfigPath = this.getAllowedSystemConfigPaths().find((systemConfigPath) =>
+      basename(systemConfigPath) === originalFileName
+    )
+
+    return matchedSystemConfigPath || join(this.claudeDir, originalFileName)
   }
 
   /**
@@ -66,19 +181,35 @@ export class ConfigService {
   }
 
   /**
+   * 获取配置刷新快照
+   * @description 单次扫描后直接同步 Claude Code 使用状态，并返回最终配置列表，避免首屏阶段重复扫描。
+   */
+  public async getRefreshSnapshot(): Promise<{ configs: ConfigFile[]; updatedConfigs: number; totalConfigs: number }> {
+    const configs = await this.scanConfigs()
+    const updatedConfigs = await this.syncClaudeCodeStatusForConfigs(configs)
+
+    return {
+      configs,
+      updatedConfigs,
+      totalConfigs: configs.length
+    }
+  }
+
+  /**
    * 获取配置文件内容（统一架构：只返回纯内容）
    * 对于所有配置文件，统一返回纯文件内容，不返回元数据
    * 元数据由单独的getConfigMetadata方法获取
    */
   async getConfig(path: string): Promise<any> {
     try {
+      const resolvedPath = this.validateConfigPath(path, '配置文件路径')
       const fs = require('fs/promises')
-      const content = await fs.readFile(path, 'utf8')
+      const content = await fs.readFile(resolvedPath, 'utf8')
 
       // 统一处理：MD文件返回字符串，JSON文件解析后返回对象
-      if (path.endsWith('.md') || path.endsWith('CLAUDE.md')) {
+      if (resolvedPath.endsWith('.md') || resolvedPath.endsWith('CLAUDE.md')) {
         return content
-      } else if (path.endsWith('.json')) {
+      } else if (resolvedPath.endsWith('.json')) {
         return content.trim() ? JSON.parse(content) : {}
       } else {
         try {
@@ -98,8 +229,13 @@ export class ConfigService {
    */
   async getConfigMetadata(path: string): Promise<any> {
     try {
+      const resolvedPath = this.validateConfigPath(path, '配置文件元数据路径')
+      if (this.isSystemConfigPath(resolvedPath)) {
+        return null
+      }
+
       const fs = require('fs/promises')
-      const metaPath = `${path}.meta`
+      const metaPath = `${resolvedPath}.meta`
 
       try {
         const metaContent = await fs.readFile(metaPath, 'utf8')
@@ -121,34 +257,24 @@ export class ConfigService {
    */
   async saveConfig(path: string, content: any, metadata?: any): Promise<void> {
     try {
+      const resolvedPath = this.validateConfigPath(path, '配置文件路径')
+
       // 检查并处理 undefined/null content
       if (content === undefined || content === null) {
-        logger.warn(`配置内容为空，使用默认值: ${path}`)
-        content = path.endsWith('.md') ? '' : {}
+        logger.warn(`配置内容为空，使用默认值: ${resolvedPath}`)
+        content = resolvedPath.endsWith('.md') ? '' : {}
       }
 
       // 检查是否为系统配置文件
-      const fileName = basename(path)
-      const userHome = os.homedir()
-      const isUserHomeConfig = path.includes(userHome) &&
-        (path.endsWith(join(userHome, '.claude', 'settings.json')) ||
-         path.endsWith(join(userHome, '.claude.json')) ||
-         path.endsWith(join(userHome, '.claude', 'CLAUDE.md')))
-
-      const isSystemConfig =
-        fileName === CONFIG_FILES.SETTINGS ||
-        fileName === CONFIG_FILES.SETTINGS_LOCAL ||
-        fileName === CONFIG_FILES.CLAUDE_JSON ||
-        fileName === CONFIG_FILES.CLAUDE_MD ||
-        isUserHomeConfig
+      const isSystemConfig = this.isSystemConfigPath(resolvedPath)
 
       // 如果是系统配置文件，创建备份
       if (isSystemConfig) {
         try {
-          await this.createBackup(path)
-          logger.info(`系统配置文件备份已创建: ${path}`)
+          await this.createBackup(resolvedPath)
+          logger.info(`系统配置文件备份已创建: ${resolvedPath}`)
         } catch (backupError) {
-          logger.warn(`创建系统配置备份失败: ${path}`, backupError)
+          logger.warn(`创建系统配置备份失败: ${resolvedPath}`, backupError)
           // 备份失败不阻止保存操作
         }
       }
@@ -156,22 +282,22 @@ export class ConfigService {
       // 统一保存内容文件
       const fs = require('fs/promises')
 
-      if (path.endsWith('.md') || path.endsWith('CLAUDE.md')) {
+      if (resolvedPath.endsWith('.md') || resolvedPath.endsWith('CLAUDE.md')) {
         // MD文件保存为纯文本
         const contentString = typeof content === 'string' ? content : String(content)
-        await fs.writeFile(path, contentString, 'utf8')
+        await fs.writeFile(resolvedPath, contentString, 'utf8')
       } else {
         // JSON文件保存为JSON格式
         const jsonString = JSON.stringify(content, null, 2)
-        await fs.writeFile(path, jsonString, 'utf8')
+        await fs.writeFile(resolvedPath, jsonString, 'utf8')
       }
 
       // 非系统配置文件：同时保存元数据到.meta文件
       if (!isSystemConfig) {
-        await this.saveConfigMetadata(path, metadata)
+        await this.saveConfigMetadata(resolvedPath, metadata)
       }
 
-      logger.info(`配置文件已保存: ${path}`)
+      logger.info(`配置文件已保存: ${resolvedPath}`)
 
     } catch (error) {
       logger.error(`保存配置文件失败 ${path}:`, error)
@@ -184,9 +310,10 @@ export class ConfigService {
    */
   async saveConfigMetadata(path: string, metadata?: any): Promise<void> {
     try {
+      const resolvedPath = this.validateUserConfigPath(path, '配置元数据路径')
       const fs = require('fs/promises')
-      const fileName = basename(path)
-      const metaPath = `${path}.meta`
+      const fileName = basename(resolvedPath)
+      const metaPath = `${resolvedPath}.meta`
 
       // 尝试读取现有元数据,保留created时间
       let existingMetadata: any = {}
@@ -201,7 +328,7 @@ export class ConfigService {
       const finalMetadata = {
         name: metadata?.name || existingMetadata.name || fileName.replace(/\.(json|md)$/, ''),
         description: metadata?.description || existingMetadata.description || `用户配置文件: ${fileName}`,
-        type: metadata?.type || existingMetadata.type || (path.endsWith('.md') ? 'user-preferences' : 'claude-code'),
+        type: metadata?.type || existingMetadata.type || (resolvedPath.endsWith('.md') ? 'user-preferences' : 'claude-code'),
         isActive: metadata?.isActive !== undefined ? metadata.isActive : (existingMetadata.isActive || false),
         isInUse: metadata?.isInUse !== undefined ? metadata.isInUse : (existingMetadata.isInUse || false), // 添加isInUse字段处理
         created: existingMetadata.created || new Date().toISOString(),
@@ -244,7 +371,7 @@ export class ConfigService {
         }
       }
 
-      const filePath = join(this.claudeDir, fileName)
+      const filePath = this.validateUserConfigPath(join(this.claudeDir, fileName), '新配置文件路径')
 
       // 检查文件是否已存在
       try {
@@ -296,35 +423,25 @@ export class ConfigService {
    */
   async deleteConfig(path: string): Promise<void> {
     try {
-      // 检查是否为系统配置文件
-      const deleteFileName = basename(path)
-      const deleteUserHome = os.homedir()
-      const deleteIsUserHomeConfig = path.includes(deleteUserHome) &&
-        (path.endsWith(join(deleteUserHome, '.claude', 'settings.json')) ||
-         path.endsWith(join(deleteUserHome, '.claude.json')) ||
-         path.endsWith(join(deleteUserHome, '.claude', 'CLAUDE.md')))
+      const resolvedPath = this.validateConfigPath(path, '配置文件路径')
 
-      const deleteIsSystemConfig =
-        deleteFileName === CONFIG_FILES.SETTINGS ||
-        deleteFileName === CONFIG_FILES.SETTINGS_LOCAL ||
-        deleteFileName === CONFIG_FILES.CLAUDE_JSON ||
-        deleteFileName === CONFIG_FILES.CLAUDE_MD ||
-        deleteIsUserHomeConfig
+      // 检查是否为系统配置文件
+      const deleteIsSystemConfig = this.isSystemConfigPath(resolvedPath)
 
       if (deleteIsSystemConfig) {
         throw new Error('系统配置文件不允许删除，请手动在文件系统中管理这些文件')
       }
 
       // 创建备份
-      await this.createBackup(path)
+      await this.createBackup(resolvedPath)
 
       // 删除文件
-      await fs.unlink(path)
+      await fs.unlink(resolvedPath)
       
       // 如果是用户配置文件，同时删除对应的.meta文件
       if (!deleteIsSystemConfig) {
         // 用户配置文件：同时删除.meta文件
-        const metaPath = `${path}.meta`
+        const metaPath = `${resolvedPath}.meta`
         try {
           await fs.unlink(metaPath)
           logger.info(`元数据文件已删除: ${metaPath}`)
@@ -334,7 +451,7 @@ export class ConfigService {
         }
       }
 
-      logger.info(`配置文件已删除: ${path}`)
+      logger.info(`配置文件已删除: ${resolvedPath}`)
 
     } catch (error) {
       logger.error(`删除配置文件失败 ${path}:`, error)
@@ -402,26 +519,37 @@ export class ConfigService {
    */
   async createBackup(path: string): Promise<BackupInfo> {
     try {
+      const resolvedPath = this.validateConfigPath(path, '备份源配置路径')
       const backupId = uuidv4()
-      const fileName = basename(path)
+      const fileName = basename(resolvedPath)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      const backupFileName = `${fileName}.${timestamp}.backup`
+      const backupFileName = `${fileName}.${timestamp}.${backupId}.backup`
       const backupPath = join(PATHS.BACKUP_DIR, backupFileName)
+      const backupMetadataPath = this.getBackupMetadataPath(backupPath)
 
       // 确保备份目录存在
       await fs.mkdir(PATHS.BACKUP_DIR, { recursive: true })
 
       // 复制文件
-      const content = await fs.readFile(path)
+      const content = await fs.readFile(resolvedPath)
       await fs.writeFile(backupPath, content)
+
+      const backupMetadata: BackupMetadata = {
+        id: backupId,
+        originalPath: resolvedPath,
+        backupPath,
+        createdAt: new Date().toISOString(),
+        description: `自动备份 - ${new Date().toLocaleString()}`
+      }
+      await fs.writeFile(backupMetadataPath, JSON.stringify(backupMetadata, null, 2), 'utf8')
 
       const backupInfo: BackupInfo = {
         id: backupId,
-        configPath: path,
+        configPath: resolvedPath,
         timestamp: new Date(),
         backupPath,
         size: content.length,
-        description: `自动备份 - ${new Date().toLocaleString()}`
+        description: backupMetadata.description
       }
 
       logger.info(`配置备份已创建: ${backupPath}`)
@@ -438,21 +566,38 @@ export class ConfigService {
    */
   async restoreBackup(backupId: string): Promise<void> {
     try {
-      // 这里简化实现，实际应该从数据库或文件中查找备份信息
-      // 目前直接在备份目录中查找
       const backupFiles = await fs.readdir(PATHS.BACKUP_DIR)
-      const backupFile = backupFiles.find(file => file.includes(backupId))
+      const metadataFiles = backupFiles.filter((file) => file.endsWith('.backup.meta.json'))
 
+      for (const metadataFile of metadataFiles) {
+        const metadataPath = join(PATHS.BACKUP_DIR, metadataFile)
+        const metadata = await this.readBackupMetadata(metadataPath)
+
+        if (metadata?.id === backupId) {
+          const backupPath = ensurePathWithinBase(metadata.backupPath, PATHS.BACKUP_DIR, '备份文件路径')
+          const configPath = this.validateConfigPath(metadata.originalPath, '备份恢复目标路径')
+          const content = await fs.readFile(backupPath)
+
+          await fs.writeFile(configPath, content)
+          logger.info(`配置已从备份恢复: ${configPath}`)
+          return
+        }
+      }
+
+      const backupFile = backupFiles.find((file) => file.endsWith('.backup') && file.includes(backupId))
       if (!backupFile) {
         throw new Error(`备份文件不存在: ${backupId}`)
       }
 
-      const backupPath = join(PATHS.BACKUP_DIR, backupFile)
+      const backupPath = ensurePathWithinBase(join(PATHS.BACKUP_DIR, backupFile), PATHS.BACKUP_DIR, '备份文件路径')
       const content = await fs.readFile(backupPath)
 
-      // 从备份文件名中提取原始配置文件名
+      // 向后兼容旧版备份文件
       const originalFileName = backupFile.split('.').slice(0, -2).join('.')
-      const configPath = join(this.claudeDir, originalFileName)
+      const configPath = this.validateConfigPath(
+        this.resolveLegacyBackupOriginalPath(originalFileName),
+        '备份恢复目标路径'
+      )
 
       // 恢复文件
       await fs.writeFile(configPath, content)
@@ -470,19 +615,51 @@ export class ConfigService {
    */
   async listBackups(configPath: string): Promise<BackupInfo[]> {
     try {
+      const resolvedConfigPath = this.validateConfigPath(configPath, '备份列表目标路径')
       const backupFiles = await fs.readdir(PATHS.BACKUP_DIR)
-      const configFileName = basename(configPath)
+      const configFileName = basename(resolvedConfigPath)
 
       const backups: BackupInfo[] = []
+      const metadataBackedFiles = new Set<string>()
+
+      for (const file of backupFiles.filter((item) => item.endsWith('.backup.meta.json'))) {
+        const metadataPath = join(PATHS.BACKUP_DIR, file)
+        const metadata = await this.readBackupMetadata(metadataPath)
+
+        if (!metadata) {
+          continue
+        }
+
+        if (normalizePathForComparison(metadata.originalPath) !== normalizePathForComparison(resolvedConfigPath)) {
+          continue
+        }
+
+        const backupPath = ensurePathWithinBase(metadata.backupPath, PATHS.BACKUP_DIR, '备份文件路径')
+        const stats = await fs.stat(backupPath)
+        metadataBackedFiles.add(basename(backupPath))
+
+        backups.push({
+          id: metadata.id,
+          configPath: resolvedConfigPath,
+          timestamp: new Date(metadata.createdAt),
+          backupPath,
+          size: stats.size,
+          description: metadata.description
+        })
+      }
 
       for (const file of backupFiles) {
+        if (metadataBackedFiles.has(file)) {
+          continue
+        }
+
         if (file.startsWith(configFileName) && file.endsWith('.backup')) {
           const backupPath = join(PATHS.BACKUP_DIR, file)
           const stats = await fs.stat(backupPath)
 
           const backupInfo: BackupInfo = {
             id: file.split('.').slice(-2)[0], // 提取 backupId
-            configPath,
+            configPath: resolvedConfigPath,
             timestamp: stats.mtime,
             backupPath,
             size: stats.size
@@ -1004,36 +1181,53 @@ export class ConfigService {
 
   public async autoUpdateClaudeCodeStatus(): Promise<{ updatedConfigs: number, totalConfigs: number }> {
     try {
-      const configs = await this.scanConfigs();
-      const userSettingsPath = require('path').join(require('os').homedir(), '.claude', 'settings.json');
-      
-      let systemSettingsContent;
-      try {
-        systemSettingsContent = await this.getConfig(userSettingsPath);
-      } catch (e) {
-        logger.warn('无法读取系统 settings.json，跳过状态更新。');
-        return { updatedConfigs: 0, totalConfigs: configs.length };
+      const snapshot = await this.getRefreshSnapshot()
+      return {
+        updatedConfigs: snapshot.updatedConfigs,
+        totalConfigs: snapshot.totalConfigs
+      }
+    } catch (error) {
+      logger.error('自动更新Claude Code配置状态失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 同步给定配置列表的 Claude Code 状态
+   * @description 复用同一批已扫描配置，避免状态同步时再次触发 `scanConfigs()`。
+   */
+  private async syncClaudeCodeStatusForConfigs(configs: ConfigFile[]): Promise<number> {
+    const userSettingsPath = require('path').join(require('os').homedir(), '.claude', 'settings.json')
+
+    let systemSettingsContent: any
+    try {
+      systemSettingsContent = await this.getConfig(userSettingsPath)
+    } catch {
+      logger.warn('无法读取系统 settings.json，跳过状态更新。')
+      return 0
+    }
+
+    let updatedCount = 0
+    for (const config of configs) {
+      if (config.isSystemConfig) {
+        continue
       }
 
-      let updatedCount = 0;
-      for (const config of configs) {
-        if (!config.isSystemConfig) {
-          const configContent = await this.getConfig(config.path);
-          const isMatch = JSON.stringify(configContent) === JSON.stringify(systemSettingsContent);
-          
-          if (config.isInUse !== isMatch) {
-            const metadata = await this.getConfigMetadata(config.path) || {};
-            await this.saveConfigMetadata(config.path, { ...metadata, isInUse: isMatch, isActive: isMatch });
-            updatedCount++;
-          }
-        }
+      const configContent = await this.getConfig(config.path)
+      const isMatch = JSON.stringify(configContent) === JSON.stringify(systemSettingsContent)
+
+      if (config.isInUse !== isMatch) {
+        const metadata = await this.getConfigMetadata(config.path) || {}
+        await this.saveConfigMetadata(config.path, { ...metadata, isInUse: isMatch, isActive: isMatch })
+        updatedCount++
       }
-      logger.info(`自动比对完成，更新了 ${updatedCount} 个配置状态`);
-      return { updatedConfigs: updatedCount, totalConfigs: configs.length };
-    } catch (error) {
-      logger.error('自动更新Claude Code配置状态失败:', error);
-      throw error;
+
+      config.isInUse = isMatch
+      config.isActive = isMatch
     }
+
+    logger.info(`自动比对完成，更新了 ${updatedCount} 个配置状态`)
+    return updatedCount
   }
 
   /**

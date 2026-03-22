@@ -13,6 +13,10 @@ import {
   SettingsChangeEvent,
   SettingsValidationRule
 } from '@shared/types/settings'
+import {
+  DEFAULT_NEW_CONFIG_TEMPLATE,
+  validateNewConfigTemplate
+} from '@shared/config-template'
 import { logger } from '../utils/logger'
 
 export class SettingsService {
@@ -44,7 +48,8 @@ export class SettingsService {
         tabSize: 2,
         wordWrap: false,
         minimap: true,
-        lineNumbers: true
+        lineNumbers: true,
+        defaultConfigTemplate: DEFAULT_NEW_CONFIG_TEMPLATE
       },
       notifications: {
         enabled: true,
@@ -88,6 +93,13 @@ export class SettingsService {
       { tab: 'editor', key: 'wordWrap', required: true, type: 'boolean' },
       { tab: 'editor', key: 'minimap', required: true, type: 'boolean' },
       { tab: 'editor', key: 'lineNumbers', required: true, type: 'boolean' },
+      {
+        tab: 'editor',
+        key: 'defaultConfigTemplate',
+        required: true,
+        type: 'string',
+        validator: (value: string) => validateNewConfigTemplate(value)
+      },
 
       // 通知设置验证
       { tab: 'notifications', key: 'enabled', required: true, type: 'boolean' },

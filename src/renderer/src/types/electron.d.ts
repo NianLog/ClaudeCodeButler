@@ -8,6 +8,8 @@ import type { ElectronAPI } from '../../../preload/index'
 declare global {
   interface Window {
     electronAPI: ElectronAPI
+    __APP_BOOTSTRAPPED__?: boolean
+    __APP_BOOT_TIMEOUT__?: ReturnType<typeof setTimeout>
   }
 }
 

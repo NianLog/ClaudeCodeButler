@@ -17,7 +17,9 @@ export interface MCPServerConfig {
   /** 传输协议类型 */
   type?: MCPTransportType
   /** 执行命令 */
-  command: string
+  command?: string
+  /** 远程服务 URL */
+  url?: string
   /** 命令参数数组 */
   args?: string[]
   /** 环境变量 */
@@ -195,7 +197,9 @@ export interface MCPServerFormData {
   /** 传输类型 */
   type?: MCPTransportType
   /** 执行命令 */
-  command: string
+  command?: string
+  /** 远程服务 URL */
+  url?: string
   /** 命令参数 (字符串形式,用空格或换行分隔) */
   argsText?: string
   /** 环境变量 (JSON字符串或键值对数组) */
@@ -221,12 +225,36 @@ export interface MCPServerValidation {
   /** 错误信息 */
   errors?: {
     id?: string
+    type?: string
     command?: string
+    url?: string
     args?: string
     env?: string
     timeout?: string
     [key: string]: string | undefined
   }
+}
+
+/**
+ * MCP服务器可用性验证结果
+ */
+export interface MCPServerAvailabilityResult {
+  /** 是否可用 */
+  valid: boolean
+  /** 传输类型 */
+  transportType: MCPTransportType
+  /** 结果消息 */
+  message: string
+  /** HTTP状态码 */
+  statusCode?: number
+  /** 使用的终端类型 */
+  terminalType?: string
+  /** 退出码 */
+  exitCode?: number | null
+  /** 标准输出 */
+  stdout?: string
+  /** 标准错误 */
+  stderr?: string
 }
 
 /**

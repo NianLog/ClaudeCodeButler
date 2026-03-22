@@ -18,6 +18,7 @@ export interface EditorSettings {
   wordWrap: boolean
   minimap: boolean
   lineNumbers: boolean
+  defaultConfigTemplate: string
 }
 
 // 通知设置类型

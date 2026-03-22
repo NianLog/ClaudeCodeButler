@@ -34,8 +34,14 @@ import {
 } from '@ant-design/icons'
 import { useConfigEditorStore } from '../../store/config-editor-store'
 import { useConfigValidationStore } from '../../store/config-validation-store'
+import { useEditorSettings } from '../../store/settings-store'
 import { useMessage } from '../../hooks/useMessage'
 import type { ConfigFile } from '@shared/types'
+import { normalizeNewConfigTemplate } from '@shared/config-template'
+import {
+  type EditorLanguage,
+  resolveConfigEditorLanguage
+} from '../../utils/config-editor-utils'
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 import { useTranslation } from '../../locales/useTranslation'
@@ -44,13 +50,47 @@ const { Option } = Select
 const { Text } = Typography
 
 /**
+ * 清理 JSON 输入中的控制字符
+ * @param rawContent 原始编辑器内容
+ * @returns 去除控制字符后的字符串
+ */
+const sanitizeJsonInput = (rawContent: string): string => {
+  return Array.from(rawContent)
+    .filter((character) => {
+      const codePoint = character.charCodeAt(0)
+      return !((codePoint >= 0 && codePoint <= 31) || (codePoint >= 127 && codePoint <= 159))
+    })
+    .join('')
+}
+
+/**
  * 配置编辑器属性
  */
 interface ConfigEditorProps {
   visible: boolean
   config?: ConfigFile | null
+  mode?: 'create' | 'edit' | 'duplicate'
+  initialDraft?: ConfigEditorDraft | null
   onClose: () => void
   onSave: (configData: Partial<ConfigFile>) => Promise<void>
+}
+
+/**
+ * 配置编辑器初始化草稿
+ */
+export interface ConfigEditorDraft {
+  /** 配置名称 */
+  name: string
+  /** 配置描述 */
+  description?: string
+  /** 配置类型 */
+  type: string
+  /** 是否激活 */
+  isActive?: boolean
+  /** 初始内容 */
+  content: unknown
+  /** 初始语言 */
+  language?: EditorLanguage
 }
 
 /**
@@ -59,6 +99,8 @@ interface ConfigEditorProps {
 const ConfigEditor: React.FC<ConfigEditorProps> = ({
   visible,
   config,
+  mode = 'create',
+  initialDraft,
   onClose,
   onSave
 }) => {
@@ -72,7 +114,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   const [showUserImport, setShowUserImport] = useState(false)
   const [userConfigs, setUserConfigs] = useState<any[]>([])
   const [loadingUserConfigs, setLoadingUserConfigs] = useState(false)
-  const [editorLanguage, setEditorLanguage] = useState<'json' | 'markdown'>('json')
+  const [editorLanguage, setEditorLanguage] = useState<EditorLanguage>('json')
   const [systemConfigConfirmVisible, setSystemConfigConfirmVisible] = useState(false)
   const [pendingSystemConfigAction, setPendingSystemConfigAction] = useState<{
     action: 'load' | 'save'
@@ -80,6 +122,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   } | null>(null)
 
   const { editorContent, loadConfigContent } = useConfigEditorStore()
+  const editorSettings = useEditorSettings()
   useConfigValidationStore()
 
   // 初始化表单数据
@@ -105,19 +148,27 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         } else {
           loadConfigContent(config)
         }
+      } else if (initialDraft) {
+        const language = initialDraft.language || resolveConfigEditorLanguage({
+          type: initialDraft.type,
+          name: initialDraft.name,
+          path: initialDraft.name
+        })
+        const initialContent = typeof initialDraft.content === 'string'
+          ? initialDraft.content
+          : JSON.stringify(initialDraft.content ?? {}, null, 2)
+
+        form.setFieldsValue({
+          name: initialDraft.name || '',
+          description: initialDraft.description || '',
+          type: initialDraft.type || 'claude-code',
+          isActive: Boolean(initialDraft.isActive)
+        })
+        setContent(initialContent)
+        setEditorLanguage(language)
       } else {
         // 新建模式
-        const defaultContent = JSON.stringify({
-          env: {
-            ANTHROPIC_AUTH_TOKEN: "Claude Code TokenKey",
-            ANTHROPIC_BASE_URL: "Claude Code API URL",
-            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-          },
-          permissions: {
-            allow: [],
-            deny: []
-          }
-        }, null, 2)
+        const defaultContent = normalizeNewConfigTemplate(editorSettings.defaultConfigTemplate)
         form.setFieldsValue({
           name: '',
           description: '',
@@ -128,22 +179,18 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         setEditorLanguage('json')
       }
     }
-  }, [visible, config, form, loadConfigContent])
+  }, [visible, config, initialDraft, form, loadConfigContent, editorSettings.defaultConfigTemplate])
 
   // 从store的editorContent加载内容（统一架构：只处理纯内容）
   useEffect(() => {
     if (config && visible && editorContent) {
       // 统一处理：editorContent已经是纯内容，不再包含元数据
       let contentStr: string
-      let language: 'json' | 'markdown' = 'json'
-
-      const isMDFile = config.type === 'claude-md' || config.type === 'user-preferences' ||
-                       config.path?.endsWith('.md') || config.path?.endsWith('CLAUDE.md')
+      let language: EditorLanguage = resolveConfigEditorLanguage(config)
 
       if (typeof editorContent === 'string') {
         // 字符串内容（MD文件）
         contentStr = editorContent
-        language = isMDFile ? 'markdown' : 'json'
       } else {
         // 对象内容（JSON文件）
         contentStr = JSON.stringify(editorContent, null, 2)
@@ -272,7 +319,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           actualContent = content
         } else {
           // JSON配置解析
-          const cleanContent = content.replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+          const cleanContent = sanitizeJsonInput(content)
           actualContent = JSON.parse(cleanContent)
         }
       } catch (error) {
@@ -357,7 +404,11 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       <Modal
         title={
           <Space>
-            {config ? t('configEditor.title.edit') : t('configEditor.title.create')}
+            {config
+              ? t('configEditor.title.edit')
+              : mode === 'duplicate'
+                ? t('configEditor.title.duplicate')
+                : t('configEditor.title.create')}
             {isValid ? (
               <Tag color="success" icon={<CheckCircleOutlined />}>{t('configEditor.status.valid')}</Tag>
             ) : (
@@ -367,6 +418,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         }
         open={visible}
         onCancel={onClose}
+        destroyOnHidden
         width={900}
         footer={[
           <Button key="cancel" onClick={onClose}>

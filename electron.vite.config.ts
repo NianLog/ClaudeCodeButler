@@ -47,13 +47,17 @@ export default defineConfig({
     build: {
       sourcemap: false,
       minify: true,
+      modulePreload: false,
       chunkSizeWarningLimit: 5000,
       rollupOptions: {
         output: {
           manualChunks: (id) => {
+            if (id.includes('vite/preload-helper')) {
+              return 'preload-helper'
+            }
+
             if (!id.includes('node_modules')) return undefined
 
-            // 只分割主要的大型模块
             if (id.includes('monaco-editor') || id.includes('@monaco-editor/react')) {
               return 'monaco-editor'
             }

@@ -18,6 +18,10 @@ import type {
   EnvCommand
 } from '@shared/types/managed-mode'
 import { managedModeLogRotationService } from './managed-mode-log-rotation.service'
+import { logger } from '../utils/logger'
+import { Utf8LineDecoder } from '../utils/utf8-line-decoder'
+
+const managedModeLogger = logger.child('ManagedModeService')
 
 /**
  * 托管模式管理服务类
@@ -36,6 +40,8 @@ export class ManagedModeService extends EventEmitter {
   private isIntegrated: boolean = false // 标记是否使用集成模式
   private startTime: number | null = null // 记录服务启动时间
   private isRestarting: boolean = false // 标记是否正在执行重启操作
+  private proxyStdoutDecoder: Utf8LineDecoder = new Utf8LineDecoder()
+  private proxyStderrDecoder: Utf8LineDecoder = new Utf8LineDecoder()
 
   // 智能健康检查相关状态
   private consecutiveSuccessCount: number = 0 // 连续成功检查次数
@@ -63,45 +69,102 @@ export class ManagedModeService extends EventEmitter {
   }
 
   /**
+   * 重置代理进程日志解码状态
+   * @description 在每次启动新的代理子进程前清空上一次会话残留的 UTF-8 解码缓冲
+   */
+  private resetProxyLogDecoders(): void {
+    this.proxyStdoutDecoder.reset()
+    this.proxyStderrDecoder.reset()
+  }
+
+  /**
+   * 处理代理进程输出分片
+   * @param chunk 子进程输出的 Buffer 分片
+   * @param stream 输出流来源
+   */
+  private handleProxyOutputChunk(chunk: Buffer, stream: 'stdout' | 'stderr'): void {
+    const decoder = stream === 'stdout' ? this.proxyStdoutDecoder : this.proxyStderrDecoder
+    const level = stream === 'stdout' ? 'info' : 'error'
+    const completedLines = decoder.write(chunk)
+
+    completedLines.forEach((line) => {
+      this.handleProxyOutputLine(line, level)
+    })
+  }
+
+  /**
+   * 刷新代理进程输出缓冲
+   * @description 在进程退出或报错时输出剩余半行，避免尾部日志因为没有换行而丢失
+   */
+  private flushProxyOutputChunks(): void {
+    this.proxyStdoutDecoder.end().forEach((line) => {
+      this.handleProxyOutputLine(line, 'info')
+    })
+    this.proxyStderrDecoder.end().forEach((line) => {
+      this.handleProxyOutputLine(line, 'error')
+    })
+    this.resetProxyLogDecoders()
+  }
+
+  /**
+   * 处理代理进程的完整日志行
+   * @param rawLine 已经按 UTF-8 和换行边界拼接完成的日志行
+   * @param level 日志级别
+   */
+  private handleProxyOutputLine(rawLine: string, level: 'info' | 'error'): void {
+    const line = rawLine.trim()
+
+    if (!line) {
+      return
+    }
+
+    if (level === 'info') {
+      managedModeLogger.info(`[ProxyProcess] ${line}`)
+    } else {
+      managedModeLogger.error(`[ProxyProcess] ${line}`)
+    }
+
+    this.parseAndEmitLog(line, level)
+  }
+
+  /**
    * 初始化服务
    */
   async initialize(): Promise<void> {
-    console.log('[ManagedModeService] ===== 开始初始化托管模式服务 =====')
+    managedModeLogger.info('开始初始化托管模式服务')
     try {
       // 初始化日志轮转服务
-      console.log('[ManagedModeService] 步骤1：初始化日志轮转服务')
+      managedModeLogger.info('步骤1：初始化日志轮转服务')
       await managedModeLogRotationService.initialize()
-      console.log('[ManagedModeService] 步骤1完成：日志轮转服务初始化成功')
+      managedModeLogger.info('步骤1完成：日志轮转服务初始化成功')
 
       // 加载配置
-      console.log('[ManagedModeService] 步骤2：加载托管模式配置')
+      managedModeLogger.info('步骤2：加载托管模式配置')
       await this.loadConfig()
-      console.log('[ManagedModeService] 步骤2完成：配置加载成功')
+      managedModeLogger.info('步骤2完成：配置加载成功')
 
       // 同步 providers：从配置管理列表自动加载并覆盖
-      console.log('[ManagedModeService] 步骤3：同步服务提供商列表')
+      managedModeLogger.info('步骤3：同步服务提供商列表')
       await this.syncProvidersFromConfigList()
-      console.log('[ManagedModeService] 步骤3完成：服务提供商同步成功')
+      managedModeLogger.info('步骤3完成：服务提供商同步成功')
 
       // 校准托管模式状态：比对 settings.json 与托管配置
-      console.log('[ManagedModeService] 步骤4：校准托管模式状态')
+      managedModeLogger.info('步骤4：校准托管模式状态')
       await this.calibrateManagedModeStatus()
-      console.log('[ManagedModeService] 步骤4完成：状态校准成功')
+      managedModeLogger.info('步骤4完成：状态校准成功')
 
       // 修改：不再自动启动托管模式，需要用户手动启用
       // 除非检测到当前系统配置就是托管配置且设置了自动启动标记
       if (this.config?.enabled && this.config.autoStart) {
-        console.log('[ManagedModeService] 检测到托管模式自动启动配置，正在启动托管服务...')
+        managedModeLogger.info('检测到托管模式自动启动配置，正在启动托管服务')
         await this.start()
       } else if (this.config?.enabled) {
-        console.log('[ManagedModeService] 托管模式已启用但需要手动启动服务')
+        managedModeLogger.info('托管模式已启用但需要手动启动服务')
       }
 
-      console.log('[ManagedModeService] ===== 托管模式服务初始化完成 =====')
+      managedModeLogger.info('托管模式服务初始化完成')
     } catch (error: any) {
-      console.error('[ManagedModeService] ===== 托管模式服务初始化失败 =====')
-      console.error('[ManagedModeService] 错误详情:', error)
-      console.error('[ManagedModeService] 错误堆栈:', error.stack)
+      managedModeLogger.error('托管模式服务初始化失败', error)
       // 重新抛出错误，确保上层能够捕获到初始化失败
       throw error
     }
@@ -125,7 +188,7 @@ export class ManagedModeService extends EventEmitter {
         currentSettings = JSON.parse(settingsContent)
       } catch (error) {
         // 文件不存在或读取失败，无需校准
-        console.log('settings.json 不存在或读取失败，跳过校准')
+        managedModeLogger.info('settings.json 不存在或读取失败，跳过校准')
         return
       }
 
@@ -162,18 +225,18 @@ export class ManagedModeService extends EventEmitter {
       // 如果配置匹配且托管模式未启用，自动启用（但不改变 enabled 状态，仅校准认知）
       if (envMatches && permissionsMatch && statusLineMatch) {
         if (!this.config.enabled) {
-          console.log('检测到 settings.json 内容与托管配置一致，自动校准托管模式状态')
+          managedModeLogger.info('检测到 settings.json 内容与托管配置一致，自动校准托管模式状态')
           this.config.enabled = true
           await this.saveConfig(this.config)
         } else {
-          console.log('settings.json 与托管配置一致，状态已同步')
+          managedModeLogger.info('settings.json 与托管配置一致，状态已同步')
         }
       } else if (this.config.enabled) {
         // 如果托管模式已启用但配置不匹配，说明用户可能手动修改了 settings.json
-        console.warn('托管模式已启用但 settings.json 内容不匹配，可能需要重新应用配置')
+        managedModeLogger.warn('托管模式已启用但 settings.json 内容不匹配，可能需要重新应用配置')
       }
     } catch (error: any) {
-      console.error('校准托管模式状态失败:', error.message)
+      managedModeLogger.error('校准托管模式状态失败', error)
     }
   }
 
@@ -204,26 +267,26 @@ export class ManagedModeService extends EventEmitter {
 
     // 记录启动时间
     this.startTime = Date.now()
-    console.log(`托管模式服务启动时间: ${new Date(this.startTime).toISOString()}`)
+    managedModeLogger.info(`托管模式服务启动时间: ${new Date(this.startTime).toISOString()}`)
 
     // 启动前备份系统设置（只在首次启动时备份，避免覆盖原始配置）
     const hasBackup = await this.hasSystemSettingsBackup()
     if (!hasBackup) {
       try {
         await this.backupSystemSettings()
-        console.log('托管模式启动：系统设置已备份（首次启动）')
+        managedModeLogger.info('托管模式启动：系统设置已备份（首次启动）')
       } catch (backupError) {
-        console.warn('托管模式启动：备份系统设置失败，但继续启动', backupError)
+        managedModeLogger.warn('托管模式启动：备份系统设置失败，但继续启动', backupError)
       }
     } else {
-      console.log('托管模式启动：检测到已有备份，跳过备份步骤（避免覆盖原始配置）')
+      managedModeLogger.info('托管模式启动：检测到已有备份，跳过备份步骤（避免覆盖原始配置）')
     }
 
     // 尝试集成模式启动代理服务
     try {
       await this.startIntegratedProxy()
       this.isIntegrated = true
-      console.log('代理服务已启动 (集成模式)')
+      managedModeLogger.info('代理服务已启动 (集成模式)')
 
       // 发送服务启动日志
       this.emit('log', {
@@ -249,7 +312,7 @@ export class ManagedModeService extends EventEmitter {
 
       return
     } catch (error) {
-      console.error('集成模式启动失败，尝试传统模式:', error)
+      managedModeLogger.error('集成模式启动失败，尝试传统模式', error)
       // 如果集成模式失败，尝试传统模式
     }
 
@@ -299,7 +362,8 @@ export class ManagedModeService extends EventEmitter {
 
     for (const method of startMethods) {
       try {
-        console.log(`尝试启动代理服务: ${method.command} ${method.args.join(' ')}`)
+        managedModeLogger.info(`尝试启动代理服务: ${method.command} ${method.args.join(' ')}`)
+        this.resetProxyLogDecoders()
 
         this.proxyProcess = spawn(method.command, method.args, {
           cwd: method.cwd,
@@ -307,34 +371,35 @@ export class ManagedModeService extends EventEmitter {
           detached: false,
           env: {
             ...process.env,
-            NODE_ENV: 'production'
+            NODE_ENV: 'production',
+            LANG: 'zh_CN.UTF-8',
+            LC_ALL: 'zh_CN.UTF-8',
+            PYTHONIOENCODING: 'utf-8'
           }
         })
 
         // 监听标准输出
         this.proxyProcess.stdout?.on('data', (data: Buffer) => {
-          const output = data.toString()
-          console.log(`[代理服务] ${output}`)
-          this.parseAndEmitLog(output, 'info')
+          this.handleProxyOutputChunk(data, 'stdout')
         })
 
         // 监听标准错误
         this.proxyProcess.stderr?.on('data', (data: Buffer) => {
-          const output = data.toString()
-          console.error(`[代理服务] ${output}`)
-          this.parseAndEmitLog(output, 'error')
+          this.handleProxyOutputChunk(data, 'stderr')
         })
 
         // 监听进程退出
         this.proxyProcess.on('exit', (code, signal) => {
-          console.log(`代理服务进程退出, code: ${code}, signal: ${signal}`)
+          this.flushProxyOutputChunks()
+          managedModeLogger.warn(`代理服务进程退出, code: ${code}, signal: ${signal}`)
           this.proxyProcess = null
           this.stopHealthCheck()
         })
 
         // 监听进程错误
         this.proxyProcess.on('error', (error) => {
-          console.error(`代理服务进程错误 (${method.command}):`, error)
+          this.flushProxyOutputChunks()
+          managedModeLogger.error(`代理服务进程错误 (${method.command})`, error)
           lastError = error
           this.proxyProcess = null
           this.stopHealthCheck()
@@ -344,7 +409,7 @@ export class ManagedModeService extends EventEmitter {
         await new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
             if (this.proxyProcess && !this.proxyProcess.killed) {
-              console.log(`代理服务启动成功 (使用: ${method.command})`)
+              managedModeLogger.info(`代理服务启动成功 (使用: ${method.command})`)
               resolve()
             } else {
               reject(new Error(`代理服务启动失败: ${method.command}`))
@@ -362,7 +427,7 @@ export class ManagedModeService extends EventEmitter {
         break
 
       } catch (error) {
-        console.log(`启动方法 ${method.command} 失败，尝试下一个方法...`)
+        managedModeLogger.warn(`启动方法 ${method.command} 失败，尝试下一个方法`, error)
         lastError = error as Error
         if (this.proxyProcess) {
           this.proxyProcess.kill()
@@ -442,18 +507,18 @@ export class ManagedModeService extends EventEmitter {
 
     // 清除启动时间
     this.startTime = null
-    console.log('托管模式服务已停止，启动时间已清除')
+    managedModeLogger.info('托管模式服务已停止，启动时间已清除')
 
     // 停止后还原系统设置（重启操作时跳过还原）
     if (!this.isRestarting) {
       try {
         await this.restoreSystemSettings()
-        console.log('托管模式停止：系统设置已还原')
+        managedModeLogger.info('托管模式停止：系统设置已还原')
       } catch (restoreError) {
-        console.warn('托管模式停止：还原系统设置失败', restoreError)
+        managedModeLogger.warn('托管模式停止：还原系统设置失败', restoreError)
       }
     } else {
-      console.log('重启操作：跳过还原settings，保持托管配置')
+      managedModeLogger.info('重启操作：跳过还原settings，保持托管配置')
     }
   }
 
@@ -468,7 +533,7 @@ export class ManagedModeService extends EventEmitter {
     }
 
     if (!this.config) {
-      console.warn('重启操作：配置不存在，跳过覆写settings')
+      managedModeLogger.warn('重启操作：配置不存在，跳过覆写settings')
       return
     }
 
@@ -493,12 +558,12 @@ export class ManagedModeService extends EventEmitter {
       // 覆写settings配置
       const writeResult = await this.updateSettingsConfig(managedConfigData)
       if (writeResult.success) {
-        console.log('重启操作：已覆写settings配置，保持托管模式')
+        managedModeLogger.info('重启操作：已覆写settings配置，保持托管模式')
       } else {
-        console.error('重启操作：覆写settings配置失败', writeResult.error)
+        managedModeLogger.error('重启操作：覆写settings配置失败', writeResult.error)
       }
     } catch (error: any) {
-      console.error('重启操作：应用settings配置失败', error.message)
+      managedModeLogger.error('重启操作：应用settings配置失败', error)
     }
   }
 
@@ -548,8 +613,7 @@ export class ManagedModeService extends EventEmitter {
           name: provider.name,
           type: provider.type,
           apiBaseUrl: provider.apiBaseUrl,
-          apiKey: formatApiKey(provider.apiKey),
-          rawApiKey: provider.apiKey
+          apiKey: formatApiKey(provider.apiKey)
         }
       }
     }
@@ -561,7 +625,6 @@ export class ManagedModeService extends EventEmitter {
       pid,
       currentProvider: this.config?.currentProvider,
       currentProviderInfo,
-      accessToken: this.config?.accessToken,
       networkProxy: this.config?.networkProxy,
       startTime: this.startTime
     }
@@ -609,15 +672,15 @@ export class ManagedModeService extends EventEmitter {
       // 将托管配置写入系统 settings.json
       const writeResult = await this.updateSettingsConfig(managedConfigData)
       if (!writeResult.success) {
-        console.error('写入托管配置到 settings.json 失败:', writeResult.error)
+        managedModeLogger.error('写入托管配置到 settings.json 失败', writeResult.error)
         // 不抛出错误，因为服务已经启动了
       }
 
-      console.log('托管模式已启用，配置已写入 settings.json')
+      managedModeLogger.info('托管模式已启用，配置已写入 settings.json')
 
       return { success: true, message: '托管模式已启用' }
     } catch (error: any) {
-      console.error('启用托管模式失败:', error)
+      managedModeLogger.error('启用托管模式失败', error)
       return { success: false, error: error.message }
     }
   }
@@ -636,9 +699,9 @@ export class ManagedModeService extends EventEmitter {
       // 无论服务是否运行，都尝试还原系统设置
       try {
         await this.restoreSystemSettings()
-        console.log('托管模式禁用：系统设置已还原')
+        managedModeLogger.info('托管模式禁用：系统设置已还原')
       } catch (restoreError) {
-        console.warn('托管模式禁用：还原系统设置失败', restoreError)
+        managedModeLogger.warn('托管模式禁用：还原系统设置失败', restoreError)
         // 还原失败不应该阻止禁用操作
       }
 
@@ -676,7 +739,7 @@ export class ManagedModeService extends EventEmitter {
    * 获取配置
    */
   getConfig(): ManagedModeConfig | null {
-    return this.config
+    return this.buildRendererSafeConfig()
   }
 
   /**
@@ -810,14 +873,14 @@ export class ManagedModeService extends EventEmitter {
         const originalContent = await fs.readFile(userSettingsPath, 'utf8')
         await fs.writeFile(backupPath, originalContent, 'utf8')
 
-        console.log(`系统设置已备份到: ${backupPath}`)
+        managedModeLogger.info(`系统设置已备份到: ${backupPath}`)
         return backupPath
       } catch (error) {
-        console.warn(`原始系统设置文件不存在: ${userSettingsPath}`)
+        managedModeLogger.warn(`原始系统设置文件不存在: ${userSettingsPath}`)
         throw new Error('系统设置文件不存在，无法备份')
       }
     } catch (error: any) {
-      console.error('备份系统设置失败:', error.message)
+      managedModeLogger.error('备份系统设置失败', error)
       throw new Error(`备份系统设置失败: ${error.message}`)
     }
   }
@@ -841,7 +904,7 @@ export class ManagedModeService extends EventEmitter {
         .sort((a, b) => b.localeCompare(a)) // 按时间倒序排列，最新的在前
 
       if (backupFiles.length === 0) {
-        console.warn('未找到系统设置备份文件')
+        managedModeLogger.warn('未找到系统设置备份文件')
         return
       }
 
@@ -857,10 +920,10 @@ export class ManagedModeService extends EventEmitter {
       // 删除备份文件
       await fs.unlink(backupPath)
 
-      console.log(`系统设置已从备份还原: ${userSettingsPath}`)
-      console.log(`已删除备份文件: ${backupPath}`)
+      managedModeLogger.info(`系统设置已从备份还原: ${userSettingsPath}`)
+      managedModeLogger.info(`已删除备份文件: ${backupPath}`)
     } catch (error: any) {
-      console.error('还原系统设置失败:', error.message)
+      managedModeLogger.error('还原系统设置失败', error)
       throw new Error(`还原系统设置失败: ${error.message}`)
     }
   }
@@ -989,7 +1052,7 @@ export class ManagedModeService extends EventEmitter {
       try {
         await fs.access(configDir)
       } catch {
-        console.log('配置目录不存在，跳过 providers 同步')
+        managedModeLogger.info('配置目录不存在，跳过 providers 同步')
         return
       }
 
@@ -1034,11 +1097,11 @@ export class ManagedModeService extends EventEmitter {
               const metaData = JSON.parse(metaContent)
               if (metaData.name && typeof metaData.name === 'string') {
                 displayName = metaData.name
-                console.log(`从元数据文件读取到配置显示名称: ${displayName} (文件名: ${configName})`)
+                managedModeLogger.debug(`从元数据文件读取到配置显示名称: ${displayName} (文件名: ${configName})`)
               }
             } catch (metaError) {
               // .meta文件不存在或读取失败，使用文件名作为fallback
-              console.log(`未找到或无法读取元数据文件 ${file}.meta，使用文件名作为显示名称`)
+              managedModeLogger.debug(`未找到或无法读取元数据文件 ${file}.meta，使用文件名作为显示名称`)
             }
 
             // 生成稳定的 provider ID（使用简化的哈希算法）
@@ -1073,7 +1136,7 @@ export class ManagedModeService extends EventEmitter {
             }
           }
         } catch (error) {
-          console.error(`处理配置文件 ${file} 失败:`, error)
+          managedModeLogger.error(`处理配置文件 ${file} 失败`, error)
         }
       }
 
@@ -1082,16 +1145,16 @@ export class ManagedModeService extends EventEmitter {
 
       // 如果 currentProvider 不在新的 providers 列表中，清空它
       if (managedConfig.currentProvider && !newProviders.find((p: ApiProvider) => p.id === managedConfig.currentProvider)) {
-        console.log(`当前 provider ${managedConfig.currentProvider} 不在新的 providers 列表中，已清空`)
+        managedModeLogger.info(`当前 provider ${managedConfig.currentProvider} 不在新的 providers 列表中，已清空`)
         managedConfig.currentProvider = ''
       }
 
       // 保存配置
       await this.saveConfig(managedConfig)
 
-      console.log(`已从配置列表同步 ${newProviders.length} 个 providers`)
+      managedModeLogger.info(`已从配置列表同步 ${newProviders.length} 个 providers`)
     } catch (error: any) {
-      console.error('同步 providers 失败:', error.message)
+      managedModeLogger.error('同步 providers 失败', error)
     }
   }
 
@@ -1176,7 +1239,7 @@ export class ManagedModeService extends EventEmitter {
         existingConfig = JSON.parse(existingContent)
       } catch (error) {
         // 文件不存在或读取失败，使用空配置
-        console.log('系统settings文件不存在，将创建新文件')
+        managedModeLogger.info('系统settings文件不存在，将创建新文件')
       }
 
       // 完全替换模式：移除托管控制的字段，然后添加新的托管配置
@@ -1200,19 +1263,18 @@ export class ManagedModeService extends EventEmitter {
       // 写入配置
       await fs.writeFile(userSettingsPath, JSON.stringify(finalConfig, null, 2), 'utf8')
 
-      console.log(`托管模式配置已写入系统settings: ${userSettingsPath}`)
-      console.log('写入的配置:', JSON.stringify(finalConfig, null, 2))
+      managedModeLogger.info(`托管模式配置已写入系统settings: ${userSettingsPath}`)
+      managedModeLogger.debug('写入的配置', finalConfig)
 
       // 发送配置更新事件，通知前端状态变化
       this.emit('config-updated', {
         timestamp: Date.now(),
-        configPath: userSettingsPath,
-        configData: finalConfig
+        configPath: userSettingsPath
       })
 
       return { success: true }
     } catch (error: any) {
-      console.error('写入系统settings配置失败:', error)
+      managedModeLogger.error('写入系统settings配置失败', error)
       return { success: false, error: error.message }
     }
   }
@@ -1232,6 +1294,60 @@ export class ManagedModeService extends EventEmitter {
   }
 
   /**
+   * 生成渲染进程可见的安全配置副本
+   * @description 默认对 provider apiKey 与 accessToken 做脱敏，减少普通状态接口暴露敏感字段
+   */
+  private buildRendererSafeConfig(
+    options?: {
+      includeAccessToken?: boolean
+      includeProviderSecrets?: boolean
+    }
+  ): ManagedModeConfig | null {
+    if (!this.config) {
+      return null
+    }
+
+    const includeAccessToken = options?.includeAccessToken || false
+    const includeProviderSecrets = options?.includeProviderSecrets || false
+    const accessToken = includeAccessToken ? this.config.accessToken : ''
+    const configData = this.config.configData
+      ? {
+          ...this.config.configData,
+          env: {
+            ...(this.config.configData.env || {}),
+            ANTHROPIC_AUTH_TOKEN: accessToken
+          }
+        }
+      : this.config.configData
+
+    return {
+      ...this.config,
+      accessToken,
+      providers: this.config.providers.map((provider) => ({
+        ...provider,
+        apiKey: includeProviderSecrets ? provider.apiKey : this.maskSecret(provider.apiKey)
+      })),
+      configData
+    }
+  }
+
+  /**
+   * 对敏感字符串做固定格式脱敏
+   * @description 保留首尾少量字符用于识别，同时避免在普通状态接口中暴露完整 secret
+   */
+  private maskSecret(secret: string): string {
+    if (!secret) {
+      return ''
+    }
+
+    if (secret.length <= 6) {
+      return '*'.repeat(secret.length)
+    }
+
+    return `${secret.slice(0, 3)}***${secret.slice(-3)}`
+  }
+
+  /**
    * 等待服务就绪
    */
   private async waitForServiceReady(): Promise<void> {
@@ -1241,12 +1357,12 @@ export class ManagedModeService extends EventEmitter {
     for (let i = 0; i < maxAttempts; i++) {
       try {
         const port = this.config?.port || ManagedModeService.DEFAULT_PORT
-        const response = await axios.get(`http://127.0.0.1:${port}/health`, {
-          timeout: 1000
-        })
+      const response = await axios.get(`http://127.0.0.1:${port}/health`, {
+        timeout: 1000
+      })
 
-        if (response.status === 200) {
-          console.log('代理服务已就绪')
+      if (response.status === 200) {
+          managedModeLogger.info('代理服务已就绪')
           return
         }
       } catch {
@@ -1269,7 +1385,7 @@ export class ManagedModeService extends EventEmitter {
     this.healthCheckLevel = 0
     this.currentHealthCheckInterval = this.HEALTH_CHECK_LEVELS[0].interval
 
-    console.log(`[健康检查] 启动智能健康检查，初始间隔: ${this.HEALTH_CHECK_LEVELS[0].label}`)
+    managedModeLogger.info(`启动智能健康检查，初始间隔: ${this.HEALTH_CHECK_LEVELS[0].label}`)
 
     // 执行第一次检查并启动循环
     this.performHealthCheck()
@@ -1282,13 +1398,13 @@ export class ManagedModeService extends EventEmitter {
   private performHealthCheck(): void {
     const port = this.config?.port || ManagedModeService.DEFAULT_PORT
 
-    console.log(`[健康检查] 开始执行健康检查...端口: ${port}`)
+    managedModeLogger.debug(`开始执行健康检查，端口: ${port}`)
 
     axios.get(`http://127.0.0.1:${port}/health`, {
       timeout: 3000
     })
     .then(response => {
-      console.log(`[健康检查] 检查成功，准备调度下次检查`)
+      managedModeLogger.debug('健康检查成功，准备调度下次检查')
       // 健康检查成功
       this.consecutiveSuccessCount++
       const currentLevel = this.HEALTH_CHECK_LEVELS[this.healthCheckLevel]
@@ -1328,7 +1444,7 @@ export class ManagedModeService extends EventEmitter {
         const newLevel = this.HEALTH_CHECK_LEVELS[this.healthCheckLevel]
         this.currentHealthCheckInterval = newLevel.interval
 
-        console.log(`[健康检查] 服务稳定，升级到级别${this.healthCheckLevel}，间隔调整为: ${newLevel.label}`)
+        managedModeLogger.info(`服务稳定，升级到级别${this.healthCheckLevel}，间隔调整为: ${newLevel.label}`)
         this.emit('log', {
           id: `health_${Date.now()}`,
           timestamp: Date.now(),
@@ -1349,7 +1465,7 @@ export class ManagedModeService extends EventEmitter {
       this.scheduleNextHealthCheck()
     })
     .catch(error => {
-      console.error('[健康检查] 检查失败,服务可能已停止:', error.message)
+      managedModeLogger.error('健康检查失败，服务可能已停止', error)
 
       // 发送健康检查失败日志
       this.emit('log', {
@@ -1391,15 +1507,15 @@ export class ManagedModeService extends EventEmitter {
     const currentInterval = this.currentHealthCheckInterval
     const currentLabel = this.HEALTH_CHECK_LEVELS[this.healthCheckLevel].label
 
-    console.log(`[健康检查] 调度下次检查，间隔: ${currentInterval}ms (${currentLabel})`)
+    managedModeLogger.debug(`调度下次检查，间隔: ${currentInterval}ms (${currentLabel})`)
 
     // 使用当前间隔调度下次检查
     this.healthCheckInterval = setTimeout(() => {
-      console.log(`[健康检康检查] 定时器触发，执行下次检查`)
+      managedModeLogger.debug('健康检查定时器触发，执行下次检查')
       this.performHealthCheck()
     }, currentInterval)
 
-    console.log(`[健康检查] 定时器已设置`)
+    managedModeLogger.debug('健康检查定时器已设置')
   }
 
   /**
@@ -1414,7 +1530,7 @@ export class ManagedModeService extends EventEmitter {
     this.healthCheckLevel = 0
     this.currentHealthCheckInterval = this.HEALTH_CHECK_LEVELS[0].interval
 
-    console.log(`[健康检查] 检查失败，重置到初始级别 (${oldInterval} → ${this.HEALTH_CHECK_LEVELS[0].label})`)
+    managedModeLogger.warn(`健康检查失败，重置到初始级别 (${oldInterval} → ${this.HEALTH_CHECK_LEVELS[0].label})`)
 
     this.emit('log', {
       id: `health_${Date.now()}`,
@@ -1496,7 +1612,7 @@ export class ManagedModeService extends EventEmitter {
         }
       }
     } catch (error) {
-      console.error('解析代理服务日志失败:', error)
+      managedModeLogger.error('解析代理服务日志失败', error)
     }
   }
 
@@ -1549,7 +1665,7 @@ export class ManagedModeService extends EventEmitter {
         window.webContents.send('managed-mode:log', logEvent)
       })
     } catch (error) {
-      console.error('发送日志事件失败:', error)
+      managedModeLogger.error('发送日志事件失败', error)
     }
   }
 
@@ -1698,7 +1814,7 @@ export class ManagedModeService extends EventEmitter {
         if (this.config?.networkProxy?.enabled) {
           const proxyUrl = `http://${this.config.networkProxy.host}:${this.config.networkProxy.port}`
           axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl)
-          console.log(`使用网络代理: ${proxyUrl}`)
+          managedModeLogger.info(`使用网络代理: ${proxyUrl}`)
         }
 
         // 记录请求日志（包含转发的请求头信息）
@@ -1737,7 +1853,7 @@ export class ManagedModeService extends EventEmitter {
             }
           }
           this.emit('log', requestLog)
-          console.log('[托管代理] 转发请求到上游:', {
+          managedModeLogger.debug('[托管代理] 转发请求到上游', {
             provider: currentProvider.name,
             url: axiosConfig.url,
             model: req.body.model,
@@ -1762,7 +1878,7 @@ export class ManagedModeService extends EventEmitter {
 
           // 处理流错误
           response.data.on('error', (error: any) => {
-            console.error('[托管代理] 上游流错误:', error)
+            managedModeLogger.error('[托管代理] 上游流错误', error)
             if (!res.headersSent) {
               res.status(500).end()
             } else {
@@ -1795,7 +1911,7 @@ export class ManagedModeService extends EventEmitter {
                 }
               }
               this.emit('log', responseLog)
-              console.log('[托管代理] 流式响应完成')
+              managedModeLogger.debug('[托管代理] 流式响应完成')
             }
           })
 
@@ -1835,7 +1951,7 @@ export class ManagedModeService extends EventEmitter {
             }
           }
           this.emit('log', responseLog)
-          console.log('[托管代理] 收到上游响应:', {
+          managedModeLogger.debug('[托管代理] 收到上游响应', {
             status: response.status,
             hasContent: !!response.data
           })
@@ -1845,7 +1961,7 @@ export class ManagedModeService extends EventEmitter {
         res.status(response.status).json(response.data)
 
       } catch (error: any) {
-        console.error('[托管代理] 请求失败:', error.message)
+        managedModeLogger.error('[托管代理] 请求失败', error)
 
         // 记录错误日志
         const endTime = Date.now()
@@ -1908,8 +2024,8 @@ export class ManagedModeService extends EventEmitter {
     // 启动服务器
     return new Promise((resolve, reject) => {
       const server = expressApp.listen(port, '127.0.0.1', () => {
-        console.log(`集成代理服务已启动: http://127.0.0.1:${port}`)
-        console.log(`当前服务提供商: ${this.config?.currentProvider || 'None'}`)
+        managedModeLogger.info(`集成代理服务已启动: http://127.0.0.1:${port}`)
+        managedModeLogger.info(`当前服务提供商: ${this.config?.currentProvider || 'None'}`)
         // 将 server 引用存储到 proxyProcess 中，以便后续管理
         this.proxyProcess = server as any
         resolve()

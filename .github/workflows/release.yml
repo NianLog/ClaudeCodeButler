@@ -1,3 +1,5 @@
+# CCB GitHub Actions workflow
+# Includes Windows quality checks and tagged Windows release packaging.
 name: Build and Release
 
 on:
@@ -11,13 +13,18 @@ on:
       - main
   workflow_dispatch:
 
-# 全局permissions
+concurrency:
+  group: ccb-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
+  quality:
+    name: Quality Check
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -26,23 +33,52 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            src/proxy-server/package-lock.json
+
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Build
+      - name: Install proxy-server dependencies
+        run: npm ci --prefix src/proxy-server
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build proxy-server
+        run: npm run build --prefix src/proxy-server
+
+      - name: Lint (informational)
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Run tests
+        run: npm run test -- --run
+
+      - name: Build application
         run: npm run build
 
   release:
-    needs: build
+    name: Windows Release
+    needs: quality
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [windows-latest]
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -51,29 +87,48 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            src/proxy-server/package-lock.json
+
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Build and package
-        run: |
-          npm run build
-          npm run pack
+      - name: Install proxy-server dependencies
+        run: npm ci --prefix src/proxy-server
+
+      - name: Build proxy-server
+        run: npm run build --prefix src/proxy-server
+
+      - name: Build application
+        run: npm run build
+
+      - name: Package Windows artifacts
+        run: npx electron-builder --win portable zip nsis --publish=never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-release
+          name: windows-release-${{ github.ref_name }}
           path: |
             release/*.exe
             release/*.zip
           if-no-files-found: error
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             release/*.exe

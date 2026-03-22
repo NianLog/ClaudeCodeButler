@@ -13,9 +13,8 @@ export const useMessage = () => {
   try {
     // 尝试使用App context
     return App.useApp().message
-  } catch (error) {
+  } catch {
     // 如果App context不可用，回退到静态message
-    console.warn('App context not available, falling back to static message:', error)
     return staticMessage
   }
 }

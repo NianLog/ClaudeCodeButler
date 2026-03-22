@@ -6,6 +6,9 @@
 import { app } from 'electron'
 import * as fs from 'fs-extra'
 import * as path from 'path'
+import { logger } from '../utils/logger'
+
+const statisticsLogger = logger.child('StatisticsService')
 
 /**
  * 统计事件类型
@@ -124,9 +127,9 @@ export class StatisticsService {
       // 启动定期保存
       this.startAutoSave()
 
-      console.log('[统计服务] 初始化完成')
+      statisticsLogger.info('初始化完成')
     } catch (error) {
-      console.error('[统计服务] 初始化失败:', error)
+      statisticsLogger.error('初始化失败', error)
     }
   }
 
@@ -143,10 +146,10 @@ export class StatisticsService {
         const cutoffTime = Date.now() - 90 * 24 * 60 * 60 * 1000
         this.events = this.events.filter(e => e.timestamp > cutoffTime)
 
-        console.log(`[统计服务] 加载了 ${this.events.length} 个历史事件`)
+        statisticsLogger.info(`加载了 ${this.events.length} 个历史事件`)
       }
     } catch (error) {
-      console.error('[统计服务] 加载事件失败:', error)
+      statisticsLogger.error('加载事件失败', error)
       this.events = []
     }
   }
@@ -158,7 +161,7 @@ export class StatisticsService {
     try {
       await fs.writeJSON(this.eventsFile, this.events, { spaces: 2 })
     } catch (error) {
-      console.error('[统计服务] 保存事件失败:', error)
+      statisticsLogger.error('保存事件失败', error)
     }
   }
 
@@ -351,7 +354,7 @@ export class StatisticsService {
     try {
       await fs.writeJSON(this.summaryFile, summary, { spaces: 2 })
     } catch (error) {
-      console.error('[统计服务] 保存摘要失败:', error)
+      statisticsLogger.error('保存摘要失败', error)
     }
 
     return summary
@@ -372,7 +375,7 @@ export class StatisticsService {
         return await fs.readJSON(this.summaryFile)
       }
     } catch (error) {
-      console.error('[统计服务] 加载摘要失败:', error)
+      statisticsLogger.error('加载摘要失败', error)
     }
 
     // 生成新摘要
@@ -390,7 +393,7 @@ export class StatisticsService {
 
     await this.saveEvents()
 
-    console.log(`[统计服务] 清理完成,删除了 ${originalLength - this.events.length} 个过期事件`)
+    statisticsLogger.info(`清理完成，删除了 ${originalLength - this.events.length} 个过期事件`)
   }
 
   /**
@@ -409,7 +412,7 @@ export class StatisticsService {
    * 关闭统计服务
    */
   public async shutdown(): Promise<void> {
-    console.log('[统计服务] 关闭中...')
+    statisticsLogger.info('关闭中')
 
     // 停止自动保存
     this.stopAutoSave()
@@ -421,7 +424,7 @@ export class StatisticsService {
     await this.saveEvents()
     await this.generateSummary()
 
-    console.log('[统计服务] 已关闭')
+    statisticsLogger.info('已关闭')
   }
 }
 

@@ -21,7 +21,6 @@ import {
   Modal,
   Form,
   Input,
-  message,
   Statistic,
   Tooltip,
   Typography
@@ -39,6 +38,7 @@ import {
 } from '@ant-design/icons'
 import { useEnvironmentCheckStore } from '@/store/environment-check-store'
 import { useTranslation } from '../../locales/useTranslation'
+import { useMessage } from '../../hooks/useMessage'
 import { EnvironmentCheckStatus, PredefinedCheckType } from '@shared/types/environment'
 import './EnvironmentCheckPanel.css'
 
@@ -48,7 +48,7 @@ const { Title, Text } = Typography
  * 环境检测面板组件
  */
 const EnvironmentCheckPanel: React.FC = () => {
-  const messageApi = message
+  const messageApi = useMessage()
   const { t } = useTranslation()
   const {
     predefinedResults,
@@ -134,7 +134,7 @@ const EnvironmentCheckPanel: React.FC = () => {
           </pre>
         )
       })
-      await loadClaudeCodeVersion()
+      await loadClaudeCodeVersion(true)
     } catch (error) {
       messageApi.error({ content: t('environment.messages.updateFailed'), key: 'claudeUpdate' })
     }
@@ -203,7 +203,7 @@ const EnvironmentCheckPanel: React.FC = () => {
 
   // 处理全部刷新
   const handleRefreshAll = async () => {
-    await refreshAll()
+    await refreshAll(true)
     messageApi.success(t('environment.messages.refreshAllSuccess'))
   }
 
@@ -447,7 +447,7 @@ const EnvironmentCheckPanel: React.FC = () => {
                 size="small"
                 icon={<ReloadOutlined />}
                 loading={isChecking}
-                onClick={() => loadClaudeCodeVersion()}
+                onClick={() => loadClaudeCodeVersion(true)}
               >
                 {t('environment.actions.refresh')}
               </Button>

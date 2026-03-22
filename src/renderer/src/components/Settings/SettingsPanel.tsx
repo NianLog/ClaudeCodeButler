@@ -3,8 +3,8 @@
  * 提供应用设置和偏好配置功能
  */
 
-import React, { useEffect, useState, useRef } from 'react'
-import { Card, Form, Switch, Input, InputNumber, Select, Button, Space, Typography, Tabs, Row, Col, Alert, Descriptions, Tag, message, Divider } from 'antd'
+import React, { Suspense, useEffect, useState, useRef } from 'react'
+import { Card, Form, Switch, Input, InputNumber, Select, Button, Space, Typography, Tabs, Row, Col, Alert, Descriptions, Tag, Divider, Modal } from 'antd'
 import {
   SaveOutlined,
   ReloadOutlined,
@@ -18,7 +18,8 @@ import {
   CloudDownloadOutlined,
   GlobalOutlined,
   GithubOutlined,
-  DesktopOutlined
+  DesktopOutlined,
+  EyeOutlined
 } from '@ant-design/icons'
 import { useSettingsStore, useBasicSettings, useEditorSettings, useNotificationSettings, useAdvancedSettings, useWindowSettings, useSettingsActions, useUnsavedChanges } from '../../store/settings-store'
 import { useAppStore } from '../../store/app-store'
@@ -27,9 +28,55 @@ import { versionService } from '../../services/version-service'
 import UpdateModal from '../Common/UpdateModal'
 import TerminalManagement from './TerminalManagement'
 import type { VersionInfo } from '../../services/version-service'
+import {
+  normalizeNewConfigTemplate,
+  validateNewConfigTemplate
+} from '@shared/config-template'
+import { useMessage } from '../../hooks/useMessage'
+const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 
 const { Title, Text } = Typography
 const { Option } = Select
+
+interface LazyCodeEditorFieldProps {
+  value?: string
+  onChange?: (value: string) => void
+  language: 'json' | 'markdown' | 'plaintext'
+  height: number
+  placeholder: string
+  showPreview?: boolean
+  readOnly?: boolean
+}
+
+/**
+ * 懒加载代码编辑器表单字段
+ * @description 作为 `Form.Item` 的直接子节点转发受控属性，避免 Ant Design 将 `value/onChange` 注入到 `Suspense` 后丢失。
+ */
+const LazyCodeEditorField: React.FC<LazyCodeEditorFieldProps> = ({
+  value,
+  onChange,
+  language,
+  height,
+  placeholder,
+  showPreview = false,
+  readOnly = false
+}) => {
+  const { t } = useTranslation()
+
+  return (
+    <Suspense fallback={<div>{t('codeEditor.loading')}</div>}>
+      <CodeEditor
+        value={value}
+        onChange={onChange}
+        language={language}
+        height={height}
+        placeholder={placeholder}
+        showPreview={showPreview}
+        readOnly={readOnly}
+      />
+    </Suspense>
+  )
+}
 
 const SettingsPanel: React.FC = () => {
   const [form] = Form.useForm()
@@ -41,6 +88,7 @@ const SettingsPanel: React.FC = () => {
   const [latestVersionStatus, setLatestVersionStatus] = useState<'idle' | 'loading' | 'ready' | 'offline'>('idle')
   const [changelogStatus, setChangelogStatus] = useState<'idle' | 'loading' | 'ready' | 'offline'>('idle')
   const [changelogLines, setChangelogLines] = useState<string[]>([])
+  const [templatePreviewVisible, setTemplatePreviewVisible] = useState(false)
   const [updateInfo, setUpdateInfo] = useState<{
     currentVersion: string
     latestVersion: string
@@ -52,60 +100,65 @@ const SettingsPanel: React.FC = () => {
   const notificationSettings = useNotificationSettings()
   const advancedSettings = useAdvancedSettings()
   const windowSettings = useWindowSettings()
+  const settingsInitialized = useSettingsStore((state) => state.isInitialized)
   const { isSaving, saveSettings, resetSettings: resetAppSettings, initialize } = useSettingsStore()
   const { setTabSettings, markTabSaved } = useSettingsActions()
-  useUnsavedChanges()
+  const unsavedChanges = useUnsavedChanges()
 
   const { theme, setTheme, version } = useAppStore()
   const { t, setLanguage, availableLanguages } = useTranslation()
+  const message = useMessage()
+  const defaultConfigTemplate = Form.useWatch(['editor', 'defaultConfigTemplate'], form) as string | undefined
 
   useEffect(() => {
     initialize()
   }, [initialize])
 
-  const isInitializedRef = useRef(false)
+  const hydratedSettingsSnapshotRef = useRef<string | null>(null)
 
   useEffect(() => {
-    console.log('📋 [SettingsPanel] useEffect触发')
-    console.log('📋 [SettingsPanel] isInitializedRef.current:', isInitializedRef.current)
-    console.log('📋 [SettingsPanel] basicSettings:', basicSettings)
-    console.log('📋 [SettingsPanel] editorSettings:', editorSettings)
-    console.log('📋 [SettingsPanel] notificationSettings:', notificationSettings)
-    console.log('📋 [SettingsPanel] advancedSettings:', advancedSettings)
-    console.log('📋 [SettingsPanel] windowSettings:', windowSettings)
-
-    // 根据当前标签页设置表单值 - 只在首次加载时设置，避免覆盖用户修改
-    // 检查所有设置是否都有实际内容(不是空对象)
-    const hasBasicSettings = basicSettings && Object.keys(basicSettings).length > 0
-    const hasEditorSettings = editorSettings && Object.keys(editorSettings).length > 0
-    const hasNotificationSettings = notificationSettings && Object.keys(notificationSettings).length > 0
-    const hasAdvancedSettings = advancedSettings && Object.keys(advancedSettings).length > 0
-    const hasWindowSettings = windowSettings && Object.keys(windowSettings).length > 0
-
-    console.log('📋 [SettingsPanel] 设置检查:', {
-      hasBasicSettings,
-      hasEditorSettings,
-      hasNotificationSettings,
-      hasAdvancedSettings,
-      hasWindowSettings
-    })
-
-    if (!isInitializedRef.current && hasBasicSettings && hasEditorSettings && hasNotificationSettings && hasAdvancedSettings && hasWindowSettings) {
-      const formValues = {
-        basic: basicSettings,
-        editor: editorSettings,
-        notifications: notificationSettings,
-        advanced: advancedSettings,
-        window: windowSettings
-      }
-      console.log('📋 [SettingsPanel] 设置表单值:', formValues)
-      form.setFieldsValue(formValues)
-      isInitializedRef.current = true
-      console.log('📋 [SettingsPanel] 表单初始化完成')
-    } else {
-      console.log('📋 [SettingsPanel] 跳过表单初始化，条件不满足')
+    if (!settingsInitialized) {
+      return
     }
-  }, [basicSettings, editorSettings, notificationSettings, advancedSettings, windowSettings, form])
+
+    const formValues = {
+      basic: basicSettings,
+      editor: editorSettings,
+      notifications: notificationSettings,
+      advanced: advancedSettings,
+      window: windowSettings
+    }
+    const nextSnapshot = JSON.stringify(formValues)
+
+    // 仅在 store 已完成真实加载且当前没有未保存修改时批量回填，避免覆盖用户编辑中的内容。
+    if (unsavedChanges.size === 0 && hydratedSettingsSnapshotRef.current !== nextSnapshot) {
+      form.setFieldsValue(formValues)
+      hydratedSettingsSnapshotRef.current = nextSnapshot
+      return
+    }
+
+    // 默认模板编辑器是懒加载组件，字段为空时单独补写模板值，防止 UI 显示空白。
+    const currentTemplateValue = form.getFieldValue(['editor', 'defaultConfigTemplate'])
+    if (
+      (typeof currentTemplateValue !== 'string' || currentTemplateValue.trim() === '') &&
+      typeof editorSettings.defaultConfigTemplate === 'string' &&
+      editorSettings.defaultConfigTemplate.trim() !== ''
+    ) {
+      form.setFieldValue(
+        ['editor', 'defaultConfigTemplate'],
+        normalizeNewConfigTemplate(editorSettings.defaultConfigTemplate)
+      )
+    }
+  }, [
+    settingsInitialized,
+    basicSettings,
+    editorSettings,
+    notificationSettings,
+    advancedSettings,
+    windowSettings,
+    unsavedChanges,
+    form
+  ])
 
   
   useEffect(() => {
@@ -159,10 +212,14 @@ const SettingsPanel: React.FC = () => {
   // 按标签页保存设置
   const handleSaveTab = async (tab: string) => {
     try {
-      console.log('🔧 开始保存标签页:', tab)
       setLoading(true)
       const values = await form.validateFields()
-      console.log('🔧 表单验证通过，获取到的值:', values)
+
+      if (tab === 'editor' && typeof values.editor?.defaultConfigTemplate === 'string') {
+        const normalizedTemplate = normalizeNewConfigTemplate(values.editor.defaultConfigTemplate)
+        values.editor.defaultConfigTemplate = normalizedTemplate
+        form.setFieldValue(['editor', 'defaultConfigTemplate'], normalizedTemplate)
+      }
 
       // 对于basic标签页，需要特殊处理嵌套的window设置
       let tabData: any = { [tab]: {} }
@@ -177,14 +234,11 @@ const SettingsPanel: React.FC = () => {
         // 其他标签页直接使用原有逻辑
         tabData = { [tab]: values[tab] || values }
       }
-      console.log('🔧 准备保存的标签页数据:', tabData)
 
       // 先获取当前表单值
       const currentFormValues = form.getFieldsValue()
-      console.log('🔧 当前表单值:', currentFormValues)
 
       // 先更新store中的设置
-      console.log('🔧 更新store中的设置...')
       if (tab === 'basic') {
         // 对于basic标签页，分别更新basic和window设置
         setTabSettings(tab as any, values.basic || {})
@@ -196,16 +250,13 @@ const SettingsPanel: React.FC = () => {
       }
 
       // 然后保存
-      console.log('🔧 调用saveSettings函数...')
       await saveSettings(tab as any)
 
       // 保存成功后，确保表单显示最新的值
-      console.log('🔧 保存成功，更新表单显示')
       form.setFieldsValue(currentFormValues)
 
       // 如果是basic标签页且有window设置，也需要单独保存window设置
       if (tab === 'basic' && values.window) {
-        console.log('🔧 保存window设置...')
         // 确保包含所有必填字段
         const completeWindowSettings = {
           width: values.window.width || windowSettings?.width || 1200,
@@ -302,6 +353,40 @@ const SettingsPanel: React.FC = () => {
     } catch (error) {
       message.error(t('settings.messages.languageSaveFailed'))
     }
+  }
+
+  /**
+   * 校验设置页中的默认模板输入
+   * @description 在表单层提前阻止非法 JSON 模板保存，保持 UI 与主进程验证规则一致
+   */
+  const validateDefaultConfigTemplateField = async (_: unknown, value: string) => {
+    const validationResult = validateNewConfigTemplate(value || '')
+    if (validationResult === true) {
+      return
+    }
+
+    throw new Error(validationResult)
+  }
+
+  const effectiveDefaultConfigTemplate = typeof defaultConfigTemplate === 'string'
+    ? defaultConfigTemplate
+    : editorSettings.defaultConfigTemplate
+  const defaultTemplateValidation = validateNewConfigTemplate(effectiveDefaultConfigTemplate || '')
+  const defaultTemplatePreviewContent = defaultTemplateValidation === true
+    ? normalizeNewConfigTemplate(effectiveDefaultConfigTemplate)
+    : ''
+
+  /**
+   * 打开默认模板预览弹窗
+   * @description 仅在模板通过业务校验时打开预览，避免弹窗中展示无效内容
+   */
+  const handleOpenTemplatePreview = () => {
+    if (defaultTemplateValidation !== true) {
+      message.error(`${t('settings.editor.defaultConfigTemplate.invalid')}: ${defaultTemplateValidation}`)
+      return
+    }
+
+    setTemplatePreviewVisible(true)
   }
 
   // 检查更新
@@ -578,6 +663,52 @@ const SettingsPanel: React.FC = () => {
           </Form.Item>
         </Col>
       </Row>
+
+      <Divider />
+
+      <Form.Item
+        name={['editor', 'defaultConfigTemplate']}
+        label={t('settings.editor.defaultConfigTemplate')}
+        tooltip={t('settings.editor.defaultConfigTemplate.tooltip')}
+        rules={[
+          { required: true, message: t('settings.editor.defaultConfigTemplate.required') },
+          { validator: validateDefaultConfigTemplateField }
+        ]}
+      >
+        <LazyCodeEditorField
+          language="json"
+          height={360}
+          placeholder={t('settings.editor.defaultConfigTemplate.placeholder')}
+          showPreview={false}
+        />
+      </Form.Item>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <Button
+          icon={<EyeOutlined />}
+          onClick={handleOpenTemplatePreview}
+          disabled={defaultTemplateValidation !== true}
+        >
+          {t('settings.editor.defaultConfigTemplate.preview')}
+        </Button>
+      </div>
+
+      <Alert
+        type={defaultTemplateValidation === true ? 'success' : 'warning'}
+        showIcon
+        message={
+          defaultTemplateValidation === true
+            ? t('settings.editor.defaultConfigTemplate.previewReady')
+            : t('settings.editor.defaultConfigTemplate.previewInvalid')
+        }
+        description={
+          defaultTemplateValidation === true
+            ? t('settings.editor.defaultConfigTemplate.help')
+            : `${t('settings.editor.defaultConfigTemplate.invalid')}: ${defaultTemplateValidation}`
+        }
+        style={{ marginBottom: 0 }}
+      >
+      </Alert>
     </Card>
   )
 
@@ -899,6 +1030,28 @@ const SettingsPanel: React.FC = () => {
           onVisitWebsite={handleVisitWebsite}
         />
       )}
+
+      <Modal
+        title={t('settings.editor.defaultConfigTemplate.preview')}
+        open={templatePreviewVisible}
+        onCancel={() => setTemplatePreviewVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setTemplatePreviewVisible(false)}>
+            {t('common.close')}
+          </Button>
+        ]}
+        width={900}
+      >
+        <Suspense fallback={<div>{t('codeEditor.loading')}</div>}>
+          <CodeEditor
+            value={defaultTemplatePreviewContent}
+            language="json"
+            height={420}
+            readOnly
+            showPreview={false}
+          />
+        </Suspense>
+      </Modal>
     </div>
   )
 }

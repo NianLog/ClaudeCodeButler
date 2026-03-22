@@ -7,15 +7,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Card,
   Button,
-  Switch,
-  Table,
-  Modal,
-  Input,
-  Select,
   Space,
   Tag,
-  Tooltip,
-  message,
   Tabs,
   Alert,
   Typography,
@@ -25,32 +18,18 @@ import {
   Col,
   Progress,
   Divider,
-  Dropdown,
-  MenuProps,
-  Empty,
   Spin
 } from 'antd'
 import {
   PlayCircleOutlined,
   StopOutlined,
   ReloadOutlined,
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  CopyOutlined,
   SettingOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  FileTextOutlined,
-  ClearOutlined,
-  DownloadOutlined,
-  EyeOutlined,
   ClockCircleOutlined,
-  ExclamationCircleOutlined,
-  InfoCircleOutlined,
   ApiOutlined,
   SafetyCertificateOutlined,
-  ThunderboltOutlined,
   DatabaseOutlined,
   MonitorOutlined,
   BugOutlined,
@@ -58,6 +37,7 @@ import {
   CloudServerOutlined,
   DashboardOutlined
 } from '@ant-design/icons'
+import { useMessage } from '../../hooks/useMessage'
 import type {
   ManagedModeStatus,
   ManagedModeConfig
@@ -75,6 +55,7 @@ const { Text, Title, Paragraph } = Typography
  * 托管模式管理面板组件
  */
 const ManagedModePanel: React.FC = () => {
+  const message = useMessage()
   const { t } = useTranslation()
   // 从全局store读取日志统计数据（用于动态计算健康度）
   const { normalLogCount, errorLogCount } = useManagedModeLogStore()
@@ -92,13 +73,27 @@ const ManagedModePanel: React.FC = () => {
   // 加载数据
   const loadData = useCallback(async () => {
     try {
-      const [statusData, configData, configsData] = await Promise.all([
+      const [statusData, configData, configsData, accessTokenResult] = await Promise.all([
         window.electronAPI.managedMode.getStatus(),
         window.electronAPI.managedMode.getConfig(),
-        window.electronAPI.config.list()
+        window.electronAPI.config.list(),
+        window.electronAPI.managedMode.getAccessToken()
       ])
+      const accessToken = accessTokenResult.success ? (accessTokenResult.data?.accessToken || '') : ''
+      const resolvedConfig = configData ? {
+        ...configData,
+        accessToken,
+        configData: configData.configData ? {
+          ...configData.configData,
+          env: {
+            ...(configData.configData.env || {}),
+            ANTHROPIC_AUTH_TOKEN: accessToken
+          }
+        } : configData.configData
+      } : null
+
       setStatus(statusData)
-      setConfig(configData)
+      setConfig(resolvedConfig)
       const resolvedConfigs = (configsData as any)?.data || configsData || []
       setConfigs(Array.isArray(resolvedConfigs) ? resolvedConfigs : [])
     } catch (error: any) {
@@ -286,7 +281,7 @@ const ManagedModePanel: React.FC = () => {
   const getCurrentServiceInfo = useCallback(() => {
     // 托管代理基础信息
     const proxyUrl = `http://127.0.0.1:${status?.port || 8487}`
-    const proxyToken = status?.accessToken || config?.accessToken || ''
+    const proxyToken = config?.accessToken || ''
 
     // 上游服务信息(从status.currentProviderInfo获取)
     const providerInfo = status?.currentProviderInfo
@@ -296,10 +291,9 @@ const ManagedModePanel: React.FC = () => {
       proxyUrl,
       proxyToken,
       // 上游服务信息
-        providerName: providerInfo?.name || t('managedMode.provider.unconfigured'),
+      providerName: providerInfo?.name || t('managedMode.provider.unconfigured'),
       providerUrl: providerInfo?.apiBaseUrl || '',
       providerKey: providerInfo?.apiKey || '', // 已经是格式化后的
-      providerRawKey: providerInfo?.rawApiKey || '',
       // 网络代理信息
       networkProxy: {
         enabled: status?.networkProxy?.enabled || config?.networkProxy?.enabled || false,
@@ -581,9 +575,7 @@ const ManagedModePanel: React.FC = () => {
                           {getEnhancedServiceInfo().providerKey && (
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <Text>{t('managedMode.upstream.key')}</Text>
-                              <Text code copyable={{ text: getEnhancedServiceInfo().providerRawKey }}>
-                                {getEnhancedServiceInfo().providerKey}
-                              </Text>
+                              <Text code>{getEnhancedServiceInfo().providerKey}</Text>
                             </div>
                           )}
                         </div>

@@ -4,7 +4,17 @@
  */
 
 import { join } from 'path'
-import { writeFileSync, existsSync, mkdirSync } from 'fs'
+import { execFileSync } from 'child_process'
+import {
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  statSync,
+  renameSync,
+  readdirSync,
+  unlinkSync,
+  readFileSync
+} from 'fs'
 import { PATHS } from '@shared/constants'
 
 export enum LogLevel {
@@ -24,6 +34,7 @@ class Logger {
     this.logEncoding = this.resolveLogEncoding()
     this.ensureLogDirectory()
     this.setupLogRotation()
+    this.setupWindowsConsoleEncoding()
     this.setupStdEncoding()
   }
 
@@ -43,18 +54,17 @@ class Logger {
     // 简单的日志轮转：每次启动检查日志文件大小
     try {
       if (existsSync(this.logFile)) {
-        const fs = require('fs')
-        const stats = fs.statSync(this.logFile)
+        const stats = statSync(this.logFile)
 
         // 如果日志文件超过 10MB，进行轮转
         if (stats.size > 10 * 1024 * 1024) {
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
           const archiveFile = join(PATHS.LOG_DIR, `ccb-${timestamp}.log`)
-          fs.renameSync(this.logFile, archiveFile)
+          renameSync(this.logFile, archiveFile)
         }
       }
     } catch (error) {
-      console.error('日志轮转失败:', error)
+      console.error(this.formatMessage('ERROR', '日志轮转失败', error))
     }
   }
 
@@ -115,7 +125,8 @@ class Logger {
    */
   private formatMessage(level: string, message: string, data?: any): string {
     const timestamp = new Date().toISOString()
-    const dataStr = data ? ` ${this.safeStringify(data)}` : ''
+    const hasData = data !== undefined && data !== null && data !== ''
+    const dataStr = hasData ? ` ${this.safeStringify(data)}` : ''
     return `[${timestamp}] [${level}] ${message}${dataStr}`
   }
 
@@ -124,10 +135,13 @@ class Logger {
    */
   private writeToFile(level: string, message: string, data?: any): void {
     try {
-      const formattedMessage = this.formatMessage(level, message, data) + '\n'
-      writeFileSync(this.logFile, formattedMessage, { flag: 'a' })
+      const formattedMessage = `${this.formatMessage(level, message, data)}\n`
+      writeFileSync(this.logFile, formattedMessage, {
+        flag: 'a',
+        encoding: this.logEncoding
+      })
     } catch (error) {
-      console.error('写入日志文件失败:', error)
+      console.error(this.formatMessage('ERROR', '写入日志文件失败', error))
     }
   }
 
@@ -148,16 +162,16 @@ class Logger {
 
     switch (level) {
       case LogLevel.DEBUG:
-        console.debug(consoleMessage, data || '')
+        console.debug(consoleMessage)
         break
       case LogLevel.INFO:
-        console.info(consoleMessage, data || '')
+        console.info(consoleMessage)
         break
       case LogLevel.WARN:
-        console.warn(consoleMessage, data || '')
+        console.warn(consoleMessage)
         break
       case LogLevel.ERROR:
-        console.error(consoleMessage, data || '')
+        console.error(consoleMessage)
         break
     }
 
@@ -183,6 +197,32 @@ class Logger {
    */
   private resolveLogEncoding(): 'utf8' {
     return 'utf8'
+  }
+
+  /**
+   * 统一设置 Windows 控制台为 UTF-8 代码页
+   * @description 主进程日志文件已按 UTF-8 写入，但若控制台仍停留在本地代码页，终端中会把 UTF-8 日志误解码成乱码。
+   */
+  private setupWindowsConsoleEncoding(): void {
+    if (process.platform !== 'win32') return
+
+    try {
+      // 打包后的 GUI 启动通常没有附着控制台，此时执行 chcp 只会额外启动同步子进程并拖慢冷启动。
+      const hasInteractiveConsole = Boolean(process.stdout?.isTTY || process.stderr?.isTTY)
+      if (!hasInteractiveConsole) {
+        return
+      }
+
+      process.env.LANG = 'zh_CN.UTF-8'
+      process.env.LC_ALL = 'zh_CN.UTF-8'
+      process.env.PYTHONIOENCODING = 'utf-8'
+      execFileSync('chcp.com', ['65001'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    } catch {
+      // 控制台代码页设置失败时继续降级使用现有输出链路，避免阻塞主进程启动
+    }
   }
 
   private setupStdEncoding(): void {
@@ -259,8 +299,7 @@ class Logger {
    */
   cleanupOldLogs(keepCount: number = 5): void {
     try {
-      const fs = require('fs')
-      const files = fs.readdirSync(PATHS.LOG_DIR)
+      const files = readdirSync(PATHS.LOG_DIR)
         .filter((file: string) => file.startsWith('ccb-') && file.endsWith('.log'))
         .sort((a: string, b: string) => b.localeCompare(a)) // 按时间倒序
 
@@ -268,7 +307,7 @@ class Logger {
       if (files.length > keepCount) {
         files.slice(keepCount).forEach((file: string) => {
           const filePath = join(PATHS.LOG_DIR, file)
-          fs.unlinkSync(filePath)
+          unlinkSync(filePath)
           this.info('删除旧日志文件', { file })
         })
       }
@@ -282,12 +321,11 @@ class Logger {
    */
   getLogs(lines: number = 100): string[] {
     try {
-      const fs = require('fs')
       if (!existsSync(this.logFile)) {
         return []
       }
 
-      const content = fs.readFileSync(this.logFile, 'utf8')
+      const content = readFileSync(this.logFile, 'utf8')
       const allLines = content.split('\n').filter((line: string) => line.trim())
       return allLines.slice(-lines)
     } catch (error) {

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Modal, Typography, Space, Button, Descriptions, Tag, Progress, message } from 'antd'
+import { Modal, Typography, Space, Button, Descriptions, Tag, Progress } from 'antd'
 import {
   CloudDownloadOutlined,
   ExclamationCircleOutlined,
@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons'
 import type { VersionInfo } from '../../services/version-service'
 import { useTranslation } from '../../locales/useTranslation'
+import { useMessage } from '../../hooks/useMessage'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -51,6 +52,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
   onVisitWebsite
 }) => {
   const { t } = useTranslation()
+  const message = useMessage()
   const [downloading, setDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [downloadComplete, setDownloadComplete] = useState(false)

@@ -120,6 +120,7 @@ export const IPC_CHANNELS = {
   MCP_ADD_OR_UPDATE_SERVER: 'mcp:add-or-update-server',
   MCP_DELETE_SERVER: 'mcp:delete-server',
   MCP_TOGGLE_SERVER: 'mcp:toggle-server',
+  MCP_VALIDATE_SERVER_AVAILABILITY: 'mcp:validate-server-availability',
   MCP_DUPLICATE_SERVER: 'mcp:duplicate-server',
   MCP_GET_PROJECT_PATHS: 'mcp:get-project-paths',
   MCP_EXPORT_SERVER_CONFIG: 'mcp:export-server-config',

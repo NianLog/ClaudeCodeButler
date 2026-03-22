@@ -3,7 +3,7 @@
  * 支持按标签页分类管理设置
  */
 
-import { create } from 'zustand'
+import { create, type StateCreator } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import {
   AppSettings,
@@ -11,6 +11,7 @@ import {
   SettingsModuleState,
   SettingsSaveOptions
 } from '@shared/types/settings'
+import { DEFAULT_NEW_CONFIG_TEMPLATE } from '@shared/config-template'
 
 const DEFAULT_SETTINGS: AppSettings = {
   basic: {
@@ -24,7 +25,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     tabSize: 2,
     wordWrap: false,
     minimap: true,
-    lineNumbers: true
+    lineNumbers: true,
+    defaultConfigTemplate: DEFAULT_NEW_CONFIG_TEMPLATE
   },
   notifications: {
     enabled: true,
@@ -82,12 +84,32 @@ interface SettingsStore extends SettingsModuleState {
   getDefaultSettings: () => AppSettings
 }
 
+type SettingsStoreCreator = StateCreator<SettingsStore, [], [], SettingsStore>
+
+/**
+ * 判断当前环境是否应启用 Zustand devtools
+ * @description 仅在开发环境且 Redux DevTools 扩展存在时启用，避免控制台持续输出缺失扩展警告。
+ */
+const shouldUseSettingsDevtools = (): boolean => {
+  if (process.env.NODE_ENV !== 'development' || typeof window === 'undefined') {
+    return false
+  }
+
+  const devtoolsWindow = window as Window & {
+    __REDUX_DEVTOOLS_EXTENSION__?: unknown
+    __REDUX_DEVTOOLS_EXTENSION_COMPOSE__?: unknown
+  }
+
+  return Boolean(
+    devtoolsWindow.__REDUX_DEVTOOLS_EXTENSION__ ||
+    devtoolsWindow.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__
+  )
+}
+
 /**
  * 创建设置 store
  */
-export const useSettingsStore = create<SettingsStore>()(
-  devtools(
-    (set, get) => ({
+const createSettingsStore: SettingsStoreCreator = (set, get) => ({
       // 初始状态
       settings: { ...DEFAULT_SETTINGS },
       isLoading: false,
@@ -410,12 +432,12 @@ export const useSettingsStore = create<SettingsStore>()(
         await get().loadSettings()
         set({ isInitialized: true })
       }
-    }),
-    {
-      name: 'settings-store',
-      enabled: process.env.NODE_ENV === 'development'
-    }
-  )
+    })
+
+export const useSettingsStore = create<SettingsStore>()(
+  (shouldUseSettingsDevtools()
+    ? devtools(createSettingsStore, { name: 'settings-store' })
+    : createSettingsStore) as SettingsStoreCreator
 )
 
 /**

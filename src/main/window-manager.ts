@@ -11,6 +11,18 @@ import { SettingsService } from './services/settings-service'
 
 export class WindowManager {
   private mainWindow: BrowserWindow | null = null
+  private devToolsEnabled: boolean = false
+  private hasShownMainWindow: boolean = false
+  private windowLoadStartedAt: number = 0
+  private showFallbackTimer: NodeJS.Timeout | null = null
+
+  /**
+   * 设置是否在窗口创建后自动打开开发者工具
+   * @param enabled 是否启用开发者工具
+   */
+  setDevToolsEnabled(enabled: boolean): void {
+    this.devToolsEnabled = enabled
+  }
 
   /**
    * 创建主窗口
@@ -55,6 +67,7 @@ export class WindowManager {
       minWidth: DEFAULT_SETTINGS.window.minWidth,
       minHeight: DEFAULT_SETTINGS.window.minHeight,
       show: false, // 先不显示，等加载完成后再显示
+      backgroundColor: '#0f172a',
       autoHideMenuBar: true,
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       icon: this.getAppIcon(),
@@ -67,27 +80,28 @@ export class WindowManager {
         experimentalFeatures: false
       }
     })
+    this.hasShownMainWindow = false
+    this.windowLoadStartedAt = Date.now()
 
     logger.info('主窗口创建开始，准备加载渲染器')
+
+    // 先注册事件，避免错过首屏加载阶段的关键时机
+    this.setupWindowEvents()
+    this.setupWindowState()
 
     // 加载应用
     if (process.env.NODE_ENV === 'development') {
       // 开发环境加载本地服务器
       logger.info('加载渲染器: http://localhost:5175')
       await this.mainWindow.loadURL('http://localhost:5175')
-      // 开发环境打开开发者工具
-      this.mainWindow.webContents.openDevTools()
+      if (this.devToolsEnabled) {
+        this.mainWindow.webContents.openDevTools()
+      }
     } else {
       // 生产环境加载本地文件
       logger.info(`加载渲染器文件: ${join(__dirname, '../renderer/index.html')}`)
       await this.mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
     }
-
-    // 设置窗口事件
-    this.setupWindowEvents()
-
-    // 保存窗口状态
-    this.setupWindowState()
 
     logger.info('主窗口创建完成')
 
@@ -100,12 +114,35 @@ export class WindowManager {
   private setupWindowEvents(): void {
     if (!this.mainWindow) return
 
+    /**
+     * 清理窗口显示兜底定时器
+     */
+    const clearShowFallbackTimer = () => {
+      if (this.showFallbackTimer) {
+        clearTimeout(this.showFallbackTimer)
+        this.showFallbackTimer = null
+      }
+    }
+
+    /**
+     * 只显示一次主窗口
+     * @param reason 触发显示的原因，用于诊断首屏链路
+     */
+    const showMainWindowOnce = (reason: string) => {
+      if (!this.mainWindow || this.hasShownMainWindow || DEFAULT_SETTINGS.startup.startMinimized) {
+        return
+      }
+
+      this.hasShownMainWindow = true
+      clearShowFallbackTimer()
+      this.mainWindow.show()
+      this.mainWindow.focus()
+      logger.info(`主窗口已显示 (${reason})，耗时 ${Date.now() - this.windowLoadStartedAt}ms`)
+    }
+
     // 窗口准备显示时
     this.mainWindow.once('ready-to-show', () => {
-      if (this.mainWindow && !DEFAULT_SETTINGS.startup.startMinimized) {
-        this.mainWindow.show()
-        this.mainWindow.focus()
-      }
+      showMainWindowOnce('ready-to-show')
     })
 
     // 窗口关闭事件 - 点击关闭按钮时隐藏而不是销毁
@@ -143,23 +180,34 @@ export class WindowManager {
     // 页面加载完成时
     this.mainWindow.webContents.on('did-finish-load', () => {
       logger.info('主窗口页面加载完成')
+      showMainWindowOnce('did-finish-load')
     })
 
     this.mainWindow.webContents.on('did-start-loading', () => {
       logger.info('主窗口开始加载')
+      if (!DEFAULT_SETTINGS.startup.startMinimized) {
+        clearShowFallbackTimer()
+        this.showFallbackTimer = setTimeout(() => {
+          showMainWindowOnce('loading-fallback')
+        }, 300)
+      }
     })
 
     this.mainWindow.webContents.on('dom-ready', () => {
       logger.info('主窗口 DOM ready')
+      showMainWindowOnce('dom-ready')
     })
 
     this.mainWindow.webContents.on('did-stop-loading', () => {
       logger.info('主窗口停止加载')
+      clearShowFallbackTimer()
     })
 
     // 页面加载失败时
     this.mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
       logger.error(`页面加载失败: ${errorCode} - ${errorDescription}`)
+      clearShowFallbackTimer()
+      showMainWindowOnce('did-fail-load')
     })
 
     // 控制台消息

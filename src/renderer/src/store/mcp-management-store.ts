@@ -8,7 +8,8 @@ import type {
   MCPServerListItem,
   MCPServerFormData,
   ClaudeConfig,
-  MCPServerConfig
+  MCPServerConfig,
+  MCPServerAvailabilityResult
 } from '@shared/types/mcp'
 
 /**
@@ -37,6 +38,7 @@ interface MCPManagementState {
   addOrUpdateServer: (formData: MCPServerFormData) => Promise<void>
   deleteServer: (serverId: string, scope: string) => Promise<void>
   toggleServer: (serverId: string, scope: string) => Promise<void>
+  validateServerAvailability: (serverId: string, scope: string) => Promise<MCPServerAvailabilityResult>
   duplicateServer: (serverId: string, scope: string, newServerId: string, targetScope: string) => Promise<void>
   exportServerConfig: (serverId: string, scope: string) => Promise<string>
   importServerConfig: (jsonString: string, serverId: string, targetScope: string) => Promise<void>
@@ -198,6 +200,26 @@ export const useMCPManagementStore = create<MCPManagementState>((set, get) => ({
       }
     } catch (error) {
       set({ error: String(error), isLoading: false })
+    }
+  },
+
+  // 验证MCP服务器可用性
+  validateServerAvailability: async (serverId: string, scope: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      const result = await window.electronAPI.mcp.validateServerAvailability(serverId, scope)
+      if (result.success && result.data) {
+        set({ isLoading: false })
+        return result.data
+      }
+
+      const errorMessage = result.error || '验证服务器可用性失败'
+      set({ error: errorMessage, isLoading: false })
+      throw new Error(errorMessage)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      set({ error: errorMessage, isLoading: false })
+      throw error
     }
   },
 

@@ -19,6 +19,7 @@ import type {
   AgentFormData,
   AgentImportOptions
 } from '@shared/types/agents'
+import { ensureSafePathSegment } from '../utils/path-security'
 
 /**
  * Agent管理服务类
@@ -29,6 +30,16 @@ class AgentsManagementService {
   constructor() {
     this.agentsDir = path.join(os.homedir(), '.claude', 'agents')
     this.initializeAgentsDir()
+  }
+
+  /**
+   * 根据 Agent ID 解析文件路径
+   * @param agentId Agent 标识
+   * @returns Agent 文件绝对路径
+   */
+  private resolveAgentFilePath(agentId: string): string {
+    const safeAgentId = ensureSafePathSegment(agentId, 'Agent ID')
+    return path.join(this.agentsDir, `${safeAgentId}.md`)
   }
 
   /**
@@ -80,7 +91,7 @@ class AgentsManagementService {
    */
   public async getAgent(agentId: string): Promise<AgentFile | null> {
     try {
-      const filePath = path.join(this.agentsDir, `${agentId}.md`)
+      const filePath = this.resolveAgentFilePath(agentId)
       return await this.parseAgentFile(filePath)
     } catch (error) {
       logger.error(`获取Agent失败: ${agentId}`, error)
@@ -255,7 +266,7 @@ class AgentsManagementService {
    * @throws Agent不存在或删除失败时抛出错误
    */
   public async deleteAgent(agentId: string): Promise<void> {
-    const filePath = path.join(this.agentsDir, `${agentId}.md`)
+    const filePath = this.resolveAgentFilePath(agentId)
 
     // 检查文件是否存在
     try {

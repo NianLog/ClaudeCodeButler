@@ -6,12 +6,15 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../../shared/constants'
 import { managedModeService } from '../services/managed-mode-service'
+import { logger } from '../utils/logger'
 import type {
   ManagedModeConfig,
   ManagedModeStatus,
   ApiProvider,
   EnvCommand
 } from '../../shared/types/managed-mode'
+
+const managedModeHandlersLogger = logger.child('ManagedModeHandlers')
 
 /**
  * 注册托管模式IPC处理程序
@@ -194,7 +197,7 @@ export function registerManagedModeHandlers(): void {
         return {
           success: true,
           data: {
-            accessToken: accessToken || '未设置'
+            accessToken: accessToken || ''
           }
         }
       } catch (error: any) {
@@ -332,9 +335,9 @@ export async function initializeManagedMode(): Promise<void> {
       })
     })
 
-    console.log('托管模式事件监听器已设置')
+    managedModeHandlersLogger.info('托管模式事件监听器已设置')
   } catch (error: any) {
-    console.error('托管模式初始化失败:', error.message)
+    managedModeHandlersLogger.error('托管模式初始化失败', error)
   }
 }
 
@@ -345,6 +348,6 @@ export async function disposeManagedMode(): Promise<void> {
   try {
     await managedModeService.dispose()
   } catch (error: any) {
-    console.error('托管模式清理失败:', error.message)
+    managedModeHandlersLogger.error('托管模式清理失败', error)
   }
 }

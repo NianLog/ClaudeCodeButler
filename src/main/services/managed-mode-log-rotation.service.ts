@@ -12,6 +12,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
 import { logger } from '../utils/logger'
+import { ensurePathWithinBase } from '../utils/path-security'
 
 /**
  * 日志条目接口（与 managed-mode-log-store.ts 保持一致）
@@ -90,23 +91,32 @@ export class ManagedModeLogRotationService {
   }
 
   /**
+   * 解析日志文件路径并限制在日志目录内
+   * @param filename 日志文件名
+   * @returns 校验后的日志文件绝对路径
+   */
+  private resolveLogFilePath(filename: string): string {
+    return ensurePathWithinBase(
+      path.join(this.config.logDirectory, filename),
+      this.config.logDirectory,
+      '托管模式日志文件路径'
+    )
+  }
+
+  /**
    * 初始化服务
    */
   async initialize(): Promise<void> {
-    console.log('[ManagedModeLogRotation] ===== 开始初始化日志轮转服务 =====')
     try {
       // 确保日志目录存在
       await fs.mkdir(this.config.logDirectory, { recursive: true })
-      console.log(`[ManagedModeLogRotation] 日志目录已创建: ${this.config.logDirectory}`)
       logger.info(`[ManagedModeLogRotation] 日志目录已创建: ${this.config.logDirectory}`)
 
       // 检查当前日志文件是否需要轮转
       await this.checkAndRotateIfNeeded()
 
-      console.log('[ManagedModeLogRotation] 服务初始化完成')
       logger.info('[ManagedModeLogRotation] 服务初始化完成')
     } catch (error: any) {
-      console.error('[ManagedModeLogRotation] 初始化失败:', error)
       logger.error('[ManagedModeLogRotation] 初始化失败:', error.message)
       throw error
     }
@@ -363,7 +373,7 @@ export class ManagedModeLogRotationService {
    */
   async readLogFile(filename: string): Promise<LogEntry[]> {
     try {
-      const filepath = path.join(this.config.logDirectory, filename)
+      const filepath = this.resolveLogFilePath(filename)
       const content = await fs.readFile(filepath, 'utf-8')
       return content.trim() ? JSON.parse(content) : []
     } catch (error: any) {

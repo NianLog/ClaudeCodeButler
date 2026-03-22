@@ -3,6 +3,7 @@
  */
 
 import { create } from 'zustand'
+import { getTranslation } from '../locales/useTranslation'
 import type {
   EnvironmentCheckResult,
   CustomEnvironmentCheck,
@@ -44,12 +45,12 @@ interface EnvironmentCheckState {
   checkPredefined: (checkType: PredefinedCheckTypeValue) => Promise<void>
   checkCustom: (customCheck: CustomEnvironmentCheck) => Promise<void>
   checkOne: (checkType: PredefinedCheckTypeValue | 'custom', id: string) => Promise<void>
-  refreshAll: () => Promise<void>
+  refreshAll: (forceRefresh?: boolean) => Promise<void>
   loadCustomChecks: () => Promise<void>
   addCustomCheck: (formData: CustomCheckFormData) => Promise<void>
   updateCustomCheck: (checkId: string, formData: CustomCheckFormData) => Promise<void>
   deleteCustomCheck: (checkId: string) => Promise<void>
-  loadClaudeCodeVersion: () => Promise<void>
+  loadClaudeCodeVersion: (forceRefresh?: boolean) => Promise<void>
   calculateSummary: () => Promise<void>
 
   // UI操作
@@ -111,7 +112,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
                 name: item.name,
                 type: item.type,
                 status: EnvironmentCheckStatus.ERROR,
-                error: result?.error || '检查失败',
+                error: result?.error || getTranslation('environment.errors.checkFailed'),
                 lastCheckTime: new Date(),
                 icon: item.icon,
                 isCustom: false
@@ -161,7 +162,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
         set({ predefinedResults: updatedResults, isChecking: false })
         await get().calculateSummary()
       } else {
-        set({ error: result?.error || '检查失败', isChecking: false })
+        set({ error: result?.error || getTranslation('environment.errors.checkFailed'), isChecking: false })
       }
     } catch (error) {
       set({ error: String(error), isChecking: false })
@@ -196,7 +197,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
         set({ customResults: updatedResults, isChecking: false })
         await get().calculateSummary()
       } else {
-        set({ error: result?.error || '检查失败', isChecking: false })
+        set({ error: result?.error || getTranslation('environment.errors.checkFailed'), isChecking: false })
       }
     } catch (error) {
       set({ error: String(error), isChecking: false })
@@ -216,7 +217,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
   },
 
   // 刷新所有检查
-  refreshAll: async () => {
+  refreshAll: async (forceRefresh = false) => {
     set({ isChecking: true, error: null })
     // 先填充预定义检查占位
     const placeholders = PREDEFINED_CHECKS.map((item) => ({
@@ -254,7 +255,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
     )
 
     await Promise.allSettled([predefinedPromise, ...customPromises])
-    await get().loadClaudeCodeVersion()
+    await get().loadClaudeCodeVersion(forceRefresh)
     await get().calculateSummary()
     set({ isChecking: false })
   },
@@ -267,7 +268,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
       if (result?.success) {
         set({ customChecks: result.data || [], isLoading: false })
       } else {
-        set({ error: result?.error || '加载失败', isLoading: false })
+        set({ error: result?.error || getTranslation('environment.errors.loadFailed'), isLoading: false })
       }
     } catch (error) {
       set({ error: String(error), isLoading: false })
@@ -283,7 +284,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
         set({ isCustomCheckModalOpen: false })
         await get().loadCustomChecks()
       } else {
-        const errorMessage = result?.error || '添加失败'
+        const errorMessage = result?.error || getTranslation('environment.errors.addFailed')
         set({ error: errorMessage })
         throw new Error(errorMessage)
       }
@@ -305,7 +306,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
         set({ isCustomCheckModalOpen: false })
         await get().loadCustomChecks()
       } else {
-        const errorMessage = result?.error || '更新失败'
+        const errorMessage = result?.error || getTranslation('environment.errors.updateFailed')
         set({ error: errorMessage })
         throw new Error(errorMessage)
       }
@@ -329,7 +330,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
         const { customResults } = get()
         set({ customResults: customResults.filter(r => r.id !== checkId) })
       } else {
-        const errorMessage = result?.error || '删除失败'
+        const errorMessage = result?.error || getTranslation('environment.errors.deleteFailed')
         set({ error: errorMessage })
         throw new Error(errorMessage)
       }
@@ -343,14 +344,14 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
   },
 
   // 加载Claude Code版本信息（使用与Statistics页面相同的API）
-  loadClaudeCodeVersion: async () => {
+  loadClaudeCodeVersion: async (forceRefresh = false) => {
     set({ isChecking: true })
     try {
-      const result = await window.electronAPI.claudeCodeVersion.checkUpdates(false)
+      const result = await window.electronAPI.claudeCodeVersion.checkUpdates(forceRefresh)
       if (result.success && result.data) {
         // 将 claudeCodeVersion 的数据格式转换为 EnvironmentCheckPanel 需要的格式
         const versionInfo = {
-          version: result.data.current || '未知',
+          version: result.data.current || getTranslation('common.unknown'),
           path: '~/.claude/',
           lastUpdated: new Date().toISOString(),
           current: result.data.current,

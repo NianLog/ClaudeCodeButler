@@ -9,8 +9,15 @@ import { APP_INFO } from '@shared/constants'
 import { logger } from './utils/logger'
 import { configService } from './ipc-handlers'
 
+interface TrayConfigSummary {
+  name: string
+  path: string
+  isInUse: boolean
+}
+
 export class TrayManager {
   private tray: Tray | null = null
+  private initialMenuRefreshTimer: NodeJS.Timeout | null = null
 
   /**
    * 创建系统托盘
@@ -26,11 +33,12 @@ export class TrayManager {
       // 设置托盘提示
       this.tray.setToolTip(APP_INFO.FULL_NAME)
 
-      // 创建托盘菜单（等待异步加载配置）
-      await this.createTrayMenu()
+      // 启动阶段先使用占位菜单，避免与首屏同时扫描配置目录。
+      this.setTrayMenu(null)
 
       // 设置托盘事件
       this.setupTrayEvents()
+      this.scheduleInitialMenuRefresh()
 
       logger.info('系统托盘创建完成')
     } catch (error) {
@@ -83,6 +91,37 @@ export class TrayManager {
 
     // 加载 claude-code 类型的配置列表
     const configs = await this.loadClaudeCodeConfigs()
+    this.setTrayMenu(configs)
+  }
+
+  /**
+   * 设置托盘菜单内容
+   * @description 启动期可传入 `null` 展示占位菜单，等首屏稳定后再异步填充真实配置项。
+   */
+  private setTrayMenu(configs: TrayConfigSummary[] | null): void {
+    if (!this.tray) return
+
+    const quickSwitchSubmenu =
+      configs === null
+        ? [
+            {
+              label: '加载配置中...',
+              enabled: false
+            }
+          ]
+        : configs.length > 0
+          ? configs.map(config => ({
+              label: config.isInUse ? `● ${config.name}` : `  ${config.name}`,
+              click: () => {
+                this.switchConfig(config.name, config.path)
+              }
+            }))
+          : [
+              {
+                label: '(无可用配置)',
+                enabled: false
+              }
+            ]
 
     const template: Electron.MenuItemConstructorOptions[] = [
       {
@@ -100,17 +139,7 @@ export class TrayManager {
       { type: 'separator' },
       {
         label: '快速切换配置',
-        submenu: configs.length > 0 ? configs.map(config => ({
-          label: config.isInUse ? `● ${config.name}` : `  ${config.name}`,
-          click: () => {
-            this.switchConfig(config.name, config.path)
-          }
-        })) : [
-          {
-            label: '(无可用配置)',
-            enabled: false
-          }
-        ]
+        submenu: quickSwitchSubmenu
       },
       { type: 'separator' },
       {
@@ -139,6 +168,21 @@ export class TrayManager {
   }
 
   /**
+   * 延迟刷新托盘菜单
+   * @description 避免在主窗口首屏加载阶段再次触发配置目录扫描。
+   */
+  private scheduleInitialMenuRefresh(): void {
+    if (this.initialMenuRefreshTimer) {
+      clearTimeout(this.initialMenuRefreshTimer)
+    }
+
+    this.initialMenuRefreshTimer = setTimeout(() => {
+      this.initialMenuRefreshTimer = null
+      void this.updateTrayMenu()
+    }, 2500)
+  }
+
+  /**
    * 设置托盘事件
    */
   private setupTrayEvents(): void {
@@ -160,7 +204,7 @@ export class TrayManager {
   /**
    * 加载 claude-code 类型的配置列表
    */
-  private async loadClaudeCodeConfigs(): Promise<Array<{ name: string; path: string; isInUse: boolean }>> {
+  private async loadClaudeCodeConfigs(): Promise<TrayConfigSummary[]> {
     try {
       const allConfigs = await configService.scanConfigs()
 
@@ -352,6 +396,11 @@ export class TrayManager {
    * 销毁托盘
    */
   destroy(): void {
+    if (this.initialMenuRefreshTimer) {
+      clearTimeout(this.initialMenuRefreshTimer)
+      this.initialMenuRefreshTimer = null
+    }
+
     if (this.tray) {
       this.tray.destroy()
       this.tray = null

@@ -12,13 +12,10 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { logger } from '../utils/logger'
-import { exec } from 'child_process'
-import { promisify } from 'util'
+import { spawn } from 'child_process'
 import { readJsonlFile, getJsonlStats, readFirstJsonlLine } from '../utils/jsonl-reader'
 import { terminalManagementService } from './terminal-management-service'
 import type { TerminalConfig, TerminalType } from '@shared/types/terminal'
-
-const execAsync = promisify(exec)
 
 /**
  * Claude Code项目信息
@@ -79,6 +76,17 @@ export interface SessionConversation {
   messages: ConversationMessage[]
   totalMessages: number
   totalTokens: number
+}
+
+/**
+ * 终端启动规格
+ * @description 描述一次受控终端启动所需的可执行文件、参数与工作目录
+ */
+interface TerminalLaunchSpec {
+  filePath: string
+  args: string[]
+  workingDirectory?: string
+  windowsHide?: boolean
 }
 
 /**
@@ -582,6 +590,8 @@ class ProjectManagementService {
     asAdmin: boolean = false
   ): Promise<{ success: boolean; message: string; command?: string }> {
     try {
+      const safeProjectId = this.ensureSafeSessionIdentifier(projectId, '项目ID')
+      const safeSessionId = this.ensureSafeSessionIdentifier(sessionId, '会话ID')
       const resolvedTerminalType = this.normalizeTerminalType(terminal)
       const defaultTerminal = await terminalManagementService.getDefaultTerminalType()
       const terminalType = resolvedTerminalType || defaultTerminal
@@ -589,7 +599,7 @@ class ProjectManagementService {
         ? await terminalManagementService.getTerminalConfig(terminalType)
         : null
 
-      logger.info(`尝试继续会话: ${projectId}/${sessionId}, 终端: ${terminalType}, 管理员模式: ${asAdmin}`)
+      logger.info(`尝试继续会话: ${safeProjectId}/${safeSessionId}, 终端: ${terminalType}, 管理员模式: ${asAdmin}`)
 
       // 检查claude命令是否可用
       const claudeAvailable = await this.checkClaudeAvailable()
@@ -601,19 +611,19 @@ class ProjectManagementService {
       }
 
       // 构建Claude命令
-      const claudeCommand = `claude --resume ${sessionId}`
-      const workingDirectory = projectPath && fs.existsSync(projectPath) ? projectPath : undefined
+      const claudeCommand = `claude --resume ${safeSessionId}`
+      const workingDirectory = this.resolveWorkingDirectory(projectPath)
 
       logger.info(`Claude命令: ${claudeCommand}`)
 
-      // 根据平台和终端类型构建终端启动命令
+      // 根据平台和终端类型构建终端启动规格
       const platform = process.platform
-      let terminalCommand: string
+      let launchSpec: TerminalLaunchSpec
 
       if (platform === 'win32') {
         // Windows平台
-        terminalCommand = await this.buildWindowsTerminalCommand(
-          claudeCommand,
+        launchSpec = await this.buildWindowsTerminalLaunchSpec(
+          safeSessionId,
           terminalType,
           terminalConfig,
           workingDirectory,
@@ -621,16 +631,14 @@ class ProjectManagementService {
         )
       } else if (platform === 'darwin') {
         // macOS: 使用 osascript 打开新的 Terminal 窗口
-        const cdPrefix = workingDirectory ? `cd \"${workingDirectory.replace(/"/g, '\\"')}\"; ` : ''
-        terminalCommand = `osascript -e 'tell application "Terminal" to do script "${cdPrefix}${claudeCommand}"'`
+        launchSpec = this.buildMacOSTerminalLaunchSpec(safeSessionId, workingDirectory)
       } else {
         // Linux: 使用 gnome-terminal 或 xterm
-        const cdPrefix = workingDirectory ? `cd \"${workingDirectory.replace(/"/g, '\\"')}\"; ` : ''
-        terminalCommand = `gnome-terminal -- bash -c "${cdPrefix}${claudeCommand}; exec bash" || xterm -e "${cdPrefix}${claudeCommand}"`
+        launchSpec = await this.buildLinuxTerminalLaunchSpec(safeSessionId, workingDirectory)
       }
 
-      logger.info(`终端命令: ${terminalCommand}`)
-      await execAsync(terminalCommand)
+      logger.info(`终端启动: ${launchSpec.filePath} ${launchSpec.args.join(' ')}`)
+      await this.launchTerminalProcess(launchSpec)
 
       return {
         success: true,
@@ -647,83 +655,94 @@ class ProjectManagementService {
   }
 
   /**
-   * 构建Windows平台的终端启动命令
+   * 构建 Windows 平台的终端启动规格
    */
-  private async buildWindowsTerminalCommand(
-    claudeCommand: string,
+  private async buildWindowsTerminalLaunchSpec(
+    sessionId: string,
     terminalType: TerminalType,
     terminalConfig: TerminalConfig | null,
     workingDirectory: string | undefined,
     asAdmin: boolean
-  ): Promise<string> {
-    let terminalCommand: string
-    const safeWorkingDir = workingDirectory ? workingDirectory.replace(/"/g, '\\"') : ''
+  ): Promise<TerminalLaunchSpec> {
+    const claudeCommand = `claude --resume ${sessionId}`
 
     switch (terminalType) {
       case 'git-bash': {
         const gitBashPath = terminalConfig?.path
         if (!gitBashPath) {
           logger.warn('未配置Git Bash路径,回退到CMD')
-          return await this.buildWindowsTerminalCommand(claudeCommand, 'cmd', null, workingDirectory, asAdmin)
+          return await this.buildWindowsTerminalLaunchSpec(sessionId, 'cmd', null, workingDirectory, asAdmin)
         }
-        const bashCwd = workingDirectory ? this.toGitBashPath(workingDirectory) : null
-        const bashCd = bashCwd ? `cd '${bashCwd}' && ` : ''
-        const bashCommand = `${bashCd}${claudeCommand}`
-        if (asAdmin) {
-          terminalCommand = `powershell -Command "Start-Process -FilePath '${gitBashPath}' -ArgumentList '-c','${bashCommand.replace(/'/g, "''")}' -Verb RunAs"`
-        } else {
-          terminalCommand = `start "" "${gitBashPath}" -c "${bashCommand}"`
+        const bashCommand = workingDirectory
+          ? 'cd -- "$1" && exec claude --resume "$2"'
+          : 'exec claude --resume "$1"'
+        const bashArgs = ['-lc', bashCommand, 'bash']
+
+        if (workingDirectory) {
+          bashArgs.push(this.toGitBashPath(workingDirectory))
         }
-        break
+
+        bashArgs.push(sessionId)
+
+        return asAdmin
+          ? this.buildElevatedWindowsLaunchSpec(gitBashPath, bashArgs, workingDirectory)
+          : {
+              filePath: gitBashPath,
+              args: bashArgs,
+              workingDirectory
+            }
       }
 
       case 'powershell': {
-        const cdPrefix = workingDirectory
-          ? `Set-Location -LiteralPath '${workingDirectory.replace(/'/g, "''")}'; `
-          : ''
-        const psCommand = `${cdPrefix}${claudeCommand}`.replace(/&&/g, ';')
-        if (asAdmin) {
-          terminalCommand = `powershell -Command "Start-Process powershell -ArgumentList '-NoExit','-Command','${psCommand.replace(/'/g, "''")}' -Verb RunAs"`
-        } else {
-          terminalCommand = `start powershell -NoExit -Command "${psCommand}"`
-        }
-        break
+        const powerShellArgs = ['-NoExit', '-Command', `& claude --resume --% ${sessionId}`]
+        return asAdmin
+          ? this.buildElevatedWindowsLaunchSpec('powershell.exe', powerShellArgs, workingDirectory)
+          : {
+              filePath: 'powershell.exe',
+              args: powerShellArgs,
+              workingDirectory
+            }
       }
 
       case 'wsl': {
-        const cdPrefix = workingDirectory ? `--cd "${safeWorkingDir}" ` : ''
-        const wslArgs = terminalConfig?.args?.join(' ') || ''
-        const wslCommand = `wsl.exe ${wslArgs} ${cdPrefix}-- bash -lc "${claudeCommand.replace(/"/g, '\\"')}"`
-        terminalCommand = asAdmin
-          ? `powershell -Command "Start-Process -FilePath 'wsl.exe' -ArgumentList '${wslArgs} ${cdPrefix}-- bash -lc \'${claudeCommand.replace(/'/g, "''")}\'' -Verb RunAs"`
-          : `start "" ${wslCommand}`
-        break
+        const wslArgs = [...(terminalConfig?.args || [])]
+        if (workingDirectory) {
+          wslArgs.push('--cd', workingDirectory)
+        }
+        wslArgs.push('--', 'bash', '-lc', 'exec claude --resume "$1"', 'bash', sessionId)
+
+        return asAdmin
+          ? this.buildElevatedWindowsLaunchSpec('wsl.exe', wslArgs, workingDirectory)
+          : {
+              filePath: 'wsl.exe',
+              args: wslArgs,
+              workingDirectory
+            }
       }
 
       case 'cmd':
       default: {
         if (terminalConfig?.path && terminalType !== 'cmd' && terminalType !== 'auto') {
-          const args = terminalConfig?.args?.join(' ') || ''
-          const startPrefix = workingDirectory ? `/D "${safeWorkingDir}" ` : ''
-          if (asAdmin) {
-            terminalCommand = `powershell -Command "Start-Process -FilePath '${terminalConfig.path}' -ArgumentList '${args} ${claudeCommand.replace(/'/g, "''")}' -Verb RunAs"`
-          } else {
-            terminalCommand = `start "" ${startPrefix}"${terminalConfig.path}" ${args} ${claudeCommand}`
-          }
-          break
+          const args = [...(terminalConfig.args || []), claudeCommand]
+          return asAdmin
+            ? this.buildElevatedWindowsLaunchSpec(terminalConfig.path, args, workingDirectory)
+            : {
+                filePath: terminalConfig.path,
+                args,
+                workingDirectory
+              }
         }
 
-        const startPrefix = workingDirectory ? `/D "${safeWorkingDir}" ` : ''
-        if (asAdmin) {
-          terminalCommand = `powershell -Command "Start-Process cmd -ArgumentList '/K','${claudeCommand.replace(/'/g, "''")}' -Verb RunAs"`
-        } else {
-          terminalCommand = `start "" ${startPrefix}cmd /K "${claudeCommand}"`
-        }
-        break
+        const cmdArgs = ['/K', claudeCommand]
+        return asAdmin
+          ? this.buildElevatedWindowsLaunchSpec('cmd.exe', cmdArgs, workingDirectory)
+          : {
+              filePath: 'cmd.exe',
+              args: cmdArgs,
+              workingDirectory
+            }
       }
     }
-
-    return terminalCommand
   }
 
   /**
@@ -752,6 +771,57 @@ class ProjectManagementService {
     return terminal as TerminalType
   }
 
+  /**
+   * 构建 macOS 终端启动规格
+   * @description 使用 AppleScript 打开新的 Terminal 窗口并在其中继续会话
+   */
+  private buildMacOSTerminalLaunchSpec(sessionId: string, workingDirectory?: string): TerminalLaunchSpec {
+    const shellCommand = workingDirectory
+      ? `cd ${this.quoteForPosixShell(workingDirectory)}; claude --resume ${this.quoteForPosixShell(sessionId)}`
+      : `claude --resume ${this.quoteForPosixShell(sessionId)}`
+    const escapedCommand = shellCommand
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+
+    return {
+      filePath: 'osascript',
+      args: ['-e', `tell application "Terminal" to do script "${escapedCommand}"`]
+    }
+  }
+
+  /**
+   * 构建 Linux 终端启动规格
+   * @description 优先使用 gnome-terminal，不可用时回退到 xterm
+   */
+  private async buildLinuxTerminalLaunchSpec(sessionId: string, workingDirectory?: string): Promise<TerminalLaunchSpec> {
+    const shellCommand = workingDirectory
+      ? 'cd -- "$1" && exec claude --resume "$2"; exec bash'
+      : 'exec claude --resume "$1"; exec bash'
+    const shellArgs = ['-lc', shellCommand, 'bash']
+
+    if (workingDirectory) {
+      shellArgs.push(workingDirectory)
+    }
+
+    shellArgs.push(sessionId)
+
+    if (await this.commandExists('gnome-terminal')) {
+      return {
+        filePath: 'gnome-terminal',
+        args: ['--', 'bash', ...shellArgs]
+      }
+    }
+
+    if (await this.commandExists('xterm')) {
+      return {
+        filePath: 'xterm',
+        args: ['-hold', '-e', 'bash', ...shellArgs]
+      }
+    }
+
+    throw new Error('未找到可用的 Linux 图形终端(gnome-terminal/xterm)')
+  }
+
   private toGitBashPath(inputPath: string): string {
     const normalized = inputPath.replace(/\\/g, '/')
     if (/^[A-Za-z]:\//.test(normalized)) {
@@ -770,11 +840,146 @@ class ProjectManagementService {
    */
   private async checkClaudeAvailable(): Promise<boolean> {
     try {
-      await execAsync('claude --version', { timeout: 5000 })
-      return true
+      return await this.commandExists('claude')
     } catch (error) {
       return false
     }
+  }
+
+  /**
+   * 校验继续会话使用的标识符
+   * @description 限制为安全字符集，避免异常参数进入终端命令上下文
+   */
+  private ensureSafeSessionIdentifier(identifier: string, label: string): string {
+    const normalizedIdentifier = identifier.trim()
+
+    if (!normalizedIdentifier) {
+      throw new Error(`${label}不能为空`)
+    }
+
+    if (normalizedIdentifier.length > 128) {
+      throw new Error(`${label}长度不能超过 128 个字符`)
+    }
+
+    if (!/^[A-Za-z0-9._:-]+$/.test(normalizedIdentifier)) {
+      throw new Error(`${label}包含不允许的字符`)
+    }
+
+    return normalizedIdentifier
+  }
+
+  /**
+   * 解析可用工作目录
+   * @description 仅在目录存在且为文件夹时返回，避免将无效路径注入终端启动流程
+   */
+  private resolveWorkingDirectory(projectPath?: string): string | undefined {
+    if (!projectPath) {
+      return undefined
+    }
+
+    const resolvedPath = path.resolve(projectPath)
+    if (!fs.existsSync(resolvedPath)) {
+      return undefined
+    }
+
+    const stat = fs.statSync(resolvedPath)
+    return stat.isDirectory() ? resolvedPath : undefined
+  }
+
+  /**
+   * 启动新的终端进程
+   * @description 统一使用 detached + ignore 模式，避免继续会话窗口被主进程生命周期绑定
+   */
+  private async launchTerminalProcess(spec: TerminalLaunchSpec): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(spec.filePath, spec.args, {
+        cwd: spec.workingDirectory,
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: spec.windowsHide ?? false
+      })
+
+      child.once('error', reject)
+      child.once('spawn', () => {
+        child.unref()
+        resolve()
+      })
+    })
+  }
+
+  /**
+   * 生成 Windows 提权启动规格
+   * @description 使用 PowerShell Start-Process + 参数数组，避免字符串拼接注入
+   */
+  private buildElevatedWindowsLaunchSpec(
+    filePath: string,
+    args: string[],
+    workingDirectory?: string
+  ): TerminalLaunchSpec {
+    const powerShellArgs = [
+      '-NoProfile',
+      '-Command',
+      this.buildPowerShellStartProcessScript(filePath, args, workingDirectory, true)
+    ]
+
+    return {
+      filePath: 'powershell.exe',
+      args: powerShellArgs,
+      windowsHide: true
+    }
+  }
+
+  /**
+   * 构造 PowerShell Start-Process 脚本文本
+   * @description 使用单引号字面量和数组参数，减少 Windows 提权路径中的注入面
+   */
+  private buildPowerShellStartProcessScript(
+    filePath: string,
+    args: string[],
+    workingDirectory?: string,
+    runAsAdmin: boolean = false
+  ): string {
+    const argumentListLiteral = args.length > 0
+      ? `@(${args.map((arg) => `'${this.escapePowerShellLiteral(arg)}'`).join(', ')})`
+      : '@()'
+    const workingDirectoryClause = workingDirectory
+      ? ` -WorkingDirectory '${this.escapePowerShellLiteral(workingDirectory)}'`
+      : ''
+    const verbClause = runAsAdmin ? ' -Verb RunAs' : ''
+
+    return `Start-Process -FilePath '${this.escapePowerShellLiteral(filePath)}' -ArgumentList ${argumentListLiteral}${workingDirectoryClause}${verbClause}`
+  }
+
+  /**
+   * 对 PowerShell 单引号字面量进行转义
+   */
+  private escapePowerShellLiteral(value: string): string {
+    return value.replace(/'/g, "''")
+  }
+
+  /**
+   * 对 POSIX shell 参数进行单引号包裹
+   */
+  private quoteForPosixShell(value: string): string {
+    return `'${value.replace(/'/g, `'"'"'`)}'`
+  }
+
+  /**
+   * 判断命令是否存在于当前系统 PATH 中
+   * @description 使用 where/which 做显式探测，避免为可执行性检测重新引入 shell 拼接
+   */
+  private async commandExists(command: string): Promise<boolean> {
+    const locator = process.platform === 'win32' ? 'where' : 'which'
+
+    return await new Promise<boolean>((resolve) => {
+      const child = spawn(locator, [command], {
+        windowsHide: true,
+        stdio: 'ignore'
+      })
+
+      child.once('error', () => resolve(false))
+      child.once('exit', (code) => resolve(code === 0))
+    })
   }
 
   /**

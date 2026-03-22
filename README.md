@@ -2,13 +2,13 @@
 
 # ⚡ CCB (Claude Code Butler)
 
-**A Powerful Configuration Management Tool for Claude Code Users**
+**A desktop configuration workbench for Claude Code power users**
 
 English | [简体中文](./README_CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Electron](https://img.shields.io/badge/Electron-32.0.0-47848F?logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react)](https://reactjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-40.0.0-47848F?logo=electron)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3.0-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
 </div>
@@ -17,49 +17,42 @@ English | [简体中文](./README_CN.md)
 
 ## 📖 Introduction
 
-CCB (Claude Code Butler) is a modern configuration management tool built with Electron + React + TypeScript, specifically designed to enhance the productivity of Claude Code users. With its intuitive visual interface, users can easily manage multiple configuration files, create automation rules, analyze usage data, making Claude Code configuration management simple and efficient.
+CCB (Claude Code Butler) is a local-first desktop application built with Electron, React, and TypeScript for managing Claude Code related assets. It centralizes config files, MCP servers, project bindings, automation rules, environment diagnostics, and managed-mode tooling into a single interface so users can edit, validate, preview, switch, and audit their setup without manually chasing files across directories.
 
 ### ✨ Key Features
 
-- 🎯 **Configuration File Management** - Visual management of Claude Code, MCP server, and project configuration files
-  - Support for CRUD operations on configuration files
-  - JSON Schema validation to ensure configuration correctness
-  - One-click switching between different configuration files
-  - Configuration backup and restore functionality
+- 🎯 **Config Lifecycle Management**
+  - Manage Claude Code configs, project configs, MCP configs, and user preference files from one place
+  - Create, edit, copy, import, export, backup, restore, and switch configurations
+  - Support both `JSON` and `Markdown`-based config types with matching validation rules
+  - Preload new configs from a customizable default template configured in `Settings -> Editor Settings`
 
-- 🔌 **MCP Server Management** - Comprehensive Model Context Protocol server management
-  - Visual management of global and project-level MCP servers
-  - Enable/disable servers (archive-based mechanism)
-  - CRUD operations for server configurations
-  - Server duplication and import/export support
-  - Grouped display by project path
-  - Real-time status monitoring
+- 🔌 **MCP Server Management**
+  - Manage global and project-scoped MCP servers in one panel
+  - Support local command-based servers and remote `http` servers that do not require a `command`
+  - Enable, disable, duplicate, import, export, archive, and validate server availability
+  - Validate enabled servers through the configured global terminal runtime
 
-- 🤖 **Automation Rule Engine** - Intelligent rule system based on trigger-condition-action pattern
-  - Scheduled task scheduling (Cron expressions)
-  - File monitoring triggers
-  - Custom condition evaluation
-  - Multiple action types (config switching, command execution, notifications, etc.)
+- 🧠 **Editor & Settings Experience**
+  - Monaco-based editor with on-demand runtime loading to keep the initial renderer lighter
+  - Built-in formatting, syntax validation, and modal preview using the same editor component
+  - Default new-config template editing, saving, and previewing in editor settings
+  - Terminal presets, theme/language preferences, and editor behavior settings
 
-- 📊 **Usage Statistics & Analytics** - Deep insights into your Claude Code usage
-  - API call count statistics
-  - Token usage analysis
-  - Model usage distribution
-  - Visual chart displays
+- 🤖 **Automation & Managed Mode**
+  - Trigger-condition-action automation rules with time, file, and manual execution flows
+  - Managed-mode proxy tooling for request transformation, logging, diagnostics, and provider control
+  - Environment checks for Claude Code and related tooling versions
 
-- 📁 **Project Management** - Centralized management of multiple development projects
-  - Project configuration associations
-  - Quick project configuration switching
-  - Project usage statistics
+- 📊 **Operations & Insights**
+  - Usage analytics, model/token statistics, and project associations
+  - Agent and skill management panels for advanced workflows
+  - Local logging, UTF-8-safe file output, and privacy-friendly local storage
 
-- 🔄 **Managed Mode** - Built-in proxy server support
-  - API request/response transformation
-  - Custom request handling logic
-  - Logging and debugging
-
-- 🌐 **Multi-language Support** - Built-in Chinese and English interfaces
-- 🎨 **Modern UI** - Beautiful interface based on Ant Design
-- 💾 **Data Security** - Local storage for privacy protection
+- 🌐 **Built for Daily Use**
+  - Chinese and English UI
+  - Windows Portable, ZIP, and NSIS installer delivery paths
+  - Local-first architecture with no forced cloud dependency
 
 ---
 
@@ -118,17 +111,23 @@ npm install
 # Start in standard mode
 npm run dev
 
-# Start with admin privileges (required for some features)
+# Start with admin privileges (required for some environment / terminal flows)
 npm run dev:admin
 ```
 
-### Build Application
+### Build & Verify
 
 ```bash
-# Build the project
+# Build the application
 npm run build
 
-# Run the built application
+# Type-check
+npm run type-check
+
+# Run tests
+npm test
+
+# Launch the built app
 npm start
 ```
 
@@ -136,39 +135,48 @@ npm start
 
 ## 📦 Packaging & Distribution
 
-### Windows
+### Windows artifacts
 
 ```bash
+# Portable single-file build
+npm run pack:portable
+
+# Guided installer (NSIS)
+npm run pack:installer
+
+# ZIP package
+npm run pack:zip
+
+# Unpacked directory for fast smoke checks
+npm run pack:dir
+```
+
+Artifacts are emitted to `release/` by default:
+
+- `CCB-Portable-{version}.exe` - Single-file portable build
+- `CCB-Setup-{version}.exe` - Assisted installer with custom install directory and shortcut options
+- `CCB-{version}-win.zip` - ZIP package
+- `win-unpacked/` - Unpacked directory build
+
+### Distribution notes
+
+- The Portable target is convenient, but Electron Builder's single-file Portable flow extracts to a temporary directory before the app process becomes visible. On Windows, that means noticeably slower startup than `win-unpacked` or the NSIS installer.
+- The NSIS installer is the recommended option when startup latency matters and a traditional installation flow is acceptable.
+- The project keeps the original compressed Portable strategy to avoid large package size growth.
+
+### Cross-platform release commands
+
+```bash
+# Default release targets for the current platform
 npm run dist
-```
 
-Output files in `release/` directory:
-- `CCB-Portable-{version}.exe` - Portable version
-- `CCB-{version}-win.zip` - Compressed package
-
-### macOS
-
-```bash
+# macOS
 npm run dist:mac
-```
 
-Output files:
-- `CCB-{version}.dmg` - Installer
-- `CCB-{version}-mac.zip` - Compressed package
-
-### Linux
-
-```bash
+# Linux
 npm run dist:linux
-```
 
-Output files:
-- `CCB-{version}.AppImage` - AppImage format
-- `CCB-{version}-linux.tar.gz` - Compressed package
-
-### All Platforms
-
-```bash
+# All configured platforms
 npm run dist:all
 ```
 
@@ -176,29 +184,39 @@ npm run dist:all
 
 ## 🛠️ Tech Stack
 
-### Frontend
+### Application runtime
 
-- **Framework**: React 18.2 + TypeScript 5.3
-- **UI Library**: Ant Design 5.12
-- **State Management**: Zustand 4.4
-- **Code Editor**: Monaco Editor 0.54
-- **Charts**: Recharts 2.8
-- **Build Tools**: Vite 5.0 + electron-vite 2.0
+- **Electron**: 40.0.0
+- **electron-vite**: 5.0.0
+- **Vite**: 7.3.1
+- **TypeScript**: 5.3
 
-### Backend
+### Renderer
 
-- **Runtime**: Electron 32.0
-- **File Monitoring**: Chokidar 3.5
-- **Task Scheduling**: node-cron 3.0
-- **Logging**: Winston
-- **Proxy Server**: Express 5.1
+- **React**: 18.2
+- **Ant Design**: 5.12
+- **Zustand**: 4.4
+- **Monaco Editor**: 0.55.1 via `@monaco-editor/react` 4.7
+- **Recharts**: 2.8
+- **react-markdown**: 9.1
+- **react-syntax-highlighter**: 16.1
+- **remark-gfm**: 4.0.1
 
-### Development Tools
+### Main process & services
 
-- **Testing**: Vitest 1.0
-- **Linting**: ESLint + TypeScript ESLint
-- **Formatting**: Prettier
-- **Packaging**: electron-builder 24.9
+- **Express**: 5.1.0
+- **Axios**: 1.12.2
+- **Chokidar**: 3.5.3
+- **node-cron**: 3.0.3
+- **js-yaml**: 4.1.1
+- **uuid**: 9.0.0
+
+### Tooling & quality gates
+
+- **Vitest**: 4.0.17
+- **ESLint**: 8.57
+- **electron-builder**: 26.5.0
+- **patch-package**: 8.0.0
 
 ---
 
@@ -206,168 +224,139 @@ npm run dist:all
 
 ### Directory Structure
 
-```
+```text
 ClaudeCodeButler/
 ├── src/
-│   ├── main/              # Electron main process
-│   │   ├── index.ts       # Main process entry
-│   │   ├── ipc-handlers.ts # IPC communication handlers
-│   │   ├── services/      # Business logic services
-│   │   └── utils/         # Utility functions
-│   ├── preload/           # Preload scripts
-│   ├── renderer/          # React renderer process
-│   │   ├── src/
-│   │   │   ├── components/ # React components
-│   │   │   ├── store/      # Zustand state management
-│   │   │   ├── hooks/      # Custom hooks
-│   │   │   └── utils/      # Utility functions
-│   │   └── index.html
-│   ├── shared/            # Shared types and constants
-│   │   ├── types/         # TypeScript type definitions
-│   │   └── constants/     # Constants
-│   └── proxy-server/      # Proxy server (standalone)
-├── resources/             # Application resources
-├── docs/                  # Project documentation
-└── release/               # Build output directory
+│   ├── main/                # Electron main process, IPC handlers, services, logging
+│   ├── preload/             # Secure bridge exposed to renderer
+│   ├── renderer/            # React UI, Zustand stores, pages, components, locales
+│   ├── shared/              # Shared types, constants, config-template helpers
+│   └── proxy-server/        # Managed-mode proxy service and related assets
+├── scripts/                 # Dev/build helper scripts
+├── resources/               # Icons, screenshots, packaged resources
+├── docs/                    # Product, architecture, audit, and implementation docs
+├── tests/                   # Unit / integration / e2e style regression coverage
+└── release/                 # Packaging output
 ```
 
-### Core Services
+### Current Module Map
 
-- **ConfigService** - Configuration file management service
-- **MCPManagementService** - MCP server management service
-- **RuleEngineService** - Automation rule engine
-- **StatisticsService** - Usage statistics service
-- **ProjectManagementService** - Project management service
-- **ManagedModeService** - Managed mode service
-- **LogStorageService** - Log storage service
+- **Main process modules**
+  - Window, tray, scheduler, watcher, and IPC bootstrap in `src/main`
+  - Domain services such as `config`, `mcp-management`, `settings`, `environment-check`, `managed-mode`, `agents-management`, `skills-management`, `statistics`, and `terminal-management`
+
+- **Renderer modules**
+  - Feature panels for Config, MCP, Automation, Managed Mode, Projects, Environment Check, Settings, Agents, and Skills
+  - Zustand stores per domain for predictable UI state synchronization
+  - `CodeEditor` with lazy Monaco loading and shared validation/preview behavior
+
+- **Shared contract layer**
+  - Cross-process types in `src/shared/types`
+  - IPC constants and app metadata in `src/shared/constants`
+  - Default new-config template helpers in `src/shared/config-template`
 
 ### IPC Communication Pattern
 
-Main process and renderer process communicate through standardized IPC pattern:
+Main and renderer communicate through a normalized IPC result shape:
 
-```typescript
-// Response format
-{ success: true, data: T }      // Success
-{ success: false, error: string } // Error
+```ts
+{ success: true, data: T }
+{ success: false, error: string }
 ```
 
 ---
 
 ## 🔧 Development Guide
 
-### Development Commands
+### Common Commands
 
 ```bash
-# Development mode
-npm run dev              # Standard privileges
-npm run dev:admin        # Admin privileges
-
-# Build
-npm run build            # Build to out/ directory
-npm run preview          # Preview build result
-
-# Testing
-npm test                 # Run tests
-npm run lint             # Code linting
-npm run type-check       # Type checking
-```
-
-### Proxy Server Development
-
-```bash
-cd src/proxy-server
-
-# Development mode
+# Development
 npm run dev
+npm run dev:admin
 
-# Build
+# Build / preview
 npm run build
+npm run preview
 
-# Start
-npm start
+# Quality gates
+npm run type-check
+npm run lint
+npm test
+
+# Packaging
+npm run pack
+npm run pack:portable
+npm run pack:installer
+npm run pack:zip
+npm run pack:dir
 ```
 
 ### Path Aliases
 
-The project is configured with the following path aliases:
+- `@/` → `src/renderer/src/`
+- `@shared/*` → `src/shared/*`
 
-- `@/` → `src/renderer/src/` (renderer process)
-- `@shared/` → `src/shared/` (all processes)
+### Notes for contributors
 
-### Code Standards
+- Renderer-only dependencies are intentionally kept out of runtime `dependencies` where possible to reduce packaged size.
+- Monaco is loaded at runtime instead of being part of the initial renderer dependency graph.
+- On Windows, UTF-8 handling is explicitly enforced in dev and logging related flows to reduce mojibake risk.
 
-- Prefer `const`, avoid `var`
-- Use TypeScript strict mode
-- Add JSDoc comments for all public functions
-- Follow ESLint rules
-- Format code with Prettier
+---
+
+## 🆕 Recent Product Updates
+
+- Added a customizable default template for new configs in `Settings -> Editor Settings`.
+- Reworked template preview so it opens in a modal and reuses the same editor capabilities for validation and formatting.
+- Fixed config copy behavior to open an editor with a localized copy suffix and defer file creation until explicit save.
+- Improved config-type aware validation so Markdown-based preference files are no longer forced through JSON parsing in preview flows.
+- Added NSIS installer packaging as a lower-latency alternative to the single-file Portable build.
 
 ---
 
 ## 🤝 Contributing
 
-We welcome all forms of contribution! Whether it's reporting bugs, suggesting new features, or submitting code improvements.
+We welcome bug reports, feature proposals, documentation improvements, and code contributions.
 
-### Contribution Process
+### Contribution Flow
 
-1. Fork this repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Submit a Pull Request
+1. Fork the repository
+2. Create a branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m "feat: add amazing feature"`)
+4. Push the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ### Commit Convention
 
-Please follow this commit message format:
+Use Conventional Commit prefixes:
 
-```
-<type>: <subject>
-
-<body>
-```
-
-**Type:**
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation update
-- `style`: Code style adjustment
-- `refactor`: Code refactoring
-- `perf`: Performance optimization
-- `test`: Test related
-- `chore`: Build/toolchain update
-
-**Example:**
-```
-feat: add batch import for configuration files
-
-- Support batch import from folder
-- Add import progress indicator
-- Optimize import performance
-```
+- `refactor`: Refactor
+- `perf`: Performance improvement
+- `test`: Tests
+- `chore`: Tooling / build change
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
 ## 🙏 Acknowledgments
 
-### Development Tools
+Thanks to these open source projects and tools:
 
-This project was developed with assistance from [Claude Code](https://claude.com/claude-code), a powerful AI programming assistant that significantly improved development efficiency and code quality.
-
-### Open Source Projects
-
-Thanks to these excellent open source projects:
-
-- [Electron](https://www.electronjs.org/) - Cross-platform desktop application framework
-- [React](https://reactjs.org/) - User interface library
-- [Ant Design](https://ant.design/) - Enterprise-class UI design language
-- [Monaco Editor](https://microsoft.github.io/monaco-editor/) - Code editor
-- [Zustand](https://github.com/pmndrs/zustand) - State management library
+- [Electron](https://www.electronjs.org/)
+- [React](https://react.dev/)
+- [Ant Design](https://ant.design/)
+- [Monaco Editor](https://microsoft.github.io/monaco-editor/)
+- [Zustand](https://github.com/pmndrs/zustand)
+- [Claude Code](https://claude.com/claude-code)
 
 ---
 
@@ -383,6 +372,6 @@ Thanks to these excellent open source projects:
 
 **If this project helps you, please give it a ⭐ Star!**
 
-Made with ❤️ by NianSir
+Made by NianSir
 
 </div>

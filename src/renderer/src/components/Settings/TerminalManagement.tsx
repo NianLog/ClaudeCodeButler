@@ -14,7 +14,6 @@ import {
   Space,
   Typography,
   Tag,
-  message,
   Tooltip,
   Popconfirm
 } from 'antd'
@@ -31,6 +30,7 @@ import {
 import { useTerminalStore } from '../../store/terminal-store'
 import type { TerminalConfig, TerminalType } from '@shared/types/terminal'
 import { useTranslation } from '../../locales/useTranslation'
+import { useMessage } from '../../hooks/useMessage'
 import './TerminalManagement.css'
 
 const { Title, Text } = Typography
@@ -56,6 +56,7 @@ const getTerminalIcon = (type: TerminalType) => {
 const TerminalManagement: React.FC = () => {
   const [form] = Form.useForm()
   const { t } = useTranslation()
+  const message = useMessage()
 
   const {
     terminals,
@@ -137,7 +138,7 @@ const TerminalManagement: React.FC = () => {
       message.success(t('terminal.messages.saveSuccess'))
       setModalVisible(false)
     } catch (error) {
-      console.error(t('terminal.messages.saveFailed'), error)
+      message.error(t('terminal.messages.saveFailed'))
     }
   }
 
@@ -147,7 +148,7 @@ const TerminalManagement: React.FC = () => {
       await setDefaultTerminal(type)
       message.success(t('terminal.messages.setDefaultSuccess'))
     } catch (error) {
-      console.error(t('terminal.messages.setDefaultFailed'), error)
+      message.error(t('terminal.messages.setDefaultFailed'))
     }
   }
 
@@ -232,7 +233,7 @@ const TerminalManagement: React.FC = () => {
                       await deleteTerminal(record.type)
                       message.success(t('terminal.messages.deleteSuccess'))
                     } catch (error) {
-                      console.error(t('terminal.messages.deleteFailed'), error)
+                      message.error(t('terminal.messages.deleteFailed'))
                     }
                   }}
                   okText={t('common.confirm')}
@@ -481,9 +482,8 @@ const TerminalManagement: React.FC = () => {
           <Form.Item
             name="isDefault"
             label={t('terminal.form.isDefault')}
-            valuePropName="checked"
           >
-            <Select size="large" defaultValue={false}>
+            <Select size="large">
               <Option value={true}>{t('common.yes')}</Option>
               <Option value={false}>{t('common.no')}</Option>
             </Select>

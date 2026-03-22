@@ -4,12 +4,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Input, Switch, Modal, message, Empty, Spin, Tag, Typography } from 'antd';
+import { Card, Button, Input, Switch, Modal, Empty, Spin, Tag, Typography } from 'antd';
 import { PlusOutlined, PlayCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useRuleStore } from '../../store/rule-store';
 import RuleEditor from './RuleEditor';
 import './AutomationPanel.css'
 import { useTranslation } from '../../locales/useTranslation'
+import { useMessage } from '../../hooks/useMessage'
 
 const { Search } = Input;
 const { Text } = Typography
@@ -35,6 +36,7 @@ const AutomationPanel: React.FC = () => {
   } = useRuleStore()
 
   const { t } = useTranslation()
+  const message = useMessage()
 
   const [searchText, setSearchText] = useState('')
   const [editorVisible, setEditorVisible] = useState(false)

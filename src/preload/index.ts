@@ -19,7 +19,8 @@ import type {
 import type {
   MCPServerListItem,
   MCPServerFormData,
-  ClaudeConfig
+  ClaudeConfig,
+  MCPServerAvailabilityResult
 } from '@shared/types/mcp'
 import type {
   AgentFile,
@@ -51,6 +52,8 @@ import type {
 interface ConfigAPI {
   // 获取配置文件列表
   list: () => Promise<{ success: boolean; data?: ConfigFile[]; error?: string }>
+  // 获取配置刷新快照
+  refreshSnapshot: () => Promise<{ success: boolean; data?: { configs: ConfigFile[]; updatedConfigs: number; totalConfigs: number }; error?: string }>
   // 获取单个配置文件内容
   get: (path: string) => Promise<{ success: boolean; data?: any; error?: string }>
   // 保存配置文件
@@ -307,6 +310,8 @@ interface ManagedModeAPI {
   getStatus: () => Promise<ManagedModeStatus>
   // 获取配置
   getConfig: () => Promise<ManagedModeConfig | null>
+  // 获取当前访问令牌
+  getAccessToken: () => Promise<{ success: boolean; data?: { accessToken: string }; error?: string }>
   // 更新配置
   updateConfig: (config: Partial<ManagedModeConfig>) => Promise<{ success: boolean; error?: string }>
   // 切换服务商
@@ -418,6 +423,12 @@ interface MCPAPI {
   toggleServer: (serverId: string, scope: string) => Promise<{
     success: boolean
     data?: boolean
+    error?: string
+  }>
+  // 验证MCP服务器可用性
+  validateServerAvailability: (serverId: string, scope: string) => Promise<{
+    success: boolean
+    data?: MCPServerAvailabilityResult
     error?: string
   }>
   // 复制MCP服务器
@@ -664,6 +675,7 @@ export interface ElectronAPI {
 // 创建配置 API 对象
 const configAPI: ConfigAPI = {
   list: () => ipcRenderer.invoke('config:list'),
+  refreshSnapshot: () => ipcRenderer.invoke('config:refreshSnapshot'),
   get: (path: string) => ipcRenderer.invoke('config:get', path),
   save: (path: string, content: any, metadata?: any) => ipcRenderer.invoke('config:save', path, content, metadata),
   saveMetadata: (path: string, metadata: any) => ipcRenderer.invoke('config:saveMetadata', path, metadata),
@@ -829,6 +841,7 @@ const managedModeAPI: ManagedModeAPI = {
   restart: () => ipcRenderer.invoke('managed-mode:restart'),
   getStatus: () => ipcRenderer.invoke('managed-mode:get-status'),
   getConfig: () => ipcRenderer.invoke('managed-mode:get-config'),
+  getAccessToken: () => ipcRenderer.invoke('managed-mode:get-access-token'),
   updateConfig: (config: Partial<ManagedModeConfig>) => ipcRenderer.invoke('managed-mode:update-config', config),
   switchProvider: (providerId: string) => ipcRenderer.invoke('managed-mode:switch-provider', providerId),
   addProvider: (provider: ApiProvider) => ipcRenderer.invoke('managed-mode:add-provider', provider),
@@ -887,6 +900,8 @@ const mcpAPI: MCPAPI = {
   addOrUpdateServer: (formData: MCPServerFormData) => ipcRenderer.invoke('mcp:add-or-update-server', formData),
   deleteServer: (serverId: string, scope: string) => ipcRenderer.invoke('mcp:delete-server', serverId, scope),
   toggleServer: (serverId: string, scope: string) => ipcRenderer.invoke('mcp:toggle-server', serverId, scope),
+  validateServerAvailability: (serverId: string, scope: string) =>
+    ipcRenderer.invoke('mcp:validate-server-availability', serverId, scope),
   duplicateServer: (serverId: string, scope: string, newServerId: string, targetScope: string) =>
     ipcRenderer.invoke('mcp:duplicate-server', serverId, scope, newServerId, targetScope),
   getProjectPaths: () => ipcRenderer.invoke('mcp:get-project-paths'),

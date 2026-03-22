@@ -6,6 +6,9 @@
 import { create } from 'zustand'
 import { ConfigFile } from '@shared/types'
 
+let refreshConfigsPromise: Promise<void> | null = null
+let shouldSkipNextTrayMenuSync = true
+
 /**
  * 配置文件过滤器接口
  * 统一管理所有筛选条件
@@ -84,39 +87,25 @@ export const useConfigListStore = create<ConfigListStore>((set, get) => ({
 
   // 刷新配置列表
   refreshConfigs: async () => {
-    try {
-      set({ isLoading: true, error: null })
-      const response = await window.electronAPI.config.list()
-      
-      // 处理IPC响应格式
-      let configs = []
-      if (response && typeof response === 'object' && 'success' in response && response.success && 'data' in response) {
-        configs = Array.isArray(response.data) ? response.data : []
-      } else if (Array.isArray(response)) {
-        // 兼容旧格式
-        configs = response
-      } else {
-        console.warn('Unexpected response format:', response)
-        configs = []
-      }
+    if (refreshConfigsPromise) {
+      await refreshConfigsPromise
+      return
+    }
 
-      console.log('Loaded configs:', configs.length, configs)
-
-      // 自动比对和更新Claude Code配置状态
+    refreshConfigsPromise = (async () => {
       try {
-        console.log('🔄 开始调用 autoUpdateClaudeCodeStatus...')
-        const updateResponse = await window.electronAPI.config.autoUpdateClaudeCodeStatus()
-        console.log('📦 autoUpdateClaudeCodeStatus响应:', updateResponse)
+        set({ isLoading: true, error: null })
+        const response = await window.electronAPI.config.refreshSnapshot()
 
-        if (updateResponse && typeof updateResponse === 'object' && 'success' in updateResponse && updateResponse.success && 'data' in updateResponse) {
-          const updatedConfigs = (updateResponse.data as any).updatedConfigs
-          const totalConfigs = (updateResponse.data as any).totalConfigs
+        if (response?.success && response.data) {
+          const configs = Array.isArray(response.data.configs) ? response.data.configs : []
+          const updatedConfigs = response.data.updatedConfigs ?? 0
+          const totalConfigs = response.data.totalConfigs ?? configs.length
+
+          console.log('Loaded configs:', configs.length, configs)
           console.log(`✅ 自动比对完成: 更新了 ${updatedConfigs} 个配置，总共 ${totalConfigs} 个配置`)
 
           if (updatedConfigs > 0) {
-            console.log(`🔄 重新获取配置列表以反映更新...`)
-
-            // 发送配置变更通知
             const addNotification = get().addNotification
             if (addNotification) {
               addNotification(
@@ -125,41 +114,38 @@ export const useConfigListStore = create<ConfigListStore>((set, get) => ({
                 `检测到 ${updatedConfigs} 个配置文件状态发生变化，已自动更新`
               )
             }
-
-            // 重新获取配置列表以反映更新
-            const freshResponse = await window.electronAPI.config.list()
-            let freshConfigs = []
-            if (freshResponse && typeof freshResponse === 'object' && 'success' in freshResponse && freshResponse.success && 'data' in freshResponse) {
-              freshConfigs = Array.isArray(freshResponse.data) ? freshResponse.data : []
-            } else if (Array.isArray(freshResponse)) {
-              freshConfigs = freshResponse
-            }
-            console.log(`✅ 刷新后的配置列表:`, freshConfigs.map(c => ({ name: c.name, isInUse: c.isInUse, isActive: c.isActive })))
-            set({ configs: freshConfigs })
           } else {
-            console.log(`ℹ️ 没有配置需要更新，使用原配置列表`)
-            set({ configs })
+            console.log('ℹ️ 没有配置需要更新，使用原配置列表')
           }
-        } else {
-          console.warn('⚠️ autoUpdateClaudeCodeStatus响应格式不正确:', updateResponse)
+
           set({ configs })
+        } else {
+          console.warn('Unexpected refreshSnapshot response:', response)
+          set({ configs: [] })
         }
       } catch (error) {
-        console.error('❌ 自动比对配置失败:', error)
-        set({ configs })
-      }
-    } catch (error) {
-      console.error('Failed to refresh configs:', error)
-      set({ error: '加载配置列表失败', configs: [] })
-    } finally {
-      set({ isLoading: false })
+        console.error('Failed to refresh configs:', error)
+        set({ error: '加载配置列表失败', configs: [] })
+      } finally {
+        set({ isLoading: false })
 
-      // 刷新配置列表后，通知主进程更新托盘菜单
-      try {
-        await window.electronAPI.tray?.updateMenu?.()
-      } catch (error) {
-        console.warn('更新托盘菜单失败:', error)
+        // 刷新配置列表后，通知主进程更新托盘菜单
+        if (shouldSkipNextTrayMenuSync) {
+          shouldSkipNextTrayMenuSync = false
+        } else {
+          try {
+            await window.electronAPI.tray?.updateMenu?.()
+          } catch (error) {
+            console.warn('更新托盘菜单失败:', error)
+          }
+        }
       }
+    })()
+
+    try {
+      await refreshConfigsPromise
+    } finally {
+      refreshConfigsPromise = null
     }
   },
 
@@ -231,13 +217,15 @@ export const useConfigListStore = create<ConfigListStore>((set, get) => ({
       }
 
       const createResponse = await window.electronAPI.config.create(`${config.name}_copy`)
-      if (createResponse?.success && createResponse.data?.path) {
+      const createdPath = createResponse?.data?.path
+
+      if (createResponse?.success && createdPath) {
         // 获取原配置内容并保存到新配置
         const contentResponse = await window.electronAPI.config.get(config.path)
         if (!contentResponse?.success) {
           throw new Error(contentResponse?.error || '读取配置失败')
         }
-        const saveResponse = await window.electronAPI.config.save(createResponse.data.path, contentResponse.data)
+        const saveResponse = await window.electronAPI.config.save(createdPath, contentResponse.data)
         if (!saveResponse?.success) {
           throw new Error(saveResponse?.error || '保存配置失败')
         }
@@ -246,7 +234,7 @@ export const useConfigListStore = create<ConfigListStore>((set, get) => ({
         await get().refreshConfigs()
         
         // 选择新创建的配置
-        const newConfig = get().configs.find(c => c.path === createResponse.data.path)
+        const newConfig = get().configs.find(c => c.path === createdPath)
         if (newConfig) {
           get().setSelectedConfig(newConfig)
         }

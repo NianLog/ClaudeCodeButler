@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Layout, Button, Space, Badge, Tooltip, Dropdown, Avatar, Typography, message } from 'antd'
+import { Layout, Button, Space, Badge, Tooltip, Dropdown, Avatar, Typography } from 'antd'
 import {
   BellOutlined,
   SettingOutlined,
@@ -23,7 +23,6 @@ import {
   FileTextOutlined,
   RobotOutlined,
   BarChartOutlined,
-  FolderOutlined,
   ReloadOutlined,
   ProjectOutlined,
   CloudDownloadOutlined,
@@ -41,6 +40,7 @@ import { useConfigListWithNotification } from '../../hooks/useConfigListWithNoti
 import { initializeManagedModeLogListener } from '../../store/managed-mode-log-store'
 import { versionService } from '../../services/version-service'
 import { useTranslation } from '../../locales/useTranslation'
+import { useMessage } from '../../hooks/useMessage'
 import UpdateModal from '../Common/UpdateModal'
 import type { VersionInfo } from '../../services/version-service'
 import './ModernLayout.css'
@@ -60,6 +60,7 @@ interface ModernLayoutProps {
  */
 const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
   const { t } = useTranslation()
+  const message = useMessage()
   const {
     version,
     notifications,
@@ -98,11 +99,9 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
 
   // 初始化托管模式日志监听器（应用启动时立即初始化，在后台持续收集日志）
   useEffect(() => {
-    console.log('[ModernLayout] 初始化托管模式日志监听器')
     const cleanup = initializeManagedModeLogListener()
 
     return () => {
-      console.log('[ModernLayout] 清理托管模式日志监听器')
       cleanup()
     }
   }, [])

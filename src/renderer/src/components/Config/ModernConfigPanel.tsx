@@ -40,10 +40,16 @@ import {
 import { useConfigListStore } from '../../store/config-list-store'
 import { useConfigEditorStore } from '../../store/config-editor-store'
 import { ConfigFile } from '@shared/types'
-import ConfigEditor from './ConfigEditor'
-import ConfigImportModal from './ConfigImportModal'
+import type { ConfigEditorDraft } from './ConfigEditor'
+const ConfigEditor = React.lazy(() => import('./ConfigEditor'))
+const ConfigImportModal = React.lazy(() => import('./ConfigImportModal'))
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 import { useTranslation } from '../../locales/useTranslation'
+import {
+  type EditorLanguage,
+  generateUniqueDuplicateName,
+  resolveConfigEditorLanguage
+} from '../../utils/config-editor-utils'
 import './ModernConfigPanel.css'
 
 const { Title, Text } = Typography
@@ -86,6 +92,8 @@ const ModernConfigPanel: React.FC = () => {
   const [editorVisible, setEditorVisible] = useState(false)
   const [importVisible, setImportVisible] = useState(false)
   const [editingConfig, setEditingConfig] = useState<ConfigFile | null>(null)
+  const [editorMode, setEditorMode] = useState<'create' | 'edit' | 'duplicate'>('create')
+  const [editorInitialDraft, setEditorInitialDraft] = useState<ConfigEditorDraft | null>(null)
   const [systemConfigConfirmVisible, setSystemConfigConfirmVisible] = useState(false)
   const [pendingSystemConfigAction, setPendingSystemConfigAction] = useState<{
     config: ConfigFile
@@ -95,12 +103,16 @@ const ModernConfigPanel: React.FC = () => {
   const [previewModalVisible, setPreviewModalVisible] = useState(false)
   const [previewConfig, setPreviewConfig] = useState<ConfigFile | null>(null)
   const [previewContent, setPreviewContent] = useState<string>('')
+  const [previewLanguage, setPreviewLanguage] = useState<EditorLanguage>('json')
 
   useEffect(() => {
-    refreshConfigs()
+    if (configs.length === 0 && !isLoading) {
+      void refreshConfigs()
+    }
+
     // 加载托管模式状态
-    loadManagedModeStatus()
-  }, [refreshConfigs])
+    void loadManagedModeStatus()
+  }, [configs.length, isLoading, refreshConfigs])
 
   // 单独处理托管模式警告消息，避免在渲染中直接调用
   useEffect(() => {
@@ -245,12 +257,13 @@ const ModernConfigPanel: React.FC = () => {
   const showConfigPreviewModal = async (config: ConfigFile) => {
     setPreviewConfig(config)
     setPreviewModalVisible(true)
+    setPreviewLanguage(resolveConfigEditorLanguage(config))
 
     try {
       // 使用正确的API加载配置内容
       const configData = await window.electronAPI.config.get(config.path)
-      if (configData.success && configData.data) {
-        const content = configData.data.content || configData.data
+      if (configData.success && Object.prototype.hasOwnProperty.call(configData, 'data')) {
+        const content = configData.data?.content ?? configData.data
         // 格式化JSON内容以便显示
         if (typeof content === 'object') {
           setPreviewContent(JSON.stringify(content, null, 2))
@@ -273,6 +286,7 @@ const ModernConfigPanel: React.FC = () => {
     setPreviewModalVisible(false)
     setPreviewConfig(null)
     setPreviewContent('')
+    setPreviewLanguage('json')
   }
 
   // 处理配置选择
@@ -282,7 +296,9 @@ const ModernConfigPanel: React.FC = () => {
 
   // 处理新建配置
   const handleCreateConfig = () => {
+    setEditorMode('create')
     setEditingConfig(null)
+    setEditorInitialDraft(null)
     setEditorVisible(true)
   }
 
@@ -329,6 +345,8 @@ const ModernConfigPanel: React.FC = () => {
       setPendingSystemConfigAction({ config, action: 'edit' })
       setSystemConfigConfirmVisible(true)
     } else {
+      setEditorMode('edit')
+      setEditorInitialDraft(null)
       setEditingConfig(config)
       setEditorVisible(true)
     }
@@ -337,18 +355,35 @@ const ModernConfigPanel: React.FC = () => {
   // 处理复制配置
   const handleDuplicateConfig = async (config: ConfigFile) => {
     try {
-      const duplicatedConfig = {
-        ...config,
-        name: t('configPanel.duplicateName', { name: config.name }),
-        id: undefined, // 让系统生成新的ID
-        path: undefined, // 让系统生成新的路径
-        isSystemConfig: false, // 复制的配置不是系统配置
-        isInUse: false
+      const configData = await window.electronAPI.config.get(config.path)
+      if (!configData.success) {
+        throw new Error(configData.error || t('configPanel.preview.loadFailed'))
       }
-      await createConfigWithData(duplicatedConfig)
-      await refreshConfigs()
+
+      const duplicatedName = generateUniqueDuplicateName(
+        config.name,
+        t('configPanel.duplicateSuffix'),
+        configs.map((item) => item.name)
+      )
+
+      setEditorMode('duplicate')
+      setEditingConfig(null)
+      setEditorInitialDraft({
+        name: duplicatedName,
+        description: config.description || '',
+        type: config.type || 'claude-code',
+        isActive: false,
+        content: configData.data?.content ?? configData.data,
+        language: resolveConfigEditorLanguage(config)
+      })
+      setEditorVisible(true)
     } catch (error) {
       console.error('复制配置失败:', error)
+      message.error(
+        t('configEditor.save.failed', {
+          error: error instanceof Error ? error.message : t('common.unknownError')
+        })
+      )
     }
   }
 
@@ -383,6 +418,8 @@ const ModernConfigPanel: React.FC = () => {
   const handleSystemConfigConfirm = () => {
     if (pendingSystemConfigAction) {
       if (pendingSystemConfigAction.action === 'edit') {
+        setEditorMode('edit')
+        setEditorInitialDraft(null)
         setEditingConfig(pendingSystemConfigAction.config)
         setEditorVisible(true)
       }
@@ -406,7 +443,7 @@ const ModernConfigPanel: React.FC = () => {
   // 处理配置保存（统一架构）
   const handleConfigSave = async (configData: any) => {
     try {
-      if (editingConfig) {
+      if (editorMode === 'edit' && editingConfig) {
         // 更新现有配置 - 直接保存纯内容和元数据
         await window.electronAPI.config.save(editingConfig.path, configData.content, configData.metadata)
       } else {
@@ -414,7 +451,9 @@ const ModernConfigPanel: React.FC = () => {
         await createConfigWithData(configData)
       }
       setEditorVisible(false)
+      setEditorMode('create')
       setEditingConfig(null)
+      setEditorInitialDraft(null)
       await refreshConfigs()
     } catch (error) {
       console.error('保存配置失败:', error)
@@ -501,7 +540,7 @@ const ModernConfigPanel: React.FC = () => {
     const k = 1024
     const sizes = ['B', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
   }
 
   // 格式化时间
@@ -870,24 +909,36 @@ const ModernConfigPanel: React.FC = () => {
       </div>
 
       {/* 配置编辑器模态框 */}
-      <ConfigEditor
-        visible={editorVisible}
-        config={editingConfig}
-        onClose={async () => {
-          setEditorVisible(false)
-          setEditingConfig(null)
-          // 关闭编辑器时刷新配置列表
-          await refreshConfigs()
-        }}
-        onSave={handleConfigSave}
-      />
+      {editorVisible && (
+        <Suspense fallback={<Spin size="large" />}>
+          <ConfigEditor
+            visible={editorVisible}
+            mode={editorMode}
+            config={editingConfig}
+            initialDraft={editorInitialDraft}
+            onClose={async () => {
+              setEditorVisible(false)
+              setEditorMode('create')
+              setEditingConfig(null)
+              setEditorInitialDraft(null)
+              // 关闭编辑器时刷新配置列表
+              await refreshConfigs()
+            }}
+            onSave={handleConfigSave}
+          />
+        </Suspense>
+      )}
 
       {/* 配置导入模态框 */}
-      <ConfigImportModal
-        visible={importVisible}
-        onClose={() => setImportVisible(false)}
-        onImport={handleConfigImport}
-      />
+      {importVisible && (
+        <Suspense fallback={<Spin size="large" />}>
+          <ConfigImportModal
+            visible={importVisible}
+            onClose={() => setImportVisible(false)}
+            onImport={handleConfigImport}
+          />
+        </Suspense>
+      )}
 
       {/* 系统配置操作确认模态框 */}
       <Modal
@@ -960,7 +1011,7 @@ const ModernConfigPanel: React.FC = () => {
           <Suspense fallback={<Spin size="large" />}>
             <CodeEditor
               value={previewContent}
-              language="json"
+              language={previewLanguage}
               height="100%"
               readOnly={true}
               options={{

@@ -3,7 +3,9 @@
  * 负责处理渲染进程与主进程之间的通信
  */
 
-import { ipcMain, app } from 'electron'
+import { ipcMain, app, Notification } from 'electron'
+import { readFile } from 'fs/promises'
+import path from 'path'
 import { ConfigService } from './services/config-service'
 import { ruleEngineService } from './services/rule-engine.service'
 import { ConfigMigrationService } from './services/config-migration'
@@ -22,6 +24,11 @@ import { agentsManagementService } from './services/agents-management-service'
 import { skillsManagementService } from './services/skills-management-service'
 import { environmentCheckService } from './services/environment-check-service'
 import { terminalManagementService } from './services/terminal-management-service'
+import {
+  ensureAllowedUrl,
+  ensurePathWithinBase,
+  sanitizeFileName
+} from './utils/path-security'
 
 
 // 服务实例
@@ -99,6 +106,7 @@ export function setupIpcHandlers(): void {
  */
 function setupConfigHandlers(): void {
   ipcMain.handle('config:list', createSimpleHandler(() => configService.scanConfigs()))
+  ipcMain.handle('config:refreshSnapshot', createSimpleHandler(() => configService.getRefreshSnapshot()))
   ipcMain.handle('config:get', createSimpleHandler((path: string) => configService.getConfig(path)))
   ipcMain.handle('config:save', createSimpleHandler(async (path: string, content: any, metadata?: any) => {
     const result = await configService.saveConfig(path, content, metadata)
@@ -142,8 +150,7 @@ function setupConfigHandlers(): void {
   }))
   ipcMain.handle('config:checkMigration', createSimpleHandler(async (filePath: string) => {
     try {
-      const fs = require('fs/promises')
-      const content = await fs.readFile(filePath, 'utf8')
+      const content = await readFile(filePath, 'utf8')
       const config = JSON.parse(content)
       const needsMigration = ConfigMigrationService.isOldFormat(config)
       return { needsMigration }
@@ -212,16 +219,17 @@ function setupAppHandlers(): void {
  */
 function setupSystemHandlers(): void {
   ipcMain.handle('system:showNotification', createSimpleHandler((title: string, body: string) => {
-    const { Notification } = require('electron')
     new Notification({ title, body }).show()
     return Promise.resolve()
   }))
   ipcMain.handle('system:openExternal', createSimpleHandler(async (url: string) => {
+    const safeUrl = ensureAllowedUrl(url, ['http:', 'https:', 'mailto:'], '外部链接')
     const { shell } = await import('electron')
-    await shell.openExternal(url)
+    await shell.openExternal(safeUrl.toString())
   }))
   ipcMain.handle('system:downloadFile', async (event, url: string, fileName?: string) => {
     try {
+      const safeUrl = ensureAllowedUrl(url, ['http:', 'https:'], '下载地址')
       const { BrowserWindow, shell } = await import('electron')
       const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
       if (!win) {
@@ -237,10 +245,10 @@ function setupSystemHandlers(): void {
         logger.info(`测试URL访问性...`)
         const https = await import('https')
         const http = await import('http')
-        const client = url.startsWith('https') ? https : http
+        const client = safeUrl.protocol === 'https:' ? https : http
 
         await new Promise((testResolve, testReject) => {
-          const req = client.request(url, { method: 'HEAD' }, (res) => {
+          const req = client.request(safeUrl.toString(), { method: 'HEAD' }, (res) => {
             logger.info(`URL测试响应: statusCode=${res.statusCode}, contentType=${res.headers['content-type']}`)
             if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
               testResolve(true)
@@ -289,7 +297,12 @@ function setupSystemHandlers(): void {
           // 设置保存路径
           const { app } = await import('electron')
           const downloadsPath = app.getPath('downloads')
-          const savePath = require('path').join(downloadsPath, fileName || item.getFilename())
+          const safeFileName = sanitizeFileName(fileName || item.getFilename(), 'download.bin')
+          const savePath = ensurePathWithinBase(
+            path.join(downloadsPath, safeFileName),
+            downloadsPath,
+            '下载保存路径'
+          )
 
           logger.info(`设置保存路径: ${savePath}`)
           item.setSavePath(savePath)
@@ -396,8 +409,8 @@ function setupSystemHandlers(): void {
         win.webContents.session.on('will-download', downloadHandler)
 
         // 4. 触发下载
-        logger.info(`触发downloadURL: ${url}`)
-        win.webContents.downloadURL(url)
+        logger.info(`触发downloadURL: ${safeUrl.toString()}`)
+        win.webContents.downloadURL(safeUrl.toString())
 
         // 如果5秒内没有开始下载,返回超时
         setTimeout(() => {
@@ -406,7 +419,7 @@ function setupSystemHandlers(): void {
             win.webContents.session.removeListener('will-download', downloadHandler)
             logger.error('========== 下载启动超时 ==========')
             logger.error('5秒内未触发 will-download 事件')
-            logger.error(`URL: ${url}`)
+            logger.error(`URL: ${safeUrl.toString()}`)
             resolve({ success: false, error: 'timeout', message: '下载启动超时' })
           }
         }, 5000)
@@ -418,13 +431,14 @@ function setupSystemHandlers(): void {
   })
   ipcMain.handle('system:fetchUrl', async (_, url: string) => {
     try {
+      const safeUrl = ensureAllowedUrl(url, ['http:', 'https:'], '抓取地址')
       const https = await import('https')
       const http = await import('http')
 
       return new Promise((resolve) => {
-        const client = url.startsWith('https') ? https : http
+        const client = safeUrl.protocol === 'https:' ? https : http
 
-        client.get(url, (res) => {
+        client.get(safeUrl.toString(), (res) => {
           let data = ''
           res.on('data', (chunk) => {
             data += chunk
@@ -629,6 +643,11 @@ function setupMCPHandlers(): void {
     return await mcpManagementService.toggleServer(serverId, scope)
   })
 
+  // 验证MCP服务器可用性
+  ipcMain.handle('mcp:validate-server-availability', async (_, serverId: string, scope: string) => {
+    return await mcpManagementService.validateServerAvailability(serverId, scope)
+  })
+
   // 复制MCP服务器
   ipcMain.handle('mcp:duplicate-server', async (_, serverId: string, scope: string, newServerId: string, targetScope: string) => {
     return await mcpManagementService.duplicateServer(serverId, scope, newServerId, targetScope)
@@ -820,6 +839,6 @@ function setupTerminalHandlers(): void {
 
   // 执行命令
   ipcMain.handle('terminal:execute-command', createSimpleHandler(async (command: string, options?: any) =>
-    terminalManagementService.executeCommand(command, options)
+    terminalManagementService.executeIpcCommand(command, options)
   ))
 }
