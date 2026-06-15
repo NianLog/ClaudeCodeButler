@@ -38,7 +38,7 @@ const AutomationPanel: React.FC = () => {
 
   const { t } = useTranslation()
   const message = useMessage()
-  // v2.0：使用 App context 的 modal 替代静态 Modal.info，消除 antd 静态函数警告
+  // v1.4.0：使用 App context 的 modal 替代静态 Modal.info，消除 antd 静态函数警告
   const { modal } = App.useApp()
 
   const [searchText, setSearchText] = useState('')
@@ -172,7 +172,7 @@ const AutomationPanel: React.FC = () => {
         <div className="automation-stats-grid">
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: '#1890ff', marginBottom: '4px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--accent)', marginBottom: '4px' }}>
                 {Number(stats.totalRules) || rules.length}
               </div>
               <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.totalRules')}</div>
@@ -180,7 +180,7 @@ const AutomationPanel: React.FC = () => {
           </Card>
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: '#52c41a', marginBottom: '4px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--green)', marginBottom: '4px' }}>
                 {Number(stats.activeRules) || rules.filter(r => r.enabled).length}
               </div>
               <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.activeRules')}</div>
@@ -188,7 +188,7 @@ const AutomationPanel: React.FC = () => {
           </Card>
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: '#faad14', marginBottom: '4px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--yellow)', marginBottom: '4px' }}>
                 {Number(stats.totalExecutions) || 0}
               </div>
               <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.totalExecutions')}</div>
@@ -196,7 +196,7 @@ const AutomationPanel: React.FC = () => {
           </Card>
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: '#f5222d', marginBottom: '4px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--red)', marginBottom: '4px' }}>
                 {Number(stats.failedExecutions) || 0}
               </div>
               <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.failedExecutions')}</div>

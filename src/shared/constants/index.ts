@@ -14,7 +14,7 @@ export const APP_INFO = {
   /** 应用全称 */
   FULL_NAME: 'Claude Code Butler',
   /** 版本号 */
-  VERSION: '1.0.0',
+  VERSION: '1.4.0',
   /** 描述 */
   DESCRIPTION: 'Claude Code 配置管理工具',
   /** 作者 */

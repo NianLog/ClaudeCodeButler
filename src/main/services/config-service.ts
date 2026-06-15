@@ -734,7 +734,7 @@ export class ConfigService {
    */
   private async scanUserSystemConfigs(files: string[]): Promise<void> {
     try {
-      // 要扫描的系统配置文件（v2.0：复用 pathManager 常量，消除内联 require 与散落的 homedir 拼接）
+      // 要扫描的系统配置文件（v1.4.0：复用 pathManager 常量，消除内联 require 与散落的 homedir 拼接）
       const systemConfigs = [
         pathManager.userSettingsPath,
         pathManager.claudeJsonPath,
@@ -1180,7 +1180,7 @@ export class ConfigService {
 
       logger.info(`用户系统settings路径: ${userSettingsPath}`)
 
-      // v2.0：字符串配置（.md 文件）直接写入，不走假 URL 热重载逻辑
+      // v1.4.0：字符串配置（.md 文件）直接写入，不走假 URL 热重载逻辑
       // （spread 字符串会产生字符索引对象，损坏 settings.json）
       if (typeof configContent === 'string') {
         await this.saveConfig(userSettingsPath, configContent)

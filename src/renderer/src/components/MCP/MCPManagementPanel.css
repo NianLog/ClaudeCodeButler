@@ -18,9 +18,9 @@
   align-items: center;
   margin-bottom: 16px;
   padding: 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: none;
 }
 
 .mcp-panel-header .header-left {
@@ -44,9 +44,9 @@
 .mcp-panel-toolbar {
   margin-bottom: 16px;
   padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: none;
 }
 
 /* 内容区 */
@@ -55,9 +55,9 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: none;
 }
 
 .mcp-panel-loading {
@@ -78,9 +78,9 @@
 
 /* 服务器列表项 */
 .mcp-server-item {
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--bg-panel);
+  border-radius: var(--radius-md);
   padding: 16px;
   margin-bottom: 12px;
   transition: all 0.3s ease;
@@ -88,9 +88,9 @@
 }
 
 .mcp-server-item:hover {
-  background: #fff;
-  border-color: #1890ff;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  box-shadow: none;
 }
 
 .mcp-server-item:last-child {
@@ -119,9 +119,9 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
-  color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent) 100%);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
   font-size: 20px;
   flex-shrink: 0;
 }
@@ -135,7 +135,7 @@
   margin: 0 0 8px 0 !important;
   font-size: 16px;
   font-weight: 600;
-  color: #262626;
+  color: var(--bg-sidebar);
 }
 
 .server-item-actions {
@@ -161,10 +161,10 @@
 }
 
 .server-command code {
-  background: #f5f5f5;
-  border: 1px solid #e8e8e8;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   word-break: break-all;
@@ -221,15 +221,15 @@
 }
 
 .mcp-server-list::-webkit-scrollbar-track {
-  background: #f0f0f0;
-  border-radius: 4px;
+  background: var(--bg-panel);
+  border-radius: var(--radius-sm);
 }
 
 .mcp-server-list::-webkit-scrollbar-thumb {
-  background: #bfbfbf;
-  border-radius: 4px;
+  background: var(--border-light);
+  border-radius: var(--radius-sm);
 }
 
 .mcp-server-list::-webkit-scrollbar-thumb:hover {
-  background: #999;
+  background: var(--text-muted);
 }

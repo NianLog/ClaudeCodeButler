@@ -116,45 +116,45 @@
 .config-list-item.selected {
   border-color: var(--primary-color);
   background: var(--primary-light);
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.1);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 /* 系统配置列表项红色高亮 */
 .config-list-item.system-config-highlight {
-  border-color: #ff4d4f;
-  background: linear-gradient(90deg, #fff2f0 0%, #ffffff 100%);
-  box-shadow: 0 2px 4px rgba(255, 77, 79, 0.08);
+  border-color: var(--red);
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .config-list-item.system-config-highlight:hover {
-  border-color: #ff7875;
-  background: linear-gradient(90deg, #fff1f0 0%, #fafafa 100%);
-  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.12);
+  border-color: var(--red);
+  background: var(--bg-hover);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .config-list-item.system-config-highlight.selected {
-  border-color: #ff4d4f;
-  background: linear-gradient(90deg, #fff2f0 0%, #fafafa 100%);
-  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.15);
+  border-color: var(--red);
+  background: var(--bg-hover);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 /* 启用配置列表项绿色高亮 */
 .config-list-item.active-config-highlight {
-  border-color: #52c41a;
-  background: linear-gradient(90deg, #f6ffed 0%, #ffffff 100%);
-  box-shadow: 0 2px 4px rgba(82, 196, 26, 0.08);
+  border-color: var(--green);
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .config-list-item.active-config-highlight:hover {
-  border-color: #73d13d;
-  background: linear-gradient(90deg, #f6ffed 0%, #fafafa 100%);
-  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.12);
+  border-color: var(--green);
+  background: var(--bg-hover);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .config-list-item.active-config-highlight.selected {
-  border-color: #52c41a;
-  background: linear-gradient(90deg, #f6ffed 0%, #fafafa 100%);
-  box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.15);
+  border-color: var(--green);
+  background: var(--bg-hover);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .list-item-icon {
@@ -278,17 +278,6 @@
   }
 }
 
-/* 暗色主题适配 */
-[data-theme="dark"] .config-list-item {
-  background: var(--bg-elevated);
-  border-color: var(--border-light);
-}
-
-[data-theme="dark"] .config-list-item:hover {
-  background: var(--primary-light);
-  border-color: var(--primary-color);
-}
-
 /* 动画效果 */
 .config-list-item {
   animation: slideInLeft var(--transition-normal) ease-out;
@@ -327,7 +316,7 @@
 /* 托管模式卡片样式 */
 .managed-mode-card {
   border-radius: var(--radius-lg) !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+  box-shadow: 0 1px 0 var(--border) !important;
   transition: all var(--transition-normal) !important;
   /* 进一步减少内边距，使卡片更加紧凑 */
   padding: 4px !important;
@@ -335,7 +324,7 @@
 }
 
 .managed-mode-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 1px 0 var(--border) !important;
 }
 
 .managed-mode-card-content {
@@ -372,12 +361,12 @@
 
 /* 托管模式卡片在不同状态下的样式 */
 .managed-mode-card[data-enabled="true"] {
-  border-color: #52c41a !important;
-  background: linear-gradient(135deg, #f6ffed 0%, #fafafa 100%) !important;
+  border-color: var(--green) !important;
+  background: var(--bg-elevated) !important;
 }
 
 .managed-mode-card[data-enabled="false"] {
-  border-color: #f0f0f0 !important;
+  border-color: var(--border) !important;
 }
 
 /* 响应式设计 - 托管模式卡片 */

@@ -1,7 +1,7 @@
 /**
  * ManagedModeConfigStore 单元测试
  * @description 验证托管模式配置存储的读取/默认创建/accessToken 补全/原子写入。
- *              覆盖 v2.0 架构解耦第一步：从 ManagedModeService 拆分 ConfigStore。
+ *              覆盖 v1.4.0 架构解耦第一步：从 ManagedModeService 拆分 ConfigStore。
  */
 
 import { promises as fs } from 'fs'

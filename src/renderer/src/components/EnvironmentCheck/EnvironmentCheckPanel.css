@@ -19,15 +19,15 @@
 
 /* 统计卡片 */
 .stat-card {
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  border-radius: var(--radius-md);
+  box-shadow: none;
   border: 1px solid rgba(124, 58, 237, 0.1);
   background: rgba(255, 255, 255, 0.9);
   transition: all 0.2s ease;
 }
 
 .stat-card:hover {
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+  box-shadow: none;
   transform: translateY(-2px);
 }
 
@@ -57,20 +57,20 @@
 
 /* Claude Code版本卡片（置顶突出） */
 .claude-code-version-card {
-  border: 2px solid #7C3AED;
+  border: 2px solid var(--accent);
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.08) 0%, rgba(124, 58, 237, 0.02) 100%);
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.2);
+  border-radius: var(--radius-md);
+  box-shadow: none;
   transition: all 0.2s ease;
 }
 
 .claude-code-version-card:hover {
-  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.3);
+  box-shadow: none;
 }
 
 /* 环境检查卡片 */
 .env-check-card {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 2px solid transparent;
   transition: all 0.2s ease;
   min-height: 140px;
@@ -144,23 +144,23 @@
 
 /* 表格样式优化 */
 .environment-check-panel .ant-table {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .environment-check-panel .ant-table-thead > tr > th {
   background: rgba(124, 58, 237, 0.05);
-  color: #4C1D95;
+  color: var(--accent);
   font-weight: 600;
 }
 
 /* Modal样式优化 */
 .environment-check-panel .ant-modal-content {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .environment-check-panel .ant-modal-header {
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-md) 8px 0 0;
 }
 
 .environment-check-panel .ant-modal-footer {

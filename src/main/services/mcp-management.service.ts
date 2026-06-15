@@ -371,7 +371,7 @@ export class MCPManagementService {
 
     const config = configResult.data
 
-    // v2.0 兼容性：若提供了原始 JSON 配置，以 rawConfig 为基础保留 headers 等原生字段，
+    // v1.4.0 兼容性：若提供了原始 JSON 配置，以 rawConfig 为基础保留 headers 等原生字段，
     // 再叠加 UI 结构化字段（disabled/timeout/autoApprove 等用户显式编辑的值）
     let serverConfig: MCPServerConfig
     if (formData.rawConfig) {
@@ -980,7 +980,7 @@ export class MCPManagementService {
       errors.type = '不支持的传输类型'
     }
 
-    // v2.0 兼容性：不再强制校验 command/url 字段，允许 {url, headers} 等 Claude Code 原生 MCP 格式
+    // v1.4.0 兼容性：不再强制校验 command/url 字段，允许 {url, headers} 等 Claude Code 原生 MCP 格式
     // （某些合法 MCP 服务器可能无 command 或无 url，具体格式由 Claude Code 自行解析处理）
 
     // 验证环境变量格式
@@ -1067,7 +1067,7 @@ export class MCPManagementService {
     try {
       const serverConfig = JSON.parse(jsonString) as MCPServerConfig
 
-      // v2.0 兼容性：放宽导入校验，只保留 JSON 格式校验（合法 JSON 对象），
+      // v1.4.0 兼容性：放宽导入校验，只保留 JSON 格式校验（合法 JSON 对象），
       // 不再强制 type/command/url 字段，以兼容 Claude Code 原生的多种 MCP 格式（如 {url, headers}）
       if (!serverConfig || typeof serverConfig !== 'object' || Array.isArray(serverConfig)) {
         return {

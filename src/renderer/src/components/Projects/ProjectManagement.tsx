@@ -56,7 +56,7 @@ import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash'
 import json from 'react-syntax-highlighter/dist/esm/languages/prism/json'
 import markdown from 'react-syntax-highlighter/dist/esm/languages/prism/markdown'
 
-// v2.0 性能：原 Prism 全量打包所有语言（~600KB），改用 PrismAsyncLight 仅注册实际需要的语言
+// v1.4.0 性能：原 Prism 全量打包所有语言（~600KB），改用 PrismAsyncLight 仅注册实际需要的语言
 SyntaxHighlighter.registerLanguage('bash', bash)
 SyntaxHighlighter.registerLanguage('json', json)
 SyntaxHighlighter.registerLanguage('markdown', markdown)
@@ -1115,7 +1115,7 @@ const ProjectManagement: React.FC = () => {
               title={t('projects.stats.totalSessions')}
               value={projects.reduce((sum, p) => sum + p.sessionCount, 0)}
               prefix={<MessageOutlined />}
-              valueStyle={{ color: '#1890ff' }}
+              valueStyle={{ color: 'var(--accent)' }}
             />
           </Card>
         </Col>

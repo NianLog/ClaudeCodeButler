@@ -1,11 +1,14 @@
 /**
  * 代码编辑器组件
  * 支持语法高亮、自动修正、JSON/Markdown格式化
+ *
+ * v3 主题适配：
+ *  - Monaco Editor 主题恒为 'vs-dark'（CCB 三套内置主题均为深色）
+ *  - 内联样式全部迁移至 CSS 变量，跟随主题切换
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { Button, Space, Typography, Alert, Select, Switch } from 'antd'
-import { useAppStore } from '../../store/app-store'
 import {
   FormatPainterOutlined,
   CheckCircleOutlined,
@@ -15,11 +18,12 @@ import {
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 import type * as monaco from 'monaco-editor'
 // Monaco 语言 worker（Vite ?worker 导入）。修复原空 blob worker 导致语法诊断/tokenization
-// 退回主线程执行造成的内存与 CPU 开销（v2.0 性能根因之一）。
+// 退回主线程执行造成的内存与 CPU 开销（v1.4.0 性能根因之一）。
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { useTranslation } from '../../locales/useTranslation'
+import { useTheme } from '../../hooks/useTheme'
 
 const { Text } = Typography
 const { Option } = Select
@@ -91,6 +95,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   // 支持两种只读属性名称，优先使用 readOnly
   const isReadOnly = readOnly ?? readonly
   const { t } = useTranslation()
+  const { currentTheme } = useTheme()
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<MonacoRuntime | null>(null)
   const [isValid, setIsValid] = useState(true)
@@ -100,9 +105,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const [previewMode, setPreviewMode] = useState<'raw' | 'rendered'>('rendered')
   const [EditorComponent, setEditorComponent] = useState<MonacoEditorComponent | null>(null)
   const [editorRuntimeError, setEditorRuntimeError] = useState<string | null>(null)
-  
-  // 获取应用主题
-  const { theme } = useAppStore()
 
   useEffect(() => {
     let cancelled = false
@@ -436,7 +438,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
               onChange={handleEditorChange}
               onMount={handleEditorDidMount}
               options={editorOptions}
-              theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+              theme={currentTheme.mode === 'light' ? 'vs' : 'vs-dark'}
               loading={<div>{t('codeEditor.loading')}</div>}
             />
           ) : (
@@ -458,10 +460,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         )}
       </div>
 
-          <style>{`
+      {/* v3：内联样式全部迁移至 CSS 变量，跟随主题切换（暗主题下不再出现白底） */}
+      <style>{`
         .code-editor-container {
-          border: 1px solid #d9d9d9;
-          border-radius: 6px;
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-md);
           overflow: hidden;
         }
 
@@ -470,8 +473,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           justify-content: space-between;
           align-items: center;
           padding: 8px 12px;
-          background: #fafafa;
-          border-bottom: 1px solid #d9d9d9;
+          background: var(--bg-elevated);
+          border-bottom: 1px solid var(--border-light);
         }
 
         .language-indicator {
@@ -496,7 +499,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         }
 
         .editor-content.with-preview {
-          border-right: 1px solid #d9d9d9;
+          border-right: 1px solid var(--border-light);
         }
 
         .editor-panel {
@@ -512,8 +515,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           justify-content: center;
           height: 100%;
           padding: 24px;
-          color: #6b7280;
-          background: #ffffff;
+          color: var(--text-secondary);
+          background: var(--bg-panel);
         }
 
         /* 强制Monaco Editor占据全部高度 */
@@ -526,13 +529,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           height: 100%;
           display: flex;
           flex-direction: column;
-          background: #fff;
+          background: var(--bg-panel);
         }
 
         .preview-header {
           padding: 12px;
-          border-bottom: 1px solid #d9d9d9;
-          background: #fafafa;
+          border-bottom: 1px solid var(--border-light);
+          background: var(--bg-elevated);
         }
 
         .preview-content {
@@ -560,23 +563,23 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         }
 
         .markdown-preview pre {
-          background: #f5f5f5;
+          background: var(--bg-input);
           padding: 16px;
-          border-radius: 4px;
+          border-radius: var(--radius-sm);
           overflow-x: auto;
         }
 
         .markdown-preview code {
-          background: #f5f5f5;
+          background: var(--bg-input);
           padding: 2px 4px;
-          border-radius: 3px;
+          border-radius: var(--radius-sm);
           font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         }
 
         .code-preview {
-          background: #f5f5f5;
+          background: var(--bg-input);
           padding: 16px;
-          border-radius: 4px;
+          border-radius: var(--radius-sm);
           overflow: auto;
           height: 100%;
           margin: 0;

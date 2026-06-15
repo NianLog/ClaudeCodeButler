@@ -41,11 +41,25 @@ const AppContent: React.FC = () => {
     notifications,
     initialize,
     removeNotification
-  } = useAppStore()
+  } = useAppStore(
+    // v1.4.0 性能：selector 只订阅用到的字段（store 默认 shallow 比较），避免 store
+    // 其他字段变化触发 App 顶层组件不必要的重渲染（连锁触发整棵树）
+    (s) => ({
+      activeMainTab: s.activeMainTab,
+      notifications: s.notifications,
+      initialize: s.initialize,
+      removeNotification: s.removeNotification,
+    })
+  )
 
-  const { initialize: initializeSettings } = useSettingsStore()
-  const { refreshConfigs } = useConfigListStore()
-  const { refreshRules, loadExecutionLogs, loadStats } = useRuleStore()
+  // 单值 selector 订阅 action 函数（引用稳定），避免对应 store 数据变化触发 App 重渲染
+  const initializeSettings = useSettingsStore((s) => s.initialize)
+  const refreshConfigs = useConfigListStore((s) => s.refreshConfigs)
+  const { refreshRules, loadExecutionLogs, loadStats } = useRuleStore((s) => ({
+    refreshRules: s.refreshRules,
+    loadExecutionLogs: s.loadExecutionLogs,
+    loadStats: s.loadStats,
+  }))
 
   // 权限警告状态
   const [privilegeWarningVisible, setPrivilegeWarningVisible] = useState(false)
@@ -62,7 +76,7 @@ const AppContent: React.FC = () => {
       refreshConfigs()
     }
 
-    // v2.0 修复：保存 unsubscribe，cleanup 时调用，避免托盘切换监听器在 refreshConfigs 变化时累积
+    // v1.4.0 修复：保存 unsubscribe，cleanup 时调用，避免托盘切换监听器在 refreshConfigs 变化时累积
     const unsubscribe = window.electronAPI.tray?.onSwitchConfig?.(handleTraySwitchConfig)
 
     // 监听权限警告事件

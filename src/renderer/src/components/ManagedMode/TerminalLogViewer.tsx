@@ -386,9 +386,9 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         alignItems: 'center',
         marginBottom: '16px',
         padding: '8px 12px',
-        background: '#fafafa',
-        borderRadius: '6px',
-        border: '1px solid #f0f0f0'
+        background: 'var(--bg-elevated)',
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid var(--border-light)'
       }}>
         <div className="log-stats">
           <Space split={<span>|</span>}>
@@ -460,9 +460,9 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         className="log-container"
         style={{
           height,
-          border: '1px solid #f0f0f0',
-          borderRadius: '6px',
-          background: '#fff'
+          border: '1px solid var(--border-light)',
+          borderRadius: 'var(--radius-sm)',
+          background: 'var(--bg-panel)'
         }}
       >
         {filteredLogs.length === 0 ? (

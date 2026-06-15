@@ -315,7 +315,7 @@ const SkillsManagementPanel: React.FC = () => {
       key: 'name',
       render: (name: string, record: SkillDirectory) => (
         <Space>
-          <FolderOutlined style={{ color: '#7C3AED' }} />
+          <FolderOutlined style={{ color: 'var(--accent)' }} />
           <div style={{ maxWidth: 200 }}>
             <Tooltip title={name}>
               <Text strong ellipsis style={{ display: 'block' }}>
@@ -442,7 +442,7 @@ const SkillsManagementPanel: React.FC = () => {
               title={t('skills.stats.totalSkills')}
               value={totalSkills}
               prefix={<AppstoreOutlined />}
-              valueStyle={{ color: '#7C3AED' }}
+              valueStyle={{ color: 'var(--accent)' }}
             />
           </Card>
         </Col>
@@ -452,7 +452,7 @@ const SkillsManagementPanel: React.FC = () => {
               title={t('skills.stats.totalFiles')}
               value={totalFiles}
               prefix={<FileOutlined />}
-              valueStyle={{ color: '#52C41A' }}
+              valueStyle={{ color: 'var(--green)' }}
             />
           </Card>
         </Col>
@@ -463,7 +463,7 @@ const SkillsManagementPanel: React.FC = () => {
               value={avgFiles}
               suffix={t('skills.stats.avgFilesSuffix')}
               prefix={<FileTextOutlined />}
-              valueStyle={{ color: '#1890FF' }}
+              valueStyle={{ color: 'var(--accent)' }}
             />
           </Card>
         </Col>
@@ -474,7 +474,7 @@ const SkillsManagementPanel: React.FC = () => {
               value={recentUpdates}
               suffix={t('skills.stats.recentUpdatesSuffix')}
               prefix={<ReloadOutlined />}
-              valueStyle={{ color: '#FAAD14' }}
+              valueStyle={{ color: 'var(--yellow)' }}
             />
           </Card>
         </Col>
@@ -513,7 +513,7 @@ const SkillsManagementPanel: React.FC = () => {
       <Drawer
         title={
           <Space>
-            <FolderOutlined style={{ color: '#7C3AED' }} />
+            <FolderOutlined style={{ color: 'var(--accent)' }} />
             <Text strong>{selectedSkill?.metadata.name}</Text>
           </Space>
         }
@@ -524,7 +524,7 @@ const SkillsManagementPanel: React.FC = () => {
       >
         {selectedSkill && (
           <>
-            <Divider orientation="left">元数据</Divider>
+            <Divider orientation="left">{t('skills.detail.metadata')}</Divider>
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label={t('skills.detail.name')} span={2}>
                 {selectedSkill.metadata.name}

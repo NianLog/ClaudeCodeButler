@@ -14,7 +14,7 @@
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03),
               0 1px 6px -1px rgba(0, 0, 0, 0.02),
               0 2px 4px 0 rgba(0, 0, 0, 0.02);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -23,8 +23,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 24px 28px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #ffffff;
+  border-bottom: 1px solid var(--bg-panel);
+  background: var(--bg-elevated);
 }
 
 .terminal-header-left {
@@ -36,21 +36,21 @@
 .terminal-table {
   width: 100%;
   border-collapse: collapse;
-  background: #ffffff;
+  background: var(--bg-elevated);
 }
 
 .terminal-table thead {
-  background: #fafafa;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--bg-panel);
 }
 
 .terminal-table tbody tr {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--bg-panel);
   transition: all 0.2s ease;
 }
 
 .terminal-table tbody tr:hover {
-  background: #fafafa;
+  background: var(--bg-panel);
 }
 
 .terminal-table tbody tr:last-child {
@@ -59,12 +59,12 @@
 
 /* 默认终端行高亮 */
 .terminal-table tr.terminal-row-default {
-  background: linear-gradient(90deg, #f6ffed 0%, #ffffff 100%);
-  border-left: 3px solid #52c41a;
+  background: var(--green-bg);
+  border-left: 3px solid var(--green);
 }
 
 .terminal-table tr.terminal-row-default:hover {
-  background: linear-gradient(90deg, #f6ffed 0%, #fafafa 100%);
+  background: var(--green-bg);
 }
 
 /* 普通终端行 */

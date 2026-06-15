@@ -461,7 +461,7 @@ const AgentsManagementPanel: React.FC = () => {
               title={t('agents.stats.totalAgents')}
               value={totalAgents}
               prefix={<RobotOutlined />}
-              valueStyle={{ color: '#7C3AED' }}
+              valueStyle={{ color: 'var(--accent)' }}
             />
           </Card>
         </Col>
@@ -471,7 +471,7 @@ const AgentsManagementPanel: React.FC = () => {
               title={t('agents.stats.totalTools')}
               value={totalTools}
               prefix={<ToolOutlined />}
-              valueStyle={{ color: '#52C41A' }}
+              valueStyle={{ color: 'var(--green)' }}
             />
           </Card>
         </Col>
@@ -481,7 +481,7 @@ const AgentsManagementPanel: React.FC = () => {
               title={t('agents.stats.modelTypes')}
               value={modelTypes}
               prefix={<CodeOutlined />}
-              valueStyle={{ color: '#1890FF' }}
+              valueStyle={{ color: 'var(--accent)' }}
             />
           </Card>
         </Col>
@@ -491,7 +491,7 @@ const AgentsManagementPanel: React.FC = () => {
               title={t('agents.stats.customColors')}
               value={customColors}
               prefix={<BgColorsOutlined />}
-              valueStyle={{ color: '#FAAD14' }}
+              valueStyle={{ color: 'var(--yellow)' }}
             />
           </Card>
         </Col>

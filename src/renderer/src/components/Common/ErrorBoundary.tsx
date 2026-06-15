@@ -138,9 +138,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 <h4>{getTranslation('errorBoundary.details')}</h4>
                 <pre style={{
                   textAlign: 'left',
-                  background: '#f5f5f5',
+                  background: 'var(--bg-input)',
                   padding: '12px',
-                  borderRadius: '4px',
+                  borderRadius: 'var(--radius-sm)',
                   fontSize: '12px',
                   maxHeight: '200px',
                   overflow: 'auto'

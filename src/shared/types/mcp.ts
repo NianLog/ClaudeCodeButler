@@ -214,7 +214,7 @@ export interface MCPServerFormData {
   fromGalleryId?: string
   /** 目标范围: 'global' | 项目路径 */
   targetScope: string
-  /** 原始 JSON 配置字符串（v2.0：透传 Claude Code 原生格式，保留 headers 等非结构化字段） */
+  /** 原始 JSON 配置字符串（v1.4.0：透传 Claude Code 原生格式，保留 headers 等非结构化字段） */
   rawConfig?: string
 }
 

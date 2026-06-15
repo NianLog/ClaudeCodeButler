@@ -163,11 +163,11 @@ const TerminalManagement: React.FC = () => {
       >
         <td style={{ padding: '16px 20px' }}>
           <Space size="middle">
-            <span style={{ fontSize: 18, color: '#7C3AED' }}>
+            <span style={{ fontSize: 18, color: 'var(--accent)' }}>
               {getTerminalIcon(record.type)}
             </span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#1f2937' }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                 {record.name}
               </div>
             </div>
@@ -191,7 +191,7 @@ const TerminalManagement: React.FC = () => {
                 style={{
                   maxWidth: 350,
                   fontSize: 13,
-                  color: '#6b7280',
+                  color: 'var(--text-secondary)',
                   fontFamily: 'Consolas, Monaco, monospace'
                 }}
               >
@@ -221,7 +221,7 @@ const TerminalManagement: React.FC = () => {
                       size="small"
                       icon={<CheckCircleOutlined />}
                       onClick={() => handleSetDefault(record.type)}
-                      style={{ color: '#52c41a' }}
+                      style={{ color: 'var(--green)' }}
                     />
                   </Tooltip>
                 )}
@@ -285,10 +285,10 @@ const TerminalManagement: React.FC = () => {
           style={{
             marginBottom: 20,
             padding: '14px 18px',
-            background: '#fff2f0',
-            border: '1px solid #ffccc7',
-            borderRadius: '8px',
-            color: '#cf1322',
+            background: 'color-mix(in srgb, var(--red) 12%, transparent)',
+            border: '1px solid var(--red)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--red)',
             fontSize: 14
           }}
         >
@@ -303,8 +303,8 @@ const TerminalManagement: React.FC = () => {
       >
         <div className="terminal-header">
           <div className="terminal-header-left">
-            <Title level={4} style={{ margin: 0, color: '#1f2937' }}>
-              <DesktopOutlined style={{ marginRight: 8, color: '#7C3AED' }} />
+            <Title level={4} style={{ margin: 0, color: 'var(--text-primary)' }}>
+              <DesktopOutlined style={{ marginRight: 8, color: 'var(--accent)' }} />
               {t('terminal.title')}
             </Title>
             <Text type="secondary" style={{ fontSize: 14, marginLeft: 8 }}>
@@ -324,16 +324,16 @@ const TerminalManagement: React.FC = () => {
         <table className="terminal-table">
           <thead>
             <tr>
-              <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: '#6b7280' }}>
+              <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
                 {t('terminal.table.name')}
               </th>
-              <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: '#6b7280' }}>
+              <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
                 {t('terminal.table.type')}
               </th>
-              <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: '#6b7280' }}>
+              <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
                 {t('terminal.table.path')}
               </th>
-              <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: '#6b7280', textAlign: 'right' }}>
+              <th style={{ padding: '14px 20px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'right' }}>
                 {t('terminal.table.actions')}
               </th>
             </tr>

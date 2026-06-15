@@ -307,30 +307,26 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         />
       )}
 
-      <Form
-        form={form}
-        layout="vertical"
+      <Form.Item
+        label={t('configImport.fields.name')}
+        name="name"
+        rules={[{ required: true, message: t('configImport.fields.nameRequired') }]}
       >
-        <Form.Item
-          label={t('configImport.fields.name')}
-          name="name"
-          rules={[{ required: true, message: t('configImport.fields.nameRequired') }]}
-        >
-          <Input placeholder={t('configImport.fields.namePlaceholder')} />
-        </Form.Item>
+        <Input placeholder={t('configImport.fields.namePlaceholder')} />
+      </Form.Item>
 
-        <Form.Item
-          label={t('configImport.fields.type')}
-          name="type"
-          rules={[{ required: true, message: t('configImport.fields.typeRequired') }]}
-        >
-          <Select placeholder={t('configImport.fields.typePlaceholder')}>
-            <Option value="claude-code">{t('configImport.types.claudeCode')}</Option>
-            <Option value="mcp-config">{t('configImport.types.mcp')}</Option>
-            <Option value="project-config">{t('configImport.types.project')}</Option>
-            <Option value="user-preferences">{t('configImport.types.userPreferences')}</Option>
-          </Select>
-        </Form.Item>
+      <Form.Item
+        label={t('configImport.fields.type')}
+        name="type"
+        rules={[{ required: true, message: t('configImport.fields.typeRequired') }]}
+      >
+        <Select placeholder={t('configImport.fields.typePlaceholder')}>
+          <Option value="claude-code">{t('configImport.types.claudeCode')}</Option>
+          <Option value="mcp-config">{t('configImport.types.mcp')}</Option>
+          <Option value="project-config">{t('configImport.types.project')}</Option>
+          <Option value="user-preferences">{t('configImport.types.userPreferences')}</Option>
+        </Select>
+      </Form.Item>
 
         <Form.Item
           label={t('configImport.fields.description')}
@@ -341,7 +337,6 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
             rows={3}
           />
         </Form.Item>
-      </Form>
 
       {importData?.isValid && (
         <Card
@@ -371,13 +366,6 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
       <Title level={4}>{t('configImport.manual.title')}</Title>
       <Paragraph type="secondary">{t('configImport.manual.desc')}</Paragraph>
 
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={{
-          type: 'claude-code'
-        }}
-      >
         <Form.Item
           label={t('configImport.fields.name')}
           name="name"
@@ -417,7 +405,6 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
             showIcon
           />
         )}
-      </Form>
     </div>
   )
 
@@ -461,11 +448,13 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         <Step title={t('configImport.steps.manualInput')} icon={<FileTextOutlined />} />
       </Steps>
 
-      <div className="import-content">
-        {currentStep === 0 && renderFileUpload()}
-        {currentStep === 1 && renderConfigConfirm()}
-        {currentStep === 2 && renderManualInput()}
-      </div>
+      <Form form={form} layout="vertical" initialValues={{ type: 'claude-code' }}>
+        <div className="import-content">
+          {currentStep === 0 && renderFileUpload()}
+          {currentStep === 1 && renderConfigConfirm()}
+          {currentStep === 2 && renderManualInput()}
+        </div>
+      </Form>
 
       {isLoading && (
         <div className="import-loading">
@@ -479,9 +468,9 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         }
 
         .config-preview {
-          background: #f5f5f5;
+          background: var(--bg-input);
           padding: 12px;
-          border-radius: 4px;
+          border-radius: var(--radius-sm);
           font-size: 12px;
           overflow-x: auto;
           max-height: 200px;
@@ -489,7 +478,7 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         }
 
         .json-input.error {
-          border-color: #ff4d4f !important;
+          border-color: var(--red) !important;
         }
 
         .import-loading {

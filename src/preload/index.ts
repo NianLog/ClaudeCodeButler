@@ -794,7 +794,7 @@ const trayAPI: TrayAPI = {
   onSwitchConfig: (callback: (configName: string) => void) => {
     const handler = (_: unknown, configName: string) => callback(configName)
     ipcRenderer.on('tray:switch-config', handler)
-    // v2.0 修复：返回 unsubscribe 函数，避免监听器在 refreshConfigs 变化时累积（资源泄漏）
+    // v1.4.0 修复：返回 unsubscribe 函数，避免监听器在 refreshConfigs 变化时累积（资源泄漏）
     return () => ipcRenderer.off('tray:switch-config', handler)
   },
   updateMenu: () => ipcRenderer.invoke('tray:updateMenu')

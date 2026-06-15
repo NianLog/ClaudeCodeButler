@@ -436,7 +436,7 @@ function setupSystemHandlers(): void {
   ipcMain.handle('system:fetchUrl', async (_, url: string) => {
     try {
       const safeUrl = ensureAllowedUrl(url, ['http:', 'https:'], '抓取地址')
-      // v2.0 SSRF 防护：拒绝内网/环回/链路本地地址，防止渲染进程探测内网服务或云元数据端点
+      // v1.4.0 SSRF 防护：拒绝内网/环回/链路本地地址，防止渲染进程探测内网服务或云元数据端点
       await ensureExternalUrl(safeUrl, '抓取地址')
       const https = await import('https')
       const http = await import('http')

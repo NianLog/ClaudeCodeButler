@@ -174,3 +174,8 @@ web/
 docs/
 **/README.md
 !/README.md
+
+# 备份文件（防止误提交）
+*.bak
+*.bak2
+*.orig

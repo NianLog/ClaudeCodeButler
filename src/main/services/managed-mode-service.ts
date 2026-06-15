@@ -65,13 +65,13 @@ export class ManagedModeService extends EventEmitter {
   private proxyProcess: ProxyProcessLike | null = null
   private configPath: string
   private config: ManagedModeConfig | null = null
-  // v2.0 架构解耦：配置读写委托给 ConfigStore（第一步拆分）
+  // v1.4.0 架构解耦：配置读写委托给 ConfigStore（第一步拆分）
   private configStore: ManagedModeConfigStore
   private healthCheckInterval: NodeJS.Timeout | null = null
   private isIntegrated: boolean = false // 标记是否使用集成模式
   private startTime: number | null = null // 记录服务启动时间
   private isRestarting: boolean = false // 标记是否正在执行重启操作
-  // v2.0 重启互斥链：串行化所有 restart，避免并发 stop/start 导致 settings 错误还原
+  // v1.4.0 重启互斥链：串行化所有 restart，避免并发 stop/start 导致 settings 错误还原
   private restartChain: Promise<void> = Promise.resolve()
 
   // 智能健康检查相关状态
@@ -97,7 +97,7 @@ export class ManagedModeService extends EventEmitter {
     super()
     // 配置文件路径
     this.configPath = path.join(os.homedir(), '.ccb', 'managed-mode-config.json')
-    // v2.0 架构解耦：委托 ConfigStore 处理配置持久化与 accessToken 生成
+    // v1.4.0 架构解耦：委托 ConfigStore 处理配置持久化与 accessToken 生成
     this.configStore = new ManagedModeConfigStore(this.configPath)
   }
 
@@ -204,7 +204,7 @@ export class ManagedModeService extends EventEmitter {
       // 如果配置匹配且托管模式未启用，自动启用（但不改变 enabled 状态，仅校准认知）
       if (envMatches && permissionsMatch && statusLineMatch) {
         if (!this.config.enabled) {
-          // v2.0 防御：校准启用时若不存在系统设置备份，原始配置可能已丢失，禁用时将无法还原原始配置
+          // v1.4.0 防御：校准启用时若不存在系统设置备份，原始配置可能已丢失，禁用时将无法还原原始配置
           const hasBackup = await this.hasSystemSettingsBackup()
           if (!hasBackup) {
             managedModeLogger.warn('校准启用托管模式：未找到系统设置备份，后续禁用时可能无法还原原始配置')
@@ -266,7 +266,7 @@ export class ManagedModeService extends EventEmitter {
       managedModeLogger.info('托管模式启动：检测到已有备份，跳过备份步骤（避免覆盖原始配置）')
     }
 
-    // 集成模式启动代理服务（v2.0：移除传统代理 fallback —— 其无鉴权 + CORS 全开是 P0 安全漏洞，
+    // 集成模式启动代理服务（v1.4.0：移除传统代理 fallback —— 其无鉴权 + CORS 全开是 P0 安全漏洞，
     // 且 4 种子进程启动方式不可靠。集成模式失败直接抛错，不再降级到不安全的传统代理）
     try {
       await this.startIntegratedProxy()
@@ -431,7 +431,7 @@ export class ManagedModeService extends EventEmitter {
    * @description 重启时保持托管配置，不触发settings还原和备份
    */
   async restart(): Promise<void> {
-    // v2.0 互斥：所有 restart 串行化执行。原实现仅用 boolean 标志，连续 UI 操作（保存配置→切换 provider）
+    // v1.4.0 互斥：所有 restart 串行化执行。原实现仅用 boolean 标志，连续 UI 操作（保存配置→切换 provider）
     // 会并发触发 stop/start，导致第二次 stop() 错误地把 settings.json 还原成非托管状态。
     const previousChain = this.restartChain
     const currentRestart = previousChain.then(async () => {
@@ -567,7 +567,7 @@ export class ManagedModeService extends EventEmitter {
       }
 
       // 仅在服务未运行（stop 未触发还原）时才还原，避免二次还原到更旧备份
-      // （v2.0 修复：原实现无论是否运行都 restore，导致运行时禁用会还原到倒数第二个备份）
+      // （v1.4.0 修复：原实现无论是否运行都 restore，导致运行时禁用会还原到倒数第二个备份）
       if (!wasRunning) {
         try {
           await this.restoreSystemSettings()
@@ -823,7 +823,7 @@ export class ManagedModeService extends EventEmitter {
    * @description 生成格式为 ccb-sk-xxx + 32位高强度随机字符串的访问令牌
    */
   private generateAccessToken(): string {
-    // v2.0 架构解耦：委托 ConfigStore
+    // v1.4.0 架构解耦：委托 ConfigStore
     return this.configStore.generateAccessToken()
   }
 
@@ -1053,7 +1053,7 @@ export class ManagedModeService extends EventEmitter {
    * 加载配置
    */
   private async loadConfig(): Promise<void> {
-    // v2.0 架构解耦：委托 ConfigStore 处理读取 / 默认值创建 / accessToken 补全
+    // v1.4.0 架构解耦：委托 ConfigStore 处理读取 / 默认值创建 / accessToken 补全
     this.config = await this.configStore.load()
   }
 
@@ -1061,7 +1061,7 @@ export class ManagedModeService extends EventEmitter {
    * 保存配置
    */
   private async saveConfig(config: ManagedModeConfig): Promise<void> {
-    // v2.0 架构解耦：委托 ConfigStore 原子写入（temp + rename，避免写入中断损坏）
+    // v1.4.0 架构解耦：委托 ConfigStore 原子写入（temp + rename，避免写入中断损坏）
     await this.configStore.save(config)
 
     // 更新内存中的配置

@@ -36,7 +36,11 @@ import {
   CloseCircleOutlined,
   QuestionCircleOutlined,
   CodeOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  ExperimentOutlined,
+  RobotOutlined,
+  NodeIndexOutlined,
+  DeploymentUnitOutlined
 } from '@ant-design/icons'
 import { useEnvironmentCheckStore } from '@/store/environment-check-store'
 import { useTranslation } from '../../locales/useTranslation'
@@ -48,11 +52,24 @@ import './EnvironmentCheckPanel.css'
 const { Title, Text } = Typography
 
 /**
+ * 预定义检查项图标映射
+ * @description 取代原 emoji（🧪🤖🟩📦⚡），改用 @ant-design/icons 保证跨设备视觉一致。
+ *              自定义检查项的 icon 仍为用户输入（保留 emoji 能力）。
+ */
+const PREDEFINED_ICON_MAP: Record<string, React.ReactNode> = {
+  [PredefinedCheckType.UV]: <ExperimentOutlined />,
+  [PredefinedCheckType.CLAUDE_CODE]: <RobotOutlined />,
+  [PredefinedCheckType.NODEJS]: <NodeIndexOutlined />,
+  [PredefinedCheckType.NPM]: <DeploymentUnitOutlined />,
+  [PredefinedCheckType.NPX]: <CodeOutlined />,
+}
+
+/**
  * 环境检测面板组件
  */
 const EnvironmentCheckPanel: React.FC = () => {
   const messageApi = useMessage()
-  // v2.0：使用 App context 的 modal 替代静态 Modal.success/confirm，消除 antd 静态函数警告
+  // v1.4.0：使用 App context 的 modal 替代静态 Modal.success/confirm，消除 antd 静态函数警告
   const { modal } = App.useApp()
   const { t } = useTranslation()
   const {
@@ -152,7 +169,11 @@ const EnvironmentCheckPanel: React.FC = () => {
       key: 'name',
       render: (_value: unknown, record: EnvironmentCheckResult) => (
         <Space>
-          {record.icon && <span style={{ fontSize: 18 }}>{record.icon}</span>}
+          {PREDEFINED_ICON_MAP[record.type] && (
+            <span style={{ fontSize: 16, display: 'inline-flex', alignItems: 'center' }}>
+              {PREDEFINED_ICON_MAP[record.type]}
+            </span>
+          )}
           <Text strong>{record.name}</Text>
         </Space>
       )
@@ -385,7 +406,7 @@ const EnvironmentCheckPanel: React.FC = () => {
               <Statistic
                 title={t('environment.summary.total')}
                 value={summary.total}
-                valueStyle={{ color: '#7C3AED' }}
+                valueStyle={{ color: 'var(--accent)' }}
               />
             </Card>
           </Col>
@@ -394,7 +415,7 @@ const EnvironmentCheckPanel: React.FC = () => {
               <Statistic
                 title={t('environment.summary.ok')}
                 value={summary.ok}
-                valueStyle={{ color: '#52C41A' }}
+                valueStyle={{ color: 'var(--green)' }}
                 prefix={<CheckCircleOutlined />}
               />
             </Card>
@@ -404,7 +425,7 @@ const EnvironmentCheckPanel: React.FC = () => {
               <Statistic
                 title={t('environment.summary.warning')}
                 value={summary.warning}
-                valueStyle={{ color: '#FAAD14' }}
+                valueStyle={{ color: 'var(--yellow)' }}
                 prefix={<WarningOutlined />}
               />
             </Card>
@@ -414,7 +435,7 @@ const EnvironmentCheckPanel: React.FC = () => {
               <Statistic
                 title={t('environment.summary.error')}
                 value={summary.error}
-                valueStyle={{ color: '#FF4D4F' }}
+                valueStyle={{ color: 'var(--red)' }}
                 prefix={<CloseCircleOutlined />}
               />
             </Card>
@@ -424,7 +445,7 @@ const EnvironmentCheckPanel: React.FC = () => {
               <Statistic
                 title={t('environment.summary.notFound')}
                 value={summary.notFound}
-                valueStyle={{ color: '#8C8C8C' }}
+                valueStyle={{ color: 'var(--text-muted)' }}
                 prefix={<QuestionCircleOutlined />}
               />
             </Card>
@@ -462,7 +483,7 @@ const EnvironmentCheckPanel: React.FC = () => {
           }
           title={
             <Space>
-              <CodeOutlined style={{ color: '#7C3AED' }} />
+              <CodeOutlined style={{ color: 'var(--accent)' }} />
               <Text strong>Claude Code</Text>
               {claudeCodeVersion.updateAvailable && (
                 <Badge status="warning" text={t('environment.messages.newVersionAvailable')} />
@@ -474,7 +495,7 @@ const EnvironmentCheckPanel: React.FC = () => {
             <Col span={6}>
               <Text type="secondary">{t('environment.claude.currentVersion')}</Text>
               <br />
-              <Title level={4} style={{ color: '#7C3AED', marginTop: 8 }}>
+              <Title level={4} style={{ color: 'var(--accent)', marginTop: 8 }}>
                 {claudeCodeVersion.current || claudeCodeVersion.version || t('common.unknown')}
               </Title>
             </Col>
@@ -482,7 +503,7 @@ const EnvironmentCheckPanel: React.FC = () => {
               <Col span={6}>
                 <Text type="secondary">{t('environment.claude.latestVersion')}</Text>
                 <br />
-                <Title level={4} style={{ color: claudeCodeVersion.updateAvailable ? '#FAAD14' : '#52C41A', marginTop: 8 }}>
+                <Title level={4} style={{ color: claudeCodeVersion.updateAvailable ? 'var(--yellow)' : 'var(--green)', marginTop: 8 }}>
                   {claudeCodeVersion.latest}
                 </Title>
               </Col>

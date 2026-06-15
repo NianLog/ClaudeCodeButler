@@ -6,7 +6,7 @@
 .app-layout {
   height: 100vh;
   overflow: hidden;
-  background: #f5f5f5;
+  background: var(--bg-panel);
 }
 
 /* 内容区域 */
@@ -14,7 +14,7 @@
   padding: 0;
   overflow: hidden;
   transition: margin-left 0.2s ease-in-out;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .app-content:not(.sidebar-collapsed) {
@@ -29,7 +29,7 @@
   height: 100%;
   overflow: auto;
   padding: 16px;
-  background: #f5f5f5;
+  background: var(--bg-panel);
 }
 
 /* 响应式设计 */
@@ -54,7 +54,7 @@
 }
 
 .app-loading .loading-text {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -73,12 +73,12 @@
 .app-error .error-title {
   font-size: 18px;
   font-weight: 600;
-  color: #ff4d4f;
+  color: var(--red);
   margin-bottom: 8px;
 }
 
 .app-error .error-message {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.5;
   max-width: 500px;
@@ -98,7 +98,7 @@
   height: 100%;
   flex-direction: column;
   gap: 16px;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .app-empty .empty-icon {
@@ -114,7 +114,7 @@
 
 .app-empty .empty-description {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   text-align: center;
   max-width: 400px;
 }
@@ -170,52 +170,25 @@
 }
 
 .content-wrapper::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-panel);
   border-radius: 3px;
 }
 
 .content-wrapper::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--border-light);
   border-radius: 3px;
 }
 
 .content-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--border);
 }
 
 /* 暗色主题支持 */
-[data-theme="dark"] .app-layout {
-  background: #1f2937;
-}
 
-[data-theme="dark"] .app-content {
-  background: #1f2937;
-}
 
-[data-theme="dark"] .content-wrapper {
-  background: #111827;
-}
 
-[data-theme="dark"] .app-loading .loading-text {
-  color: #d1d5db;
-}
 
-[data-theme="dark"] .app-error .error-message {
-  color: #d1d5db;
-}
 
-[data-theme="dark"] .app-empty {
-  color: #9ca3af;
-}
 
-[data-theme="dark"] .content-wrapper::-webkit-scrollbar-track {
-  background: #374151;
-}
 
-[data-theme="dark"] .content-wrapper::-webkit-scrollbar-thumb {
-  background: #6b7280;
-}
 
-[data-theme="dark"] .content-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}

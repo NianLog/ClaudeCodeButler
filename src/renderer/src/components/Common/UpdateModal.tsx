@@ -187,7 +187,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             <CheckCircleOutlined
               style={{
                 fontSize: '48px',
-                color: '#52c41a',
+                color: 'var(--green)',
                 marginBottom: '16px'
               }}
             />
@@ -195,7 +195,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             <CloseCircleOutlined
               style={{
                 fontSize: '48px',
-                color: '#ff4d4f',
+                color: 'var(--red)',
                 marginBottom: '16px'
               }}
             />
@@ -203,7 +203,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             <ExclamationCircleOutlined
               style={{
                 fontSize: '48px',
-                color: '#1890ff',
+                color: 'var(--accent)',
                 marginBottom: '16px'
               }}
             />
@@ -266,8 +266,8 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             style={{
               marginBottom: '24px',
               padding: '16px',
-              background: '#f5f5f5',
-              borderRadius: '8px'
+              background: 'var(--bg-input)',
+              borderRadius: 'var(--radius-md)'
             }}
           >
             <Title level={5} style={{ marginTop: 0, marginBottom: '12px' }}>

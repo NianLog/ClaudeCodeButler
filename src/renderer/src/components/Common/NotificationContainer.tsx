@@ -39,14 +39,14 @@ interface NotificationContainerProps {
 const getNotificationIcon = (type: NotificationItem['type']) => {
   switch (type) {
     case 'success':
-      return <CheckCircleOutlined style={{ color: '#52c41a' }} />
+      return <CheckCircleOutlined style={{ color: 'var(--green)' }} />
     case 'warning':
-      return <ExclamationCircleOutlined style={{ color: '#faad14' }} />
+      return <ExclamationCircleOutlined style={{ color: 'var(--yellow)' }} />
     case 'error':
-      return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
+      return <CloseCircleOutlined style={{ color: 'var(--red)' }} />
     case 'info':
     default:
-      return <InfoCircleOutlined style={{ color: '#1890ff' }} />
+      return <InfoCircleOutlined style={{ color: 'var(--accent)' }} />
   }
 }
 

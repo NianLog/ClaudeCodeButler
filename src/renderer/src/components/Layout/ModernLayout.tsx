@@ -17,8 +17,6 @@ import {
   MenuUnfoldOutlined,
   QuestionCircleOutlined,
   GithubOutlined,
-  MoonOutlined,
-  SunOutlined,
   SearchOutlined,
   UserOutlined,
   LogoutOutlined,
@@ -37,6 +35,7 @@ import {
   UpOutlined
 } from '@ant-design/icons'
 import { useAppStore } from '../../store/app-store'
+import { useTheme } from '../../hooks/useTheme'
 import { useNotificationSettings } from '../../store/settings-store'
 import { useConfigListWithNotification } from '../../hooks/useConfigListWithNotification'
 import { initializeManagedModeLogListener } from '../../store/managed-mode-log-store'
@@ -45,6 +44,7 @@ import { useTranslation } from '../../locales/useTranslation'
 import { useMessage } from '../../hooks/useMessage'
 import UpdateModal from '../Common/UpdateModal'
 import type { VersionInfo } from '../../services/version-service'
+import ccbLogo from '../../assets/icons/ccb_64.png'
 import './ModernLayout.css'
 
 const { Sider, Content } = Layout
@@ -62,21 +62,35 @@ interface ModernLayoutProps {
  */
 const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
   const { t } = useTranslation()
+  const { currentTheme } = useTheme()
   const message = useMessage()
   const {
     version,
     notifications,
-    theme,
     sidebarCollapsed,
     expandedMenuGroups,
     activeMainTab,
     toggleSidebar,
     toggleMenuGroup,
     setActiveMainTab,
-    setTheme,
     addNotification,
     refreshAll
-  } = useAppStore()
+  } = useAppStore(
+    // v1.4.0 性能：selector 只订阅用到的字段（store 默认 shallow 比较），避免 store 其他字段
+    // （platform/theme/language 等）变化触发本组件不必要的重渲染
+    (s) => ({
+      version: s.version,
+      notifications: s.notifications,
+      sidebarCollapsed: s.sidebarCollapsed,
+      expandedMenuGroups: s.expandedMenuGroups,
+      activeMainTab: s.activeMainTab,
+      toggleSidebar: s.toggleSidebar,
+      toggleMenuGroup: s.toggleMenuGroup,
+      setActiveMainTab: s.setActiveMainTab,
+      addNotification: s.addNotification,
+      refreshAll: s.refreshAll,
+    })
+  )
 
   const notificationSettings = useNotificationSettings()
   // 使用默认值防止设置未加载时出现错误
@@ -84,7 +98,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
 
   const [searchValue, setSearchValue] = useState('')
   const [updateModalVisible, setUpdateModalVisible] = useState(false)
-  // v2.0：托管模式状态（用于侧边栏导航项状态标签高亮）
+  // v1.4.0：托管模式状态（用于侧边栏导航项状态标签高亮）
   const [managedModeActive, setManagedModeActive] = useState(false)
 
   // 查询托管模式状态（activeMainTab 变化时刷新，确保在托管面板启用后返回其他页能看到状态标签）
@@ -176,12 +190,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     }
   }, [startupCheckUpdate, silentUpdateCheck, addNotification])
 
-  // 主题切换
-  const handleThemeToggle = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light'
-    setTheme(newTheme)
-    document.documentElement.setAttribute('data-theme', newTheme)
-  }
+  // v3：主题切换已迁移至 Settings → 高级 → 界面主题（useTheme hook）
+  // 旧版 light/dark 切换已废弃，不再覆盖 data-theme 属性
 
   // 全局刷新
   const handleGlobalRefresh = async () => {
@@ -342,14 +352,14 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
       {/* 现代化侧边栏 */}
       <Sider
         className="modern-sidebar"
-        width={280}
-        collapsedWidth={64}
+        width={currentTheme.cssVars['--sidebar-width']}
+        collapsedWidth={56}
         collapsed={sidebarCollapsed}
-        theme="dark"
+        theme={currentTheme.mode === 'light' ? 'light' : 'dark'}
       >
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <div className="logo-icon">⚡</div>
+            <img className="logo-icon" src={ccbLogo} alt="CCB" />
             {!sidebarCollapsed && (
               <div className="logo-text">
                 <Text className="logo-title">CCB</Text>
@@ -467,8 +477,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                             width: 8,
                             height: 8,
                             borderRadius: '50%',
-                            background: '#52c41a',
-                            border: '1.5px solid var(--ccb-sidebar-bg, #001529)'
+                            background: 'var(--green)',
+                            border: '1.5px solid var(--bg-sidebar)'
                           }}
                         />
                       )}
@@ -484,10 +494,10 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                             style={{
                               fontSize: 10,
                               lineHeight: '16px',
-                              color: '#52c41a',
+                              color: 'var(--green)',
                               fontWeight: 600,
                               padding: '0 4px',
-                              background: 'rgba(82, 196, 26, 0.15)',
+                              background: 'var(--green-bg)',
                               borderRadius: 3
                             }}
                           >
@@ -518,17 +528,9 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
           </div>
         </div>
 
-        {/* 侧边栏底部：主题切换 + 收起按钮 */}
+        {/* 侧边栏底部：收起按钮（主题切换已移至设置页） */}
         <div className="sidebar-footer">
           <div className="sidebar-footer-actions">
-            <Tooltip title={theme === 'light' ? t('layout.tooltip.themeDark') : t('layout.tooltip.themeLight')}>
-              <Button
-                type="text"
-                className="sidebar-footer-btn"
-                icon={theme === 'light' ? <MoonOutlined /> : <SunOutlined />}
-                onClick={handleThemeToggle}
-              />
-            </Tooltip>
             <Tooltip title={sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')}>
               <Button
                 type="text"

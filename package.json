@@ -1,6 +1,6 @@
 {
   "name": "ccb",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "Claude Code Butler - 配置管理工具",
   "main": "out/main/index.js",
   "scripts": {

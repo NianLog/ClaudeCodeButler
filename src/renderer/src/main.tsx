@@ -12,6 +12,7 @@ import App from './App'
 import './styles/globals.css'
 import { useTranslation } from './locales/useTranslation'
 import { formatTranslation, getCurrentLanguage, languageResources } from './locales'
+import { useTheme } from './hooks/useTheme'
 
 /**
  * 隐藏加载屏幕，显示应用
@@ -77,19 +78,33 @@ const translate = (key: string, variables: Record<string, string | number> = {})
 const RootApp: React.FC = () => {
   const { language } = useTranslation()
   const locale = language === 'en-US' ? enUS : zhCN
+  const { currentTheme } = useTheme()
 
-  console.info('[Renderer] RootApp render start', { language })
+  console.info('[Renderer] RootApp render start', { language, theme: currentTheme.id })
 
   return (
     <ConfigProvider
       locale={locale}
       theme={{
-        algorithm: theme.defaultAlgorithm,
+        algorithm: currentTheme.mode === 'light' ? theme.defaultAlgorithm : theme.darkAlgorithm,
         token: {
-          colorPrimary: '#3b82f6',
-          borderRadius: 8,
-          fontSize: 14
-        }
+          colorPrimary: currentTheme.antdTokens.colorPrimary,
+          colorBgContainer: currentTheme.antdTokens.colorBgContainer,
+          colorBgElevated: currentTheme.antdTokens.colorBgElevated,
+          colorBgLayout: currentTheme.antdTokens.colorBgLayout,
+          colorText: currentTheme.antdTokens.colorText,
+          colorTextSecondary: currentTheme.antdTokens.colorTextSecondary,
+          colorBorder: currentTheme.antdTokens.colorBorder,
+          colorBorderSecondary: currentTheme.antdTokens.colorBorderSecondary,
+          borderRadius: currentTheme.antdTokens.borderRadius,
+          borderRadiusSM: currentTheme.antdTokens.borderRadiusSM,
+          fontSize: currentTheme.antdTokens.fontSize,
+          fontSizeSM: currentTheme.antdTokens.fontSizeSM,
+          controlHeight: currentTheme.antdTokens.controlHeight,
+          controlHeightSM: currentTheme.antdTokens.controlHeightSM,
+          controlItemBgHover: currentTheme.antdTokens.controlItemBgHover,
+          controlItemBgActive: currentTheme.antdTokens.controlItemBgActive,
+        },
       }}
     >
       <AntApp
@@ -180,7 +195,7 @@ const bootstrap = async () => {
 setTimeout(() => {
   const loadingDiv = document.getElementById('loading')
   if (loadingDiv && loadingDiv.style.display !== 'none') {
-    console.warn('Loading timeout reached, forcing hide...')
+    console.info('Loading fallback triggered (10s elapsed) — hiding loading screen')
     hideLoadingAndShowApp()
   }
 }, 10000)

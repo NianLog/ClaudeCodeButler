@@ -3,7 +3,7 @@
  * @file src/main/services/managed-mode-config-store.ts
  * @description 封装 managed-mode-config.json 的读写与访问令牌生成。
  *
- * 从 ManagedModeService 拆分的第一个子模块（v2.0 架构解耦）。
+ * 从 ManagedModeService 拆分的第一个子模块（v1.4.0 架构解耦）。
  * ManagedModeService 通过本类委托配置持久化，对外 API（loadConfig/saveConfig/generateAccessToken）
  * 保持不变，仅内部实现委托，确保 26 个 IPC 调用点不受影响。
  *

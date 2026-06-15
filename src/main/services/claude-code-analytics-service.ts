@@ -333,7 +333,7 @@ class ClaudeCodeAnalyticsService {
     projectStatsMap: Map<string, ProjectUsageStats>,
     sessionStatsMap: Map<string, SessionStats>
   ): Promise<void> {
-    // v2.0 性能优化：直接读取原文件（只读 flags:'r' + 已有 EBUSY/ENOENT 错误处理），
+    // v1.4.0 性能优化：直接读取原文件（只读 flags:'r' + 已有 EBUSY/ENOENT 错误处理），
     // 去除临时拷贝（原实现每个文件先 copyFile 到 tmpdir 再读，分析期内存峰值 +100~300MB，磁盘 IO 翻倍）
     const safePath = filePath
 

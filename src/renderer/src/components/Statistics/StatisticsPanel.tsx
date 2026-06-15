@@ -217,7 +217,7 @@ const StatisticsPanel: React.FC = () => {
       key: 'configName',
       render: (text: string) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <FileTextOutlined style={{ color: '#1890ff' }} />
+          <FileTextOutlined style={{ color: 'var(--accent)' }} />
           <Text strong>{text}</Text>
         </div>
       )
@@ -295,7 +295,7 @@ const StatisticsPanel: React.FC = () => {
             <Progress
               percent={parseFloat(rate)}
               size="small"
-              strokeColor={parseFloat(rate) >= 80 ? '#52c41a' : '#faad14'}
+              strokeColor={parseFloat(rate) >= 80 ? 'var(--green)' : 'var(--yellow)'}
               style={{ width: '100px' }}
               showInfo={false}
             />
@@ -382,8 +382,8 @@ const StatisticsPanel: React.FC = () => {
                 <Statistic
                   title={t('statistics.metrics.totalConfigs')}
                   value={statistics.system.totalConfigs}
-                  prefix={<FileTextOutlined style={{ color: '#1890ff' }} />}
-                  valueStyle={{ color: '#1890ff' }}
+                  prefix={<FileTextOutlined style={{ color: 'var(--accent)' }} />}
+                  valueStyle={{ color: 'var(--accent)' }}
                 />
               </Card>
             </Col>
@@ -393,8 +393,8 @@ const StatisticsPanel: React.FC = () => {
                   title={t('statistics.metrics.configSwitches')}
                   value={statistics.system.totalConfigSwitches}
                   suffix={t('statistics.units.timesSuffix')}
-                  prefix={<FireOutlined style={{ color: '#ff4d4f' }} />}
-                  valueStyle={{ color: '#ff4d4f' }}
+                  prefix={<FireOutlined style={{ color: 'var(--red)' }} />}
+                  valueStyle={{ color: 'var(--red)' }}
                 />
               </Card>
             </Col>
@@ -403,8 +403,8 @@ const StatisticsPanel: React.FC = () => {
                 <Statistic
                   title={t('statistics.metrics.totalRules')}
                   value={statistics.system.totalRules}
-                  prefix={<ThunderboltOutlined style={{ color: '#52c41a' }} />}
-                  valueStyle={{ color: '#52c41a' }}
+                  prefix={<ThunderboltOutlined style={{ color: 'var(--green)' }} />}
+                  valueStyle={{ color: 'var(--green)' }}
                 />
               </Card>
             </Col>
@@ -414,8 +414,8 @@ const StatisticsPanel: React.FC = () => {
                   title={t('statistics.metrics.ruleExecutions')}
                   value={statistics.system.totalRuleExecutions}
                   suffix={t('statistics.units.timesSuffix')}
-                  prefix={<TrophyOutlined style={{ color: '#faad14' }} />}
-                  valueStyle={{ color: '#faad14' }}
+                  prefix={<TrophyOutlined style={{ color: 'var(--yellow)' }} />}
+                  valueStyle={{ color: 'var(--yellow)' }}
                 />
               </Card>
             </Col>
@@ -426,7 +426,7 @@ const StatisticsPanel: React.FC = () => {
             <Col xs={24} sm={12} md={8}>
               <Card style={{ borderRadius: '12px' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 600, color: '#52c41a', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--green)', marginBottom: '4px' }}>
                     {statistics.system.appStartCount}
                   </div>
                   <div style={{ color: '#666', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
@@ -452,7 +452,7 @@ const StatisticsPanel: React.FC = () => {
             <Col xs={24} sm={12} md={8}>
               <Card style={{ borderRadius: '12px' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 600, color: statistics.system.totalErrors > 0 ? '#f5222d' : '#52c41a', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 600, color: statistics.system.totalErrors > 0 ? 'var(--red)' : 'var(--green)', marginBottom: '4px' }}>
                     {statistics.system.totalErrors}
                   </div>
                   <div style={{ color: '#666', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>

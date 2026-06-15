@@ -72,7 +72,9 @@ export class WindowManager {
       // 使用操作系统原生标题栏（含最小化/最大化/关闭按钮），
       // 渲染层不再渲染自定义 header，避免与原生标题栏重复。
       // 注意：不设置 titleBarStyle，使用各平台默认的完整原生标题栏。
-      autoHideMenuBar: false,
+      // v3：自动隐藏应用菜单栏（File/Edit/View/Help），日常界面更干净；
+      //     按 Alt 可临时唤起原生菜单，功能不丢失。
+      autoHideMenuBar: true,
       icon: this.getAppIcon(),
       webPreferences: {
         nodeIntegration: false,
@@ -81,7 +83,7 @@ export class WindowManager {
         webSecurity: true,
         allowRunningInsecureContent: false,
         experimentalFeatures: false,
-        // v2.0 性能：窗口隐藏到托盘时降低后台定时器/重渲染频率，减少驻留期 CPU 占用
+        // v1.4.0 性能：窗口隐藏到托盘时降低后台定时器/重渲染频率，减少驻留期 CPU 占用
         backgroundThrottling: true
       }
     })

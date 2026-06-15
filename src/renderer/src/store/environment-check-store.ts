@@ -14,12 +14,13 @@ import type {
 import type { PredefinedCheckType as PredefinedCheckTypeValue } from '@shared/types/environment'
 import { EnvironmentCheckStatus, PredefinedCheckType } from '@shared/types/environment'
 
-const PREDEFINED_CHECKS: Array<{ id: PredefinedCheckTypeValue; type: PredefinedCheckTypeValue; name: string; icon?: string }> = [
-  { id: PredefinedCheckType.UV, type: PredefinedCheckType.UV, name: 'UV', icon: '🧪' },
-  { id: PredefinedCheckType.CLAUDE_CODE, type: PredefinedCheckType.CLAUDE_CODE, name: 'Claude Code', icon: '🤖' },
-  { id: PredefinedCheckType.NODEJS, type: PredefinedCheckType.NODEJS, name: 'Node.js', icon: '🟩' },
-  { id: PredefinedCheckType.NPM, type: PredefinedCheckType.NPM, name: 'NPM', icon: '📦' },
-  { id: PredefinedCheckType.NPX, type: PredefinedCheckType.NPX, name: 'NPX', icon: '⚡' }
+// 预定义检查项（图标由 EnvironmentCheckPanel 根据 type 映射到 @ant-design/icons，保证跨设备视觉一致性）
+const PREDEFINED_CHECKS: Array<{ id: PredefinedCheckTypeValue; type: PredefinedCheckTypeValue; name: string }> = [
+  { id: PredefinedCheckType.UV, type: PredefinedCheckType.UV, name: 'UV' },
+  { id: PredefinedCheckType.CLAUDE_CODE, type: PredefinedCheckType.CLAUDE_CODE, name: 'Claude Code' },
+  { id: PredefinedCheckType.NODEJS, type: PredefinedCheckType.NODEJS, name: 'Node.js' },
+  { id: PredefinedCheckType.NPM, type: PredefinedCheckType.NPM, name: 'NPM' },
+  { id: PredefinedCheckType.NPX, type: PredefinedCheckType.NPX, name: 'NPX' }
 ]
 
 /**
@@ -88,7 +89,6 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
         version: undefined,
         error: undefined,
         lastCheckTime: new Date(),
-        icon: item.icon,
         isCustom: false
       }))
       set({ predefinedResults: placeholders })
@@ -114,7 +114,6 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
                 status: EnvironmentCheckStatus.ERROR,
                 error: result?.error || getTranslation('environment.errors.checkFailed'),
                 lastCheckTime: new Date(),
-                icon: item.icon,
                 isCustom: false
               } as EnvironmentCheckResult)
             }
@@ -127,7 +126,6 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
               status: EnvironmentCheckStatus.ERROR,
               error: error instanceof Error ? error.message : String(error),
               lastCheckTime: new Date(),
-              icon: item.icon,
               isCustom: false
             } as EnvironmentCheckResult)
           })
@@ -228,7 +226,6 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
       version: undefined,
       error: undefined,
       lastCheckTime: new Date(),
-      icon: item.icon,
       isCustom: false
     }))
     set({ predefinedResults: placeholders })

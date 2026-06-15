@@ -51,7 +51,7 @@ const { Option } = Select
  */
 const MCPManagementPanel: React.FC = () => {
   const message = useMessage()
-  // v2.0：使用 App context 的 modal 替代静态 Modal.confirm，消除 antd 静态函数警告
+  // v1.4.0：使用 App context 的 modal 替代静态 Modal.confirm，消除 antd 静态函数警告
   const { modal } = App.useApp()
   const { t } = useTranslation()
   // Zustand状态 - 使用selector避免类型错误,确保所有数组类型都有类型检查
@@ -165,7 +165,7 @@ const MCPManagementPanel: React.FC = () => {
       const normalizedCommand = typeof newConfig.command === 'string' ? newConfig.command.trim() : ''
       const normalizedUrl = typeof newConfig.url === 'string' ? newConfig.url.trim() : ''
 
-      // v2.0 兼容性：不再强制校验 command/url，允许 {url, headers} 等 Claude Code 原生 MCP 格式
+      // v1.4.0 兼容性：不再强制校验 command/url，允许 {url, headers} 等 Claude Code 原生 MCP 格式
 
       // 调用API更新服务器配置
       const saveResult = await window.electronAPI.mcp.addOrUpdateServer({
@@ -384,7 +384,7 @@ const MCPManagementPanel: React.FC = () => {
             <Button
               type="text"
               size="small"
-              icon={isEnabled ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <CloseCircleOutlined style={{ color: '#ff4d4f' }} />}
+              icon={isEnabled ? <CheckCircleOutlined style={{ color: 'var(--green)' }} /> : <CloseCircleOutlined style={{ color: 'var(--red)' }} />}
               onClick={() => handleToggleServer(server)}
               title={isEnabled ? t('mcp.actions.disable') : t('mcp.actions.enable')}
             />

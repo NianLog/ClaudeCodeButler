@@ -75,7 +75,7 @@ class RuleEngineService {
 
     if (rule.trigger.type === 'time') {
       const { time, days } = rule.trigger;
-      // v2.0 边界校验：先验证 time/days，避免构造出无效或恒不触发的 cron 表达式
+      // v1.4.0 边界校验：先验证 time/days，避免构造出无效或恒不触发的 cron 表达式
       try {
         this.assertValidTimeTrigger(time, days);
       } catch (error) {
@@ -134,7 +134,7 @@ class RuleEngineService {
         const action = rule.action as CustomCommandAction
         result = await this.executeCustomCommandAction(rule, action)
         message = `规则 "${rule.name}" 命令执行完成。`
-        // v2.0 UX：自定义命令执行成功也推送通知（自动触发/手动触发均通知，让用户感知规则已执行）
+        // v1.4.0 UX：自定义命令执行成功也推送通知（自动触发/手动触发均通知，让用户感知规则已执行）
         this.sendNotification(`规则执行${trigger === 'manual' ? '（手动）' : '（自动）'}`, message)
       } else {
         throw new Error(`未支持的动作类型: ${(rule.action as Action).type}`)
@@ -186,7 +186,7 @@ class RuleEngineService {
   private async executeCustomCommandAction(rule: AutomationRule, action: CustomCommandAction): Promise<{ stdout: string; stderr: string }> {
     logger.info(`执行自定义命令动作: ${rule.name} -> ${action.command}`)
 
-    // v2.0 安全重做：改用参数化 command-executor（spawn shell:false + 元字符黑名单），
+    // v1.4.0 安全重做：改用参数化 command-executor（spawn shell:false + 元字符黑名单），
     // 消除原 terminalManagementService.executeCommand 的 shell 拼接导致的任意命令执行（RCE）风险。
     const result = await executeCommand(action.command, {
       cwd: action.workingDirectory,
@@ -210,7 +210,7 @@ class RuleEngineService {
    */
   private sendNotification(title: string, body: string): void {
     try {
-      // v2.0：主进程直接显示系统通知（Electron Notification API），不依赖 renderer 监听链路
+      // v1.4.0：主进程直接显示系统通知（Electron Notification API），不依赖 renderer 监听链路
       // 原实现仅 webContents.send('notification:show')，但 renderer 无对应 ipcRenderer.on 监听，链路断裂
       if (Notification.isSupported()) {
         new Notification({ title, body }).show()
@@ -249,7 +249,7 @@ class RuleEngineService {
   }
 
   public async createRule(newRuleData: Omit<AutomationRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<AutomationRule> {
-    // v2.0 边界校验：保存前拒绝非法的定时触发器，避免静默创建不可用的规则
+    // v1.4.0 边界校验：保存前拒绝非法的定时触发器，避免静默创建不可用的规则
     if (newRuleData.trigger?.type === 'time') {
       this.assertValidTimeTrigger(newRuleData.trigger.time, newRuleData.trigger.days);
     }
@@ -273,7 +273,7 @@ class RuleEngineService {
   }
 
   public async updateRule(ruleId: RuleId, updates: Partial<AutomationRule>): Promise<AutomationRule | null> {
-    // v2.0 边界校验：更新前拒绝非法的定时触发器
+    // v1.4.0 边界校验：更新前拒绝非法的定时触发器
     if (updates.trigger?.type === 'time') {
       this.assertValidTimeTrigger(updates.trigger.time, updates.trigger.days);
     }

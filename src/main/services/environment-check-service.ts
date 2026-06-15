@@ -324,7 +324,7 @@ class EnvironmentCheckService {
   public async checkCustom(customCheck: CustomEnvironmentCheck): Promise<EnvironmentCheckResult> {
     const now = new Date()
 
-    // v2.0 安全重做：自定义命令改用参数化 command-executor，消除 shell 拼接导致的 RCE 风险
+    // v1.4.0 安全重做：自定义命令改用参数化 command-executor，消除 shell 拼接导致的 RCE 风险
     const result = await executeCommand(customCheck.command, { timeout: 10000 })
 
     if (!result.success) {

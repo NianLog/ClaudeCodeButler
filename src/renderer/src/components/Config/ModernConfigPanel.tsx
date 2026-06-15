@@ -58,7 +58,7 @@ const { Option } = Select
  */
 const ModernConfigPanel: React.FC = () => {
   const { t } = useTranslation()
-  // v2.0：使用 App context 的 message/modal 替代静态 message/Modal.confirm/info，消除 antd 静态函数警告
+  // v1.4.0：使用 App context 的 message/modal 替代静态 message/Modal.confirm/info，消除 antd 静态函数警告
   const { message, modal } = App.useApp()
 
   const {
@@ -224,7 +224,7 @@ const ModernConfigPanel: React.FC = () => {
       // 如果是系统settings配置且托管模式已启用，显示提示信息
       modal.info({
         title: t('configPanel.locked.title'),
-        icon: React.createElement(LockOutlined, { style: { color: '#1890ff' } }),
+        icon: React.createElement(LockOutlined, { style: { color: 'var(--accent)' } }),
         width: 480,
         content: (
           <div style={{ padding: '16px 0' }}>
@@ -240,7 +240,7 @@ const ModernConfigPanel: React.FC = () => {
               padding: '12px',
               marginTop: '12px'
             }}>
-              <Text style={{ color: '#52c41a', fontWeight: 500 }}>
+              <Text style={{ color: 'var(--green)', fontWeight: 500 }}>
                 {t('configPanel.locked.hint')}
               </Text>
             </div>
@@ -833,7 +833,7 @@ const ModernConfigPanel: React.FC = () => {
         <div style={{ padding: '16px 0' }}>
           <p>
             <strong>{t('configPanel.systemConfirm.warningLabel')}</strong>{t('configPanel.systemConfirm.warningText')}
-            <code style={{ margin: '0 4px', padding: '2px 6px', background: '#f5f5f5', borderRadius: '4px' }}>
+            <code style={{ margin: '0 4px', padding: '2px 6px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
               {pendingSystemConfigAction?.config.name}
             </code>
           </p>

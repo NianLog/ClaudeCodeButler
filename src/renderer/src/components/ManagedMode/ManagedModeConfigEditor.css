@@ -8,20 +8,20 @@
 
 /* 基础配置区域 */
 .basic-config {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
 }
 
 /* 配置区块样式 */
 .config-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
 }
 
 .config-section .ant-card-body {
-  padding: 16px;
+  padding: var(--space-md);
 }
 
 .config-section .ant-form-item {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
 }
 
 .config-section .ant-form-item:last-child {
@@ -43,8 +43,8 @@
 }
 
 .json-editor-container {
-  border: 1px solid #d9d9d9;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -55,7 +55,7 @@
 
 /* 标签页样式 */
 .managed-mode-config-editor .ant-tabs-tabpane {
-  padding: 16px 0;
+  padding: var(--space-md) 0;
 }
 
 /* 响应式设计 */
@@ -66,7 +66,7 @@
 
   .managed-mode-config-editor .ant-col {
     width: 100% !important;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-sm);
   }
 
   .config-section .ant-row {
@@ -75,7 +75,7 @@
 
   .config-section .ant-col {
     width: 100% !important;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-sm);
   }
 }
 
@@ -83,8 +83,8 @@
 .custom-field-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
 }
 
 .custom-field-row .ant-input,
@@ -102,26 +102,26 @@
 }
 
 .ant-input-group .ant-input-group-addon {
-  background: #f5f5f5;
+  background: var(--bg-input);
   border-left: none;
-  padding: 0 8px;
+  padding: 0 var(--space-sm);
 }
 
 /* 状态徽章样式 */
 .ant-badge-status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--space-sm);
+  height: var(--space-sm);
 }
 
 .ant-badge-status-text {
-  margin-left: 8px;
-  font-size: 12px;
+  margin-left: var(--space-sm);
+  font-size: var(--font-size-xs);
 }
 
 /* 卡片标题样式 */
 .config-section .ant-card-head-title {
   font-weight: 500;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
 }
 
 /* 开关样式 */
@@ -143,13 +143,13 @@
 .toolbar-space {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 /* 按钮组样式 */
 .button-group {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .button-group .ant-btn {
@@ -158,11 +158,11 @@
 
 /* 警告提示样式 */
 .config-alert {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
 }
 
 .config-alert .ant-alert-icon {
-  font-size: 16px;
+  font-size: var(--font-size-lg);
 }
 
 /* 字段值编辑器 */
@@ -176,7 +176,7 @@
 
 .field-value-editor .field-type-selector {
   position: absolute;
-  right: 4px;
+  right: var(--space-xs);
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
@@ -185,24 +185,24 @@
 .field-type-selector .ant-btn {
   border: none;
   background: transparent;
-  color: #999;
-  padding: 0 4px;
+  color: var(--text-secondary);
+  padding: 0 var(--space-xs);
 }
 
 .field-type-selector .ant-btn:hover {
-  color: #1890ff;
+  color: var(--accent);
 }
 
 /* 代码编辑器容器 */
 .code-editor-wrapper {
-  border: 1px solid #e8e8e8;
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .code-editor-wrapper .monaco-editor,
 .code-editor-wrapper .ace_editor {
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 /* 加载状态 */
@@ -212,7 +212,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -225,16 +225,16 @@
 }
 
 .json-editor-container ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-base);
 }
 
 .json-editor-container ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--border-light);
   border-radius: 3px;
 }
 
 .json-editor-container ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--text-muted);
 }
 
 /* 动画效果 */
@@ -243,7 +243,7 @@
 }
 
 .config-section:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .ant-btn {
@@ -261,33 +261,15 @@
 
 /* 工具提示样式 */
 .ant-tooltip-inner {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 
 .ant-tooltip-arrow-content {
-  background: #001529;
+  background: var(--bg-sidebar);
 }
 
 /* 徽章组样式 */
 .ant-space-item .ant-badge {
   display: inline-flex;
   align-items: center;
-}
-
-/* 暗色主题适配 */
-[data-theme="dark"] .managed-mode-config-editor {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-[data-theme="dark"] .config-section {
-  background: #141414;
-  border-color: #434343;
-}
-
-[data-theme="dark"] .json-editor-container {
-  border-color: #434343;
-}
-
-[data-theme="dark"] .code-editor-wrapper {
-  border-color: #434343;
 }

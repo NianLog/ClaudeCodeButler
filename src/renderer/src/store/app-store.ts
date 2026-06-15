@@ -3,7 +3,8 @@
  * 管理应用级别的状态和操作
  */
 
-import { create } from 'zustand'
+import { createWithEqualityFn } from 'zustand/traditional'
+import { shallow } from 'zustand/shallow'
 
 const FALLBACK_APP_VERSION = '1.3.2'
 
@@ -48,7 +49,7 @@ interface AppStore {
   refreshAll: () => Promise<void>
 }
 
-export const useAppStore = create<AppStore>((set, get) => ({
+export const useAppStore = createWithEqualityFn<AppStore>((set, get) => ({
   // 初始状态
   version: FALLBACK_APP_VERSION,
   platform: 'unknown',
@@ -159,4 +160,4 @@ export const useAppStore = create<AppStore>((set, get) => ({
       throw error
     }
   }
-}))
+}), shallow)

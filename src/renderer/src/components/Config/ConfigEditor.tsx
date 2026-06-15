@@ -495,7 +495,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
                   placeholder={t('configEditor.fields.namePlaceholder')}
                   disabled={config?.isSystemConfig}
                   style={{
-                    backgroundColor: config?.isSystemConfig ? '#f5f5f5' : 'white',
+                    backgroundColor: config?.isSystemConfig ? 'var(--bg-elevated)' : 'var(--bg-input)',
                     cursor: config?.isSystemConfig ? 'not-allowed' : 'text'
                   }}
                 />
@@ -511,7 +511,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
                   placeholder={t('configEditor.fields.typePlaceholder')}
                   disabled={config?.isSystemConfig}
                   style={{
-                    backgroundColor: config?.isSystemConfig ? '#f5f5f5' : 'white',
+                    backgroundColor: config?.isSystemConfig ? 'var(--bg-elevated)' : 'var(--bg-input)',
                     cursor: config?.isSystemConfig ? 'not-allowed' : 'pointer'
                   }}
                 >
@@ -533,7 +533,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
               rows={2}
               disabled={config?.isSystemConfig}
               style={{
-                backgroundColor: config?.isSystemConfig ? '#f5f5f5' : 'white',
+                backgroundColor: config?.isSystemConfig ? 'var(--bg-elevated)' : 'var(--bg-input)',
                 cursor: config?.isSystemConfig ? 'not-allowed' : 'text'
               }}
             />
@@ -740,8 +740,8 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           }
 
           .config-preview {
-            background: #f5f5f5;
-            border-radius: 4px;
+            background: var(--bg-input);
+            border-radius: var(--radius-sm);
             padding: 16px;
             max-height: 400px;
             overflow: auto;
@@ -757,20 +757,20 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           }
 
           .config-preview code.language-json {
-            color: #333;
+            color: var(--text-primary);
           }
 
           .config-preview .error-preview {
-            color: #f5222d;
-            background: #fff2f0;
-            border: 1px solid #ffccc7;
-            border-radius: 4px;
+            color: var(--red);
+            background: color-mix(in srgb, var(--red) 12%, transparent);
+            border: 1px solid var(--red);
+            border-radius: var(--radius-sm);
             padding: 12px;
           }
 
           .markdown-preview-modal {
             line-height: 1.6;
-            color: #333;
+            color: var(--text-primary);
           }
 
           .markdown-preview-modal h1,
@@ -789,26 +789,26 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           }
 
           .markdown-preview-modal pre {
-            background: #f5f5f5;
+            background: var(--bg-input);
             padding: 16px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             overflow-x: auto;
             margin: 16px 0;
           }
 
           .markdown-preview-modal code {
-            background: #f5f5f5;
+            background: var(--bg-input);
             padding: 2px 4px;
-            border-radius: 3px;
+            border-radius: var(--radius-sm);
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
             font-size: 0.9em;
           }
 
           .markdown-preview-modal blockquote {
-            border-left: 4px solid #d9d9d9;
+            border-left: 4px solid var(--border-light);
             padding-left: 16px;
             margin: 16px 0;
-            color: #666;
+            color: var(--text-secondary);
           }
 
           .markdown-preview-modal ul,
@@ -829,13 +829,13 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
 
           .markdown-preview-modal th,
           .markdown-preview-modal td {
-            border: 1px solid #d9d9d9;
+            border: 1px solid var(--border-light);
             padding: 8px 12px;
             text-align: left;
           }
 
           .markdown-preview-modal th {
-            background: #fafafa;
+            background: var(--bg-elevated);
             font-weight: 600;
           }
         `}</style>
@@ -854,7 +854,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         <div style={{ padding: '16px 0' }}>
           <p>
             <strong>{t('configEditor.systemConfirm.warningLabel')}</strong>{t('configEditor.systemConfirm.action', { action: pendingSystemConfigAction?.action === 'load' ? t('configEditor.systemConfirm.actionLoad') : t('configEditor.systemConfirm.actionSave') })}
-            <code style={{ margin: '0 4px', padding: '2px 6px', background: '#f5f5f5', borderRadius: '4px' }}>
+            <code style={{ margin: '0 4px', padding: '2px 6px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
               {config?.name}
             </code>
           </p>

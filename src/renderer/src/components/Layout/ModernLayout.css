@@ -46,14 +46,9 @@
 .logo-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
   border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: white;
   flex-shrink: 0;
+  object-fit: contain;
 }
 
 .logo-text {
@@ -301,7 +296,7 @@
   padding: 0 var(--space-md) 0 36px;
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-full);
-  background: var(--bg-primary);
+  background: var(--bg-tertiary);
   font-size: var(--text-sm);
   color: var(--text-primary);
   transition: all var(--transition-fast);
@@ -310,7 +305,7 @@
 .search-input:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+  box-shadow: none;
 }
 
 .header-right {
@@ -396,7 +391,7 @@
   padding: 0 var(--space-md) 0 36px;
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-full);
-  background: var(--bg-primary);
+  background: var(--bg-tertiary);
   font-size: var(--text-sm);
   color: var(--text-primary);
   transition: all var(--transition-fast);
@@ -405,7 +400,7 @@
 .toolbar-search-input:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+  box-shadow: none;
 }
 
 /* 主内容区域 */
@@ -458,44 +453,6 @@
   .toolbar-search {
     display: none;
   }
-}
-
-/* 暗色主题适配 */
-[data-theme="dark"] .modern-sidebar {
-  background: var(--bg-secondary) !important;
-  border-right-color: var(--border-light);
-}
-
-[data-theme="dark"] .modern-header {
-  background: var(--bg-elevated) !important;
-  border-bottom-color: var(--border-light);
-}
-
-[data-theme="dark"] .search-input {
-  background: var(--bg-tertiary);
-  border-color: var(--border-medium);
-  color: var(--text-primary);
-}
-
-[data-theme="dark"] .search-input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1);
-}
-
-[data-theme="dark"] .content-toolbar {
-  background: var(--bg-elevated);
-  border-bottom-color: var(--border-light);
-}
-
-[data-theme="dark"] .toolbar-search-input {
-  background: var(--bg-tertiary);
-  border-color: var(--border-medium);
-  color: var(--text-primary);
-}
-
-[data-theme="dark"] .toolbar-search-input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1);
 }
 
 /* 动画效果 */

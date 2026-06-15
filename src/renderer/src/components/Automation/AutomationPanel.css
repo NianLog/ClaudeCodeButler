@@ -38,7 +38,7 @@
 .automation-list-card,
 .automation-detail-card {
   flex: 1;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
 .automation-rule-card {
@@ -49,12 +49,12 @@
 }
 
 .automation-rule-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 .automation-rule-card.is-selected {
-  border: 1px solid #7C3AED;
-  box-shadow: 0 2px 12px rgba(124, 58, 237, 0.15);
+  border: 1px solid var(--accent);
+  box-shadow: none;
 }
 
 @media (max-width: 1024px) {

@@ -463,7 +463,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
         content: (
           <div>
             <div>{t('managedMode.config.saveSuccess')}</div>
-            <div style={{ fontSize: '12px', marginTop: '8px', color: '#faad14' }}>
+            <div style={{ fontSize: '12px', marginTop: '8px', color: 'var(--yellow)' }}>
               {t('managedMode.config.saveTip')}
             </div>
           </div>
@@ -892,7 +892,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
             <Space direction="vertical" size="small">
               <Text>{t('managedMode.config.alert.gui')}</Text>
               <Text>{t('managedMode.config.alert.json')}</Text>
-              <Text strong style={{ color: '#1890ff' }}>
+              <Text strong style={{ color: 'var(--accent)' }}>
                 {t('managedMode.config.alert.tip')}
               </Text>
               <Text strong style={{ color: '#fa8c16' }}>

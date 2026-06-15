@@ -6,14 +6,31 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:;">
   <title>CCB - Claude Code Butler</title>
   <style>
-    /* 加载动画样式 */
+    /* v3 加载界面：跟随用户上次选择的主题（暗/亮），去除原蓝紫渐变 AI 味。
+       此处 CSS 在主题系统加载前执行，无法引用主题 CSS 变量，故用 loading 专用变量 +
+       data-loading-mode 属性（由下方内联 script 根据 localStorage 设置）。 */
+    :root {
+      --loading-bg: #1e1e1e;
+      --loading-fg: #cccccc;
+      --loading-accent: #0e639c;
+      --loading-track: rgba(255, 255, 255, 0.15);
+    }
+    html[data-loading-mode="light"] {
+      --loading-bg: #ffffff;
+      --loading-fg: #1f2328;
+      --loading-accent: #0969da;
+      --loading-track: rgba(0, 0, 0, 0.1);
+    }
+
+    /* 加载页容器 */
     #loading {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: var(--loading-bg);
+      color: var(--loading-fg);
       display: flex;
       justify-content: center;
       align-items: center;
@@ -23,42 +40,49 @@
 
     .loading-container {
       text-align: center;
-      color: white;
     }
 
     .loading-logo {
-      width: 80px;
-      height: 80px;
+      width: 64px;
+      height: 64px;
       margin: 0 auto 20px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 32px;
-      font-weight: bold;
-      animation: pulse 2s infinite;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .loading-logo img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      /* 适配亮色加载界面（图标本身可能深色），暗色加载保持原色 */
+      filter: var(--loading-logo-filter, none);
+    }
+    html[data-loading-mode="light"] {
+      --loading-logo-filter: none;
     }
 
     .loading-text {
       font-size: 18px;
-      margin-bottom: 10px;
-      opacity: 0.9;
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
     }
 
     .loading-subtitle {
-      font-size: 14px;
-      opacity: 0.7;
+      font-size: 13px;
+      opacity: 0.55;
     }
 
     .loading-spinner {
-      width: 40px;
-      height: 40px;
-      margin: 20px auto 0;
-      border: 3px solid rgba(255, 255, 255, 0.3);
-      border-top: 3px solid white;
+      width: 32px;
+      height: 32px;
+      margin: 24px auto 0;
+      border: 2px solid var(--loading-track);
+      border-top: 2px solid var(--loading-accent);
       border-radius: 50%;
-      animation: spin 1s linear infinite;
+      animation: spin 0.9s linear infinite;
     }
 
     @keyframes spin {
@@ -68,17 +92,18 @@
 
     @keyframes pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.05); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 0.85; }
     }
 
-    /* 错误页面样式 */
+    /* 错误页面（跟随 loading-mode，保持与加载页视觉一致） */
     #error {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: #f5f5f5;
+      background: var(--loading-bg);
+      color: var(--loading-fg);
       display: none;
       justify-content: center;
       align-items: center;
@@ -89,45 +114,40 @@
     .error-container {
       text-align: center;
       padding: 40px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
       max-width: 400px;
     }
 
     .error-icon {
       font-size: 48px;
       margin-bottom: 20px;
-      color: #ff4757;
     }
 
     .error-title {
       font-size: 20px;
       font-weight: 600;
-      color: #333;
       margin-bottom: 10px;
     }
 
     .error-message {
       font-size: 14px;
-      color: #666;
-      margin-bottom: 20px;
+      opacity: 0.65;
+      margin-bottom: 24px;
       line-height: 1.5;
     }
 
     .error-button {
-      background: #667eea;
-      color: white;
+      background: var(--loading-accent);
+      color: #ffffff;
       border: none;
-      padding: 10px 20px;
+      padding: 10px 24px;
       border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
-      transition: background 0.3s;
+      transition: opacity 0.2s;
     }
 
     .error-button:hover {
-      background: #5a6fd8;
+      opacity: 0.85;
     }
 
     /* 隐藏主要内容 */
@@ -140,12 +160,27 @@
   </style>
 </head>
 <body>
+  <!-- 根据上次选择的主题设置加载界面明暗模式（必须在主题系统加载前执行） -->
+  <script>
+    (function () {
+      try {
+        var themeId = localStorage.getItem('ccb-ui-theme');
+        // 仅 CCB Light 为亮色模式，其余三套（Dark Pro / Minimal / Terminal）均为暗色
+        if (themeId === 'ccb-light') {
+          document.documentElement.setAttribute('data-loading-mode', 'light');
+        }
+      } catch (e) {
+        // localStorage 不可用时使用默认暗色加载界面
+      }
+    })();
+  </script>
+
   <!-- 加载页面 -->
   <div id="loading">
     <div class="loading-container">
-      <div class="loading-logo">CCB</div>
-      <div class="loading-text">Claude Code Butler</div>
-      <div class="loading-subtitle">正在加载配置管理工具...</div>
+      <div class="loading-logo"><img src="./src/assets/icons/ccb_256.png" alt="CCB" /></div>
+      <div class="loading-text">CCB</div>
+      <div class="loading-subtitle">Claude Code Butler</div>
       <div class="loading-spinner"></div>
     </div>
   </div>

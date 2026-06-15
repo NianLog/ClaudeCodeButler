@@ -32,7 +32,7 @@ export interface LogEntry {
 /**
  * 日志 body 最大保留长度（字符）
  * @description HTTP 请求/响应 body 可达数十 KB，500 条全量驻留内存可达数十 MB。
- *              截断到 2KB 既保留可读性又大幅降低内存与 IPC 序列化开销（v2.0 性能）。
+ *              截断到 2KB 既保留可读性又大幅降低内存与 IPC 序列化开销（v1.4.0 性能）。
  */
 const MAX_LOG_BODY_LENGTH = 2048
 
@@ -106,7 +106,7 @@ export const useManagedModeLogStore = create<ManagedModeLogState>((set, get) => 
    * @description 添加日志后自动检查是否需要持久化
    */
   addLog: (log: Omit<LogEntry, 'id'>) => {
-    // v2.0 性能：截断日志 body，避免完整 HTTP 请求/响应体驻留内存及 IPC 全量序列化导致的内存膨胀
+    // v1.4.0 性能：截断日志 body，避免完整 HTTP 请求/响应体驻留内存及 IPC 全量序列化导致的内存膨胀
     const sanitizedData = log.data
       ? { ...log.data, body: truncateLogBody(log.data.body) }
       : log.data

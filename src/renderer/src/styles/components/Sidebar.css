@@ -7,8 +7,8 @@
   left: 0;
   top: 56px;
   bottom: 0;
-  background: #fff;
-  border-right: 1px solid #e8e8e8;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
   z-index: 999;
   transition: width 0.2s ease-in-out;
   overflow: hidden;
@@ -19,7 +19,7 @@
 /* Logo 区域 */
 .sidebar-logo {
   padding: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--bg-panel);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -28,14 +28,14 @@
 
 .logo-icon {
   font-size: 24px;
-  color: #1890ff;
+  color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: #f0f9ff;
-  border-radius: 8px;
+  background: var(--accent-bg);
+  border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 
@@ -48,12 +48,12 @@
 .logo-text span {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--bg-sidebar);
 }
 
 .logo-text small {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--text-secondary);
   line-height: 1;
 }
 
@@ -69,18 +69,18 @@
   height: 44px;
   line-height: 44px;
   margin: 4px 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition: all 0.2s ease-in-out;
 }
 
 .sidebar-menu .ant-menu-item:hover {
-  background: #f5f5f5;
-  color: #1890ff;
+  background: var(--bg-panel);
+  color: var(--accent);
 }
 
 .sidebar-menu .ant-menu-item-selected {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--accent-bg);
+  color: var(--accent);
   font-weight: 500;
 }
 
@@ -96,7 +96,7 @@
 /* 底部快捷操作 */
 .sidebar-footer {
   padding: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--bg-panel);
 }
 
 .quick-actions {
@@ -110,16 +110,16 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 6px;
-  color: #6b7280;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease-in-out;
   font-size: 13px;
 }
 
 .action-item:hover {
-  background: #f5f5f5;
-  color: #1890ff;
+  background: var(--bg-panel);
+  color: var(--accent);
 }
 
 .action-item .anticon {
@@ -166,51 +166,13 @@
 }
 
 /* 暗色主题 */
-[data-theme="dark"] .app-sidebar {
-  background: #374151;
-  border-right-color: #4b5563;
-}
 
-[data-theme="dark"] .sidebar-logo {
-  border-bottom-color: #4b5563;
-}
 
-[data-theme="dark"] .logo-icon {
-  background: #1e3a8a;
-  color: #60a5fa;
-}
 
-[data-theme="dark"] .logo-text span {
-  color: #f9fafb;
-}
 
-[data-theme="dark"] .logo-text small {
-  color: #9ca3af;
-}
 
-[data-theme="dark"] .sidebar-menu .ant-menu-item {
-  color: #d1d5db;
-}
 
-[data-theme="dark"] .sidebar-menu .ant-menu-item:hover {
-  background: #4b5563;
-  color: #60a5fa;
-}
 
-[data-theme="dark"] .sidebar-menu .ant-menu-item-selected {
-  background: #1e3a8a;
-  color: #60a5fa;
-}
 
-[data-theme="dark"] .action-item {
-  color: #9ca3af;
-}
 
-[data-theme="dark"] .action-item:hover {
-  background: #4b5563;
-  color: #60a5fa;
-}
 
-[data-theme="dark"] .sidebar-footer {
-  border-top-color: #4b5563;
-}

@@ -19,7 +19,8 @@ import {
   GlobalOutlined,
   GithubOutlined,
   DesktopOutlined,
-  EyeOutlined
+  EyeOutlined,
+  CheckOutlined
 } from '@ant-design/icons'
 import { useSettingsStore, useBasicSettings, useEditorSettings, useNotificationSettings, useAdvancedSettings, useWindowSettings, useSettingsActions, useUnsavedChanges } from '../../store/settings-store'
 import { useAppStore } from '../../store/app-store'
@@ -34,10 +35,105 @@ import {
   validateNewConfigTemplate
 } from '@shared/config-template'
 import { useMessage } from '../../hooks/useMessage'
+import { useTheme } from '../../hooks/useTheme'
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 
 const { Title, Text } = Typography
 const { Option } = Select
+
+/**
+ * 主题选择器组件
+ * @description 显示所有内置主题的卡片预览，用户点击切换
+ */
+const ThemeSelector: React.FC = () => {
+  const { themeId, setTheme, availableThemes } = useTheme()
+
+  return (
+    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+      {availableThemes.map((theme) => (
+        <div
+          key={theme.id}
+          onClick={() => setTheme(theme.id)}
+          style={{
+            width: '180px',
+            cursor: 'pointer',
+            border: themeId === theme.id
+              ? `2px solid ${theme.cssVars['--accent']}`
+              : `1px solid ${theme.cssVars['--border']}`,
+            borderRadius: theme.cssVars['--radius-md'],
+            overflow: 'hidden',
+            transition: 'border-color 0.15s',
+          }}
+        >
+          {/* 预览条 — 展示主题配色 */}
+          <div style={{ display: 'flex', height: '32px' }}>
+            <div style={{ flex: 2, background: theme.cssVars['--bg-sidebar'] }} />
+            <div style={{ flex: 3, background: theme.cssVars['--bg-panel'], display: 'flex', alignItems: 'center', paddingLeft: '6px', gap: '3px' }}>
+              <div style={{ width: '16px', height: '4px', background: theme.cssVars['--accent'], borderRadius: theme.cssVars['--radius-sm'] }} />
+              <div style={{ width: '8px', height: '4px', background: theme.cssVars['--green'], borderRadius: theme.cssVars['--radius-sm'] }} />
+              <div style={{ width: '6px', height: '4px', background: theme.cssVars['--yellow'], borderRadius: theme.cssVars['--radius-sm'] }} />
+            </div>
+          </div>
+          {/* 标题区 */}
+          <div style={{
+            padding: '6px 8px',
+            background: theme.cssVars['--bg-elevated'],
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                fontFamily: theme.cssVars['--font-ui'],
+                color: theme.cssVars['--text-primary'],
+              }}>
+                {theme.name}
+              </div>
+              <div style={{
+                fontSize: '10px',
+                color: theme.cssVars['--text-muted'],
+                marginTop: '1px',
+              }}>
+                {theme.description}
+              </div>
+            </div>
+            {themeId === theme.id && (
+              <div style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                background: theme.cssVars['--accent'],
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <CheckOutlined style={{ color: '#ffffff', fontSize: '10px' }} />
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+      {/* 未来扩展占位 */}
+      <div style={{
+        width: '180px',
+        border: '1px dashed rgba(255,255,255,0.15)',
+        borderRadius: '0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '70px',
+        fontSize: '11px',
+        color: 'rgba(255,255,255,0.3)',
+        textAlign: 'center',
+      }}>
+        自定义主题导入<br />（即将支持）
+      </div>
+    </div>
+  )
+}
 
 interface LazyCodeEditorFieldProps {
   value?: string
@@ -106,7 +202,7 @@ const SettingsPanel: React.FC = () => {
   const { setTabSettings, markTabSaved } = useSettingsActions()
   const unsavedChanges = useUnsavedChanges()
 
-  const { theme, setTheme, version } = useAppStore()
+  const { version } = useAppStore()
   const { t, setLanguage, availableLanguages } = useTranslation()
   const message = useMessage()
   const defaultConfigTemplate = Form.useWatch(['editor', 'defaultConfigTemplate'], form) as string | undefined
@@ -354,10 +450,8 @@ const SettingsPanel: React.FC = () => {
     }
   }
 
-  const handleThemeChange = (newTheme: 'light' | 'dark' | 'auto') => {
-    setTheme(newTheme)
-    document.documentElement.setAttribute('data-theme', newTheme)
-  }
+  // v3：旧版 light/dark 主题切换已废弃，由 useTheme（界面主题选择器）接管
+  // 不再覆盖 data-theme 属性
 
   // 语言变更处理
   const handleLanguageChange = async (newLanguage: 'zh-CN' | 'en-US') => {
@@ -462,6 +556,11 @@ const SettingsPanel: React.FC = () => {
 
   const generalSettings = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* 界面主题选择（v3：从「高级」迁移至「基础」顶部，提升可见性） */}
+      <Card title={t('settings.theme.title')} style={{ borderRadius: '0' }}>
+        <ThemeSelector />
+      </Card>
+
       <Card title={t('settings.basic')} style={{ borderRadius: '12px' }}>
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12}>
@@ -479,20 +578,9 @@ const SettingsPanel: React.FC = () => {
               </Select>
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item
-              name={['basic', 'theme']}
-              label={t('settings.basic.theme')}
-              tooltip={t('settings.basic.theme.tooltip')}
-            >
-              <Select<'light' | 'dark' | 'auto'> value={theme} onChange={handleThemeChange}>
-                <Option value="light">{t('settings.basic.theme.light')}</Option>
-                <Option value="dark">{t('settings.basic.theme.dark')}</Option>
-                <Option value="auto">{t('settings.basic.theme.auto')}</Option>
-              </Select>
-            </Form.Item>
-          </Col>
         </Row>
+
+        {/* v3：旧版亮/暗主题选择器已移除，由「高级」Tab 的「界面主题」选择器替代 */}
 
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12}>
@@ -731,7 +819,7 @@ const SettingsPanel: React.FC = () => {
 
   const advancedSettingsContent = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <Card title={t('settings.advanced')} style={{ borderRadius: '12px' }}>
+      <Card title={t('settings.advanced')} style={{ borderRadius: '0' }}>
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12}>
             <Form.Item

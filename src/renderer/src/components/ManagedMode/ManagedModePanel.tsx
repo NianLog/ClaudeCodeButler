@@ -327,7 +327,7 @@ const ManagedModePanel: React.FC = () => {
    * 获取服务状态颜色
    */
   const getStatusColor = () => {
-    return status?.running ? '#52c41a' : '#ff4d4f'
+    return status?.running ? 'var(--green)' : 'var(--red)'
   }
 
   /**
@@ -519,10 +519,10 @@ const ManagedModePanel: React.FC = () => {
                     status={getHealthScore() >= 90 ? 'success' : getHealthScore() >= 70 ? 'normal' : 'exception'}
                     strokeColor={
                       getHealthScore() >= 90
-                        ? '#52c41a' // 绿色：健康
+                        ? 'var(--green)' // 绿色：健康
                         : getHealthScore() >= 70
-                        ? '#faad14' // 黄色：警告
-                        : '#ff4d4f' // 红色：异常
+                        ? 'var(--yellow)' // 黄色：警告
+                        : 'var(--red)' // 红色：异常
                     }
                     style={{ marginTop: '8px' }}
                   />
@@ -544,7 +544,7 @@ const ManagedModePanel: React.FC = () => {
                     <Space direction="vertical" size="small" style={{ width: '100%' }}>
                       <div style={{ marginBottom: '12px' }}>
                         <Space>
-                          <ApiOutlined style={{ color: '#1890ff' }} />
+                          <ApiOutlined style={{ color: 'var(--accent)' }} />
                           <Text strong>{t('managedMode.proxy.title')}</Text>
                         </Space>
                         <Divider style={{ margin: '8px 0' }} />
@@ -562,7 +562,7 @@ const ManagedModePanel: React.FC = () => {
 
                       <div style={{ marginBottom: '12px' }}>
                         <Space>
-                          <CloudServerOutlined style={{ color: '#52c41a' }} />
+                          <CloudServerOutlined style={{ color: 'var(--green)' }} />
                           <Text strong>{t('managedMode.upstream.title')}</Text>
                         </Space>
                         <Divider style={{ margin: '8px 0' }} />
@@ -771,7 +771,7 @@ const ManagedModePanel: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '24px', minHeight: '100vh', background: '#f5f5f5' }}>
+    <div style={{ padding: '24px', minHeight: '100vh', background: 'var(--bg-base)' }}>
       <style>{`
         /* 修复Card标题溢出问题 */
         .ant-card-head {
@@ -791,7 +791,7 @@ const ManagedModePanel: React.FC = () => {
       `}</style>
 
       <div style={{ marginBottom: '24px' }}>
-        <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
+        <Title level={2} style={{ color: 'var(--accent)', marginBottom: '8px' }}>
           {t('managedMode.title')}
         </Title>
         <Paragraph style={{ color: '#666', fontSize: '14px', margin: 0 }}>
@@ -804,10 +804,10 @@ const ManagedModePanel: React.FC = () => {
         onChange={setActiveTab}
         type="card"
         style={{
-          background: 'white',
-          borderRadius: '8px',
+          background: 'var(--bg-panel)',
+          borderRadius: 'var(--radius-md)',
           padding: '16px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)'
+          boxShadow: 'none'
         }}
         items={tabItems}
       />

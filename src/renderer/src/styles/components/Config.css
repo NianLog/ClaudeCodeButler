@@ -11,14 +11,14 @@
 
 /* 工具栏 */
 .config-toolbar {
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   padding: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
 .toolbar-left {
@@ -36,11 +36,11 @@
 /* 配置列表 */
 .config-list {
   flex: 1;
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
 .config-list .ant-card-body {
@@ -56,13 +56,13 @@
 
 .config-list .ant-list-item {
   padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--bg-panel);
   transition: all 0.2s ease-in-out;
   position: relative;
 }
 
 .config-list .ant-list-item:hover {
-  background: #fafafa;
+  background: var(--bg-panel);
 }
 
 .config-list .ant-list-item:last-child {
@@ -75,8 +75,8 @@
 }
 
 .config-item.active {
-  border-left: 3px solid #1890ff;
-  background: #f6ffed;
+  border-left: 3px solid var(--accent);
+  background: var(--green-bg);
 }
 
 .config-item.active::before {
@@ -86,20 +86,20 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: #52c41a;
+  background: var(--green);
 }
 
 .config-avatar {
   position: relative;
   font-size: 20px;
-  color: #1890ff;
+  color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: #f0f9ff;
-  border-radius: 8px;
+  background: var(--accent-bg);
+  border-radius: var(--radius-md);
 }
 
 .active-indicator {
@@ -108,14 +108,14 @@
   right: -2px;
   width: 10px;
   height: 10px;
-  background: #52c41a;
+  background: var(--green);
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--bg-elevated);
 }
 
 .config-name {
   font-weight: 500;
-  color: #1f2937;
+  color: var(--bg-sidebar);
   font-size: 15px;
 }
 
@@ -124,19 +124,19 @@
 }
 
 .config-path {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 12px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  background: #f5f5f5;
+  background: var(--bg-panel);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: inline-block;
   margin-bottom: 6px;
 }
 
 .config-meta {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .config-meta .anticon {
@@ -152,15 +152,15 @@
 
 /* JSON编辑器 */
 .json-editor {
-  border: 1px solid #d9d9d9;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .editor-toolbar {
   padding: 8px 12px;
-  background: #fafafa;
-  border-bottom: 1px solid #e8e8e8;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -176,8 +176,8 @@
 }
 
 .json-textarea.error {
-  border-color: #ff4d4f;
-  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+  border-color: var(--red);
+  box-shadow: none;
 }
 
 .json-textarea:focus {
@@ -187,9 +187,9 @@
 
 /* 配置预览 */
 .config-preview {
-  background: #f5f5f5;
+  background: var(--bg-panel);
   padding: 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 12px;
   line-height: 1.5;
@@ -234,53 +234,16 @@
 }
 
 /* 暗色主题 */
-[data-theme="dark"] .config-toolbar,
-[data-theme="dark"] .config-list {
-  background: #374151;
-  border-color: #4b5563;
+  background: var(--bg-elevated);
+  border-color: var(--border-light);
 }
 
-[data-theme="dark"] .config-list .ant-list-item:hover {
-  background: #4b5563;
-}
 
-[data-theme="dark"] .config-item.active {
-  background: #1e3a8a;
-}
 
-[data-theme="dark"] .config-avatar {
-  background: #1e3a8a;
-  color: #60a5fa;
-}
 
-[data-theme="dark"] .config-name {
-  color: #f9fafb;
-}
 
-[data-theme="dark"] .config-path {
-  background: #4b5563;
-  color: #d1d5db;
-}
 
-[data-theme="dark"] .config-meta {
-  color: #9ca3af;
-}
 
-[data-theme="dark"] .json-editor {
-  border-color: #4b5563;
-}
 
-[data-theme="dark"] .editor-toolbar {
-  background: #4b5563;
-  border-bottom-color: #6b7280;
-}
 
-[data-theme="dark"] .json-textarea {
-  background: #374151;
-  color: #f9fafb;
-}
 
-[data-theme="dark"] .config-preview {
-  background: #4b5563;
-  color: #f9fafb;
-}

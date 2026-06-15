@@ -1,7 +1,7 @@
 /**
  * 原子 JSON 读写工具
  * @file src/main/utils/atomic-json-writer.ts
- * @description 提供原子写入（temp + rename）与容错读取，作为 v2.0 基础设施层的一部分，
+ * @description 提供原子写入（temp + rename）与容错读取，作为 v1.4.0 基础设施层的一部分，
  *              消除各 service 中重复的手写「临时文件→rename→失败回滚」与「readFile+parse+ENOENT 容错」逻辑。
  *
  * 设计目标：

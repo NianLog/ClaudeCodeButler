@@ -9,9 +9,9 @@
 
 ---
 
-## [Unreleased] — v2.0 大版本重构（安全重做 + 性能优化 + 质量基建）
+## [1.4.0] - 2026-06-15
 
-基于 v1.3.2 全量审计（4 维度：安全/架构/性能/功能）的系统性重做。规划详见 [`docs/v2.0/`](./docs/v2.0/)。
+基于 v1.3.2 全量审计（4 维度：安全/架构/性能/功能）的系统性重做。规划详见 [`docs/1.4.0/`](./docs/1.4.0/)。
 
 ### Security（安全重做）
 - **[P0]** 移除传统代理 fallback：其无鉴权 + CORS 全开构成上游 API Key 越权使用风险，现只保留带 accessToken 鉴权的集成模式
@@ -38,7 +38,7 @@
 - 测试基础设施：`vitest.config.ts` + `@vitest/coverage-v8`（v8 覆盖率收集）
 - 托管模式运维手册 [`docs/14-托管模式运维手册.md`](./docs/14-托管模式运维手册.md)（Runbook + 回滚预案）
 - 架构决策记录 [`docs/adr/`](./docs/adr/)（4 份 ADR）
-- v2.0 规划文档 [`docs/v2.0/`](./docs/v2.0/)（PRD + 架构设计 + 实施路线图）
+- v1.4.0 规划文档 [`docs/1.4.0/`](./docs/1.4.0/)（PRD + 架构设计 + 实施路线图）
 - 托管模式代理转换器单元测试（28 项，覆盖 4 provider + 工厂路由）
 - command-executor 单元测试（13 项，含元字符注入防护）、rule-storage 单元测试（2 项）
 
@@ -48,7 +48,7 @@
 - 清理 `TerminalLogViewer.tsx.bak` / `.bak2` 残留备份文件
 - 全局修复 antd 静态 Modal/message 警告：AutomationPanel/EnvironmentCheckPanel/ModernConfigPanel 的 `Modal.xxx` → `App.useApp().modal`，message 类组件统一 `useMessage` hook（消除控制台 `Static function can not consume context` 警告）
 
-### 验收反馈优化（v2.0 测试反馈）
+### 验收反馈优化（v1.4.0 测试反馈）
 - MCP 校验全面放宽：移除前端+后端强制字段校验（command/url），新增 `rawConfig` 透传机制——前端将原始 JSON 直接传给后端，后端原样写入 `.claude.json`，完整保留 `{url, headers}` 等 Claude Code 原生格式的所有字段
 - 配置激活热重载：切换配置时先写随机假 `ANTHROPIC_BASE_URL`，延时 1s 后写真实配置，强制 Claude Code 热重载（解决同 baseUrl 仅换 key 不重载）
 - 自动化规则 custom-command 执行成功后推送通知（自动/手动触发均通知，增强用户感知）
@@ -137,7 +137,8 @@
 
 ---
 
-[Unreleased]: https://github.com/NianLog/ClaudeCodeButler/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/NianLog/ClaudeCodeButler/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/NianLog/ClaudeCodeButler/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/NianLog/ClaudeCodeButler/releases/tag/v1.3.2
 [1.3.0]: https://github.com/NianLog/ClaudeCodeButler/releases/tag/v1.3.0
 [1.2.2]: https://github.com/NianLog/ClaudeCodeButler/releases/tag/v1.2.2

@@ -174,9 +174,9 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
   // 渲染权限状态图标
   const renderPrivilegeIcon = (hasPermission: boolean) => {
     return hasPermission ? (
-      <CheckCircleOutlined style={{ color: '#52c41a' }} />
+      <CheckCircleOutlined style={{ color: 'var(--green)' }} />
     ) : (
-      <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />
+      <ExclamationCircleOutlined style={{ color: 'var(--red)' }} />
     )
   }
 
@@ -297,7 +297,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
             <Progress
               percent={elevationProgress}
               status={isElevating ? 'active' : 'normal'}
-              strokeColor={elevationProgress === 100 ? '#52c41a' : '#1890ff'}
+              strokeColor={elevationProgress === 100 ? 'var(--green)' : 'var(--accent)'}
             />
           </div>
 
@@ -346,7 +346,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
     <Modal
       title={
         <Space>
-          <WarningOutlined style={{ color: '#faad14' }} />
+          <WarningOutlined style={{ color: 'var(--yellow)' }} />
           {t('privilege.title')}
         </Space>
       }

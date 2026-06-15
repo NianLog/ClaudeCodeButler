@@ -5,7 +5,7 @@
  *
  * 背景：v1 的 rule-engine / environment-check 通过 terminalManagementService.executeCommand
  * 以 shell 拼接方式执行用户配置的自定义命令，构成任意 shell 执行（RCE）入口。
- * v2.0 引入本执行器作为统一入口：
+ * v1.4.0 引入本执行器作为统一入口：
  *  1. 解析命令字符串为 [binary, ...args]，拒绝包含 shell 元字符的输入；
  *  2. 使用 spawn(binary, args, { shell: false }) 执行，不经 shell，元字符不再被解释；
  *  3. 记录审计日志便于溯源。

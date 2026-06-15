@@ -3,7 +3,8 @@
  * 管理自动化规则相关的状态和操作
  */
 
-import { create } from 'zustand'
+import { createWithEqualityFn } from 'zustand/traditional'
+import { shallow } from 'zustand/shallow'
 import { AutomationRule, RuleExecutionLog } from '@shared/types/rules'
 
 /** 规则操作的统一响应包装类型（兼容旧式 { success, data, error } 返回） */
@@ -49,7 +50,7 @@ interface RuleStore {
   loadStats: () => Promise<void>
 }
 
-export const useRuleStore = create<RuleStore>((set, get) => ({
+export const useRuleStore = createWithEqualityFn<RuleStore>((set, get) => ({
   // 初始状态
   rules: [],
   selectedRule: null,
@@ -227,4 +228,4 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       console.error('Failed to load stats:', error)
     }
   }
-}))
+}), shallow)
