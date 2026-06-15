@@ -23,10 +23,42 @@ export interface LogEntry {
     statusCode?: number
     duration?: number
     headers?: Record<string, string>
-    body?: any
+    body?: unknown
     error?: string
   }
   source?: string
+}
+
+/**
+ * 日志 body 最大保留长度（字符）
+ * @description HTTP 请求/响应 body 可达数十 KB，500 条全量驻留内存可达数十 MB。
+ *              截断到 2KB 既保留可读性又大幅降低内存与 IPC 序列化开销（v2.0 性能）。
+ */
+const MAX_LOG_BODY_LENGTH = 2048
+
+/**
+ * 截断日志 body 到最大长度
+ * @param body 原始 body（任意类型）
+ * @returns 截断后的 body（字符串超长则截断并标记）
+ */
+function truncateLogBody(body: unknown): unknown {
+  if (body == null) {
+    return body
+  }
+  if (typeof body === 'string') {
+    return body.length > MAX_LOG_BODY_LENGTH
+      ? `${body.slice(0, MAX_LOG_BODY_LENGTH)}...[已截断]`
+      : body
+  }
+  try {
+    const str = JSON.stringify(body)
+    if (str.length > MAX_LOG_BODY_LENGTH) {
+      return `${str.slice(0, MAX_LOG_BODY_LENGTH)}...[已截断]`
+    }
+  } catch {
+    // 不可序列化的 body 保持原样
+  }
+  return body
 }
 
 /**
@@ -74,8 +106,13 @@ export const useManagedModeLogStore = create<ManagedModeLogState>((set, get) => 
    * @description 添加日志后自动检查是否需要持久化
    */
   addLog: (log: Omit<LogEntry, 'id'>) => {
+    // v2.0 性能：截断日志 body，避免完整 HTTP 请求/响应体驻留内存及 IPC 全量序列化导致的内存膨胀
+    const sanitizedData = log.data
+      ? { ...log.data, body: truncateLogBody(log.data.body) }
+      : log.data
     const newLog: LogEntry = {
       ...log,
+      data: sanitizedData,
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     }
 
@@ -231,14 +268,21 @@ export const initializeManagedModeLogListener = (): (() => void) => {
   /**
    * 日志事件处理函数
    */
-  const handleManagedModeLog = (event: any) => {
+  const handleManagedModeLog = (event: {
+    timestamp?: number
+    level?: LogLevel
+    type?: LogEntry['type']
+    source?: string
+    message?: string
+    data?: LogEntry['data'] | null
+  }) => {
     store.addLog({
       timestamp: event.timestamp || Date.now(),
       level: event.level || 'info',
       type: event.type || 'system',
       source: event.source || 'managed-mode-proxy',
       message: event.message || '',
-      data: event.data || null
+      data: event.data || undefined
     })
   }
 

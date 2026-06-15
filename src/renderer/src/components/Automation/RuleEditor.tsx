@@ -42,7 +42,17 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ visible, onClose, rule }) => {
   useEffect(() => {
     if (visible && rule) {
       const trigger = rule.trigger as TimeTrigger;
-      const baseValues: any = {
+      const baseValues: {
+        name: string;
+        enabled: boolean;
+        time: dayjs.Dayjs;
+        days: number[];
+        actionType: string;
+        targetConfigPath?: string;
+        command?: string;
+        workingDirectory?: string;
+        timeout?: number;
+      } = {
         name: rule.name,
         enabled: rule.enabled,
         time: dayjs(trigger.time, 'HH:mm'),
@@ -70,7 +80,17 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ visible, onClose, rule }) => {
     }
   }, [visible, rule, form]);
 
-  const handleFinish = async (values: any) => {
+  const handleFinish = async (values: {
+    name: string;
+    enabled: boolean;
+    time: dayjs.Dayjs;
+    days: number[];
+    actionType: string;
+    command?: string;
+    workingDirectory?: string;
+    timeout?: string | number;
+    targetConfigPath?: string;
+  }) => {
     setIsSubmitting(true);
     try {
       const baseRule = {
@@ -86,13 +106,13 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ visible, onClose, rule }) => {
       const action = values.actionType === 'custom-command'
         ? {
             type: 'custom-command' as const,
-            command: values.command,
+            command: values.command ?? '',
             workingDirectory: values.workingDirectory,
             timeout: values.timeout ? Number(values.timeout) : undefined
           }
         : {
             type: 'switch-config' as const,
-            targetConfigPath: values.targetConfigPath
+            targetConfigPath: values.targetConfigPath ?? ''
           }
 
       const ruleData = {
@@ -104,7 +124,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ visible, onClose, rule }) => {
         await updateRule(rule.id, ruleData);
         message.success(t('automation.messages.updateSuccess'));
       } else {
-        await createRule(ruleData as any);
+        await createRule(ruleData as Partial<AutomationRule>);
         message.success(t('automation.messages.createSuccess'));
       }
       onClose();

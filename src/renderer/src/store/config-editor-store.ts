@@ -6,11 +6,29 @@
 import { create } from 'zustand'
 import { ConfigFile } from '@shared/types'
 
+/**
+ * 配置创建/导入的数据载荷
+ * 兼容统一架构：包含元数据或扁平字段
+ */
+interface ConfigPayload {
+  content?: unknown
+  metadata?: {
+    name?: string
+    description?: string
+    type?: string
+    isActive?: boolean
+  }
+  name?: string
+  description?: string
+  type?: string
+  isActive?: boolean
+}
+
 interface ConfigEditorStore {
   // 状态
   editingConfig: ConfigFile | null
-  editorContent: any
-  originalContent: any
+  editorContent: unknown
+  originalContent: unknown
   hasUnsavedChanges: boolean
   activeTab: 'list' | 'editor' | 'backups'
   isLoading: boolean
@@ -18,19 +36,19 @@ interface ConfigEditorStore {
 
   // 基础操作
   setEditingConfig: (config: ConfigFile | null) => void
-  setEditorContent: (content: any) => void
+  setEditorContent: (content: unknown) => void
   setActiveTab: (tab: 'list' | 'editor' | 'backups') => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
 
   // 编辑器操作
   loadConfigContent: (config: ConfigFile) => Promise<void>
-  saveConfig: (config: ConfigFile, content: any) => Promise<void>
+  saveConfig: (config: ConfigFile, content: unknown) => Promise<void>
   resetEditorContent: () => void
   markAsSaved: () => void
-  createConfigWithData: (configData: any) => Promise<void>
-  updateConfig: (id: string, configData: any) => Promise<void>
-  importConfig: (configData: any) => Promise<void>
+  createConfigWithData: (configData: ConfigPayload) => Promise<void>
+  updateConfig: (id: string, configData: Partial<ConfigFile>) => Promise<void>
+  importConfig: (configData: ConfigPayload) => Promise<void>
 }
 
 export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
@@ -102,8 +120,9 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
       })
 
       // 更新编辑中的配置
-      if (get().editingConfig) {
-        const updatedConfig = { ...get().editingConfig!, lastModified: new Date() }
+      const currentEditingConfig = get().editingConfig
+      if (currentEditingConfig) {
+        const updatedConfig = { ...currentEditingConfig, lastModified: new Date() }
         set({ editingConfig: updatedConfig })
       }
     } catch (error) {
@@ -138,13 +157,13 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
       }
 
       // 提取纯内容
-      const content = configData.content || {}
+      const content = configData.content ?? {}
 
       // 对于MD文件，需要确保文件名以.md结尾
       let configName = configData.metadata?.name || configData.name
       const configType = configData.metadata?.type || configData.type || 'claude-code'
 
-      if ((configType === 'user-preferences' || configType === 'claude-md') && !configName.endsWith('.md')) {
+      if ((configType === 'user-preferences' || configType === 'claude-md') && !configName?.endsWith('.md')) {
         configName = `${configName}.md`
       }
 
@@ -158,7 +177,7 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
         templateContent = JSON.stringify(content, null, 2)
       }
 
-      const response = await window.electronAPI.config.create(configName, templateContent)
+      const response = await window.electronAPI.config.create(configName as string, templateContent)
 
       if (response?.success && response.data?.path) {
         // 保存元数据到.meta文件
@@ -178,12 +197,12 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
         set({
           editingConfig: {
             id: response.data.path,
-            name: configName,
+            name: configName as string,
             path: response.data.path,
-            type: configType,
+            type: configType as ConfigFile['type'],
             size: JSON.stringify(content).length,
             lastModified: new Date(),
-            content,
+            content: (typeof content === 'object' && content !== null ? content : {}) as Record<string, unknown>,
             isValid: true,
             description: metadata.description
           },
@@ -211,9 +230,10 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
       // await window.electronAPI.config.update(id, configData) // 暂时注释，等待实现
 
       // 更新编辑中的配置
-      if (get().editingConfig && get().editingConfig!.id === id) {
-        const updatedConfig = {
-          ...get().editingConfig,
+      const currentEditingConfig = get().editingConfig
+      if (currentEditingConfig && currentEditingConfig.id === id) {
+        const updatedConfig: ConfigFile = {
+          ...currentEditingConfig,
           ...configData,
           lastModified: new Date()
         }
@@ -239,13 +259,13 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
       }
 
       // 提取纯内容
-      const content = configData.content || {}
+      const content = configData.content ?? {}
 
       // 对于MD文件，需要确保文件名以.md结尾
       let configName = configData.metadata?.name || configData.name
       const configType = configData.metadata?.type || configData.type || 'claude-code'
 
-      if ((configType === 'user-preferences' || configType === 'claude-md') && !configName.endsWith('.md')) {
+      if ((configType === 'user-preferences' || configType === 'claude-md') && !configName?.endsWith('.md')) {
         configName = `${configName}.md`
       }
 
@@ -259,7 +279,7 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
         templateContent = JSON.stringify(content, null, 2)
       }
 
-      const response = await window.electronAPI.config.create(configName, templateContent)
+      const response = await window.electronAPI.config.create(configName as string, templateContent)
 
       if (response?.success && response.data?.path) {
         // 保存元数据到.meta文件
@@ -279,12 +299,12 @@ export const useConfigEditorStore = create<ConfigEditorStore>((set, get) => ({
         set({
           editingConfig: {
             id: response.data.path,
-            name: configName,
+            name: configName as string,
             path: response.data.path,
-            type: configType,
+            type: configType as ConfigFile['type'],
             size: JSON.stringify(content).length,
             lastModified: new Date(),
-            content,
+            content: (typeof content === 'object' && content !== null ? content : {}) as Record<string, unknown>,
             isValid: true,
             description: metadata.description
           },

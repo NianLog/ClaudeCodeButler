@@ -64,6 +64,19 @@ const sanitizeJsonInput = (rawContent: string): string => {
 }
 
 /**
+ * 配置保存载荷：分离纯内容和元数据
+ */
+export interface ConfigSavePayload {
+  content: unknown
+  metadata: {
+    name: string
+    description: string
+    type: string
+    isActive: boolean
+  }
+}
+
+/**
  * 配置编辑器属性
  */
 interface ConfigEditorProps {
@@ -72,7 +85,7 @@ interface ConfigEditorProps {
   mode?: 'create' | 'edit' | 'duplicate'
   initialDraft?: ConfigEditorDraft | null
   onClose: () => void
-  onSave: (configData: Partial<ConfigFile>) => Promise<void>
+  onSave: (configData: ConfigSavePayload) => Promise<void>
 }
 
 /**
@@ -112,7 +125,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   const [previewVisible, setPreviewVisible] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showUserImport, setShowUserImport] = useState(false)
-  const [userConfigs, setUserConfigs] = useState<any[]>([])
+  const [userConfigs, setUserConfigs] = useState<Array<Record<string, unknown>>>([])
   const [loadingUserConfigs, setLoadingUserConfigs] = useState(false)
   const [editorLanguage, setEditorLanguage] = useState<EditorLanguage>('json')
   const [systemConfigConfirmVisible, setSystemConfigConfirmVisible] = useState(false)
@@ -237,9 +250,10 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       setLoadingUserConfigs(true)
       const response = await window.electronAPI.config.importFromUserDir()
       if (response && typeof response === 'object' && 'success' in response && response.success) {
-        setUserConfigs((response as any).data || [])
+        const data = (response as { data?: Array<Record<string, unknown>> }).data || []
+        setUserConfigs(data)
       } else {
-        console.error('加载用户配置失败:', (response as any).error)
+        console.error('加载用户配置失败:', (response as { error?: unknown }).error)
       }
     } catch (error) {
       console.error('加载用户配置失败:', error)
@@ -249,28 +263,31 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   }
 
   // 导入用户配置
-  const importUserConfig = (userConfig: any) => {
+  const importUserConfig = (userConfig: Record<string, unknown>) => {
     try {
       let contentStr: string
       let language: 'json' | 'markdown' = 'json'
 
+      const configType = String(userConfig.type ?? '')
+      const configContent = userConfig.content
+
       // 根据配置类型判断内容格式
-      if (userConfig.type === 'user-preferences' || userConfig.type === 'claude-md') {
+      if (configType === 'user-preferences' || configType === 'claude-md') {
         // MD文件：确保内容是字符串
-        contentStr = typeof userConfig.content === 'string' ? userConfig.content : String(userConfig.content || '')
+        contentStr = typeof configContent === 'string' ? configContent : String(configContent || '')
         language = 'markdown'
       } else {
         // JSON文件：序列化内容
-        contentStr = typeof userConfig.content === 'string' ? userConfig.content : JSON.stringify(userConfig.content || {}, null, 2)
+        contentStr = typeof configContent === 'string' ? configContent : JSON.stringify(configContent ?? {}, null, 2)
         language = 'json'
       }
 
       setContent(contentStr)
       setEditorLanguage(language)
       form.setFieldsValue({
-        name: `导入_${userConfig.name}`,
-        description: userConfig.description,
-        type: userConfig.type
+        name: `导入_${String(userConfig.name ?? '')}`,
+        description: userConfig.description as string | undefined,
+        type: configType
       })
       setShowUserImport(false)
     } catch (error) {
@@ -291,7 +308,12 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       // 验证表单
       let values
       try {
-        values = await form.validateFields()
+        values = await form.validateFields() as {
+          name?: string
+          description?: string
+          type?: string
+          isActive?: boolean
+        }
       } catch (formError) {
         const fieldError = formError as { errorFields?: Array<{ errors: string[] }> }
         console.error('表单验证失败:', fieldError)
@@ -312,7 +334,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       setIsSaving(true)
 
       // 处理内容
-      let actualContent: any
+      let actualContent: unknown
       try {
         if (editorLanguage === 'markdown') {
           // Markdown文件直接存储为字符串内容
@@ -329,7 +351,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       }
 
       // 构建配置数据：分离内容和元数据
-      const configData = {
+      const configData: ConfigSavePayload = {
         content: actualContent, // 纯内容
         metadata: { // 元数据
           name: String(values.name || t('configEditor.defaults.unnamed')),
@@ -670,7 +692,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
               dataSource={userConfigs}
               renderItem={(item) => (
                 <List.Item
-                  key={item.name}
+                  key={String(item.name ?? '')}
                   actions={[
                     <Button
                       type="primary"
@@ -684,8 +706,8 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
                 >
                   <List.Item.Meta
                     avatar={<FolderOpenOutlined />}
-                    title={item.name}
-                    description={item.description}
+                    title={String(item.name ?? '')}
+                    description={item.description as string | undefined}
                   />
                 </List.Item>
               )}

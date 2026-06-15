@@ -49,6 +49,12 @@ import type {
 /**
  * 配置管理 API
  */
+/**
+ * 配置管理 API
+ * @note 该接口为 IPC 桥接层契约，返回值/回调参数来自序列化后的动态 JSON，
+ * 渲染进程依赖宽松类型，故保留 any 并在此文件接口区禁用 no-explicit-any 规则
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 interface ConfigAPI {
   // 获取配置文件列表
   list: () => Promise<{ success: boolean; data?: ConfigFile[]; error?: string }>
@@ -220,6 +226,8 @@ interface MenuAPI {
   onNewConfig: (callback: () => void) => void
   onValidateConfigs: (callback: () => void) => void
   onExportConfigs: (callback: () => void) => void
+  // 监听"帮助 → 检查更新"原生菜单事件
+  onCheckUpdate: (callback: () => void) => void
 }
 
 /**
@@ -227,7 +235,7 @@ interface MenuAPI {
  */
 interface TrayAPI {
   // 监听配置切换请求
-  onSwitchConfig: (callback: (configName: string) => void) => void
+  onSwitchConfig: (callback: (configName: string) => void) => () => void
   // 更新托盘菜单
   updateMenu: () => Promise<void>
 }
@@ -775,13 +783,19 @@ const menuAPI: MenuAPI = {
   },
   onExportConfigs: (callback: () => void) => {
     ipcRenderer.on('menu:export-configs', callback)
+  },
+  onCheckUpdate: (callback: () => void) => {
+    ipcRenderer.on('menu:check-update', callback)
   }
 }
 
 // 创建托盘 API 对象
 const trayAPI: TrayAPI = {
   onSwitchConfig: (callback: (configName: string) => void) => {
-    ipcRenderer.on('tray:switch-config', (_, configName) => callback(configName))
+    const handler = (_: unknown, configName: string) => callback(configName)
+    ipcRenderer.on('tray:switch-config', handler)
+    // v2.0 修复：返回 unsubscribe 函数，避免监听器在 refreshConfigs 变化时累积（资源泄漏）
+    return () => ipcRenderer.off('tray:switch-config', handler)
   },
   updateMenu: () => ipcRenderer.invoke('tray:updateMenu')
 }

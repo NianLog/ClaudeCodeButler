@@ -33,7 +33,7 @@ export class FileWatcher extends EventEmitter {
       // 创建文件监控实例
       this.watcher = chokidar.watch(this.watchPath, {
         ignored: [
-          /(^|[\/\\])\../,  // 忽略隐藏文件
+          /(^|[/\\])\../,  // 忽略隐藏文件
           /node_modules/,
           /.*\.log$/,
           /.*\.tmp$/
@@ -142,7 +142,7 @@ export class FileWatcher extends EventEmitter {
     }
 
     // 特定的配置文件
-    return Object.values(CONFIG_FILES).includes(fileName as any)
+    return (Object.values(CONFIG_FILES) as readonly string[]).includes(fileName)
   }
 
   /**

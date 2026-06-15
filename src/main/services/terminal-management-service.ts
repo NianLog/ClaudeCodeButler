@@ -336,13 +336,17 @@ class TerminalManagementService {
         stdout,
         stderr
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('命令执行失败:', error)
+
+      const stderrOutput = error instanceof Error && 'stderr' in error
+        ? String((error as { stderr?: unknown }).stderr ?? '')
+        : ''
 
       return {
         stdout: '',
-        stderr: error.stderr || '',
-        error
+        stderr: stderrOutput,
+        error: error instanceof Error ? error : undefined
       }
     }
   }
@@ -474,7 +478,7 @@ class TerminalManagementService {
       }
 
       return await this.executeCommand(normalizedCommand, options)
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.warn('IPC 命令执行被拒绝:', error)
       return {
         stdout: '',

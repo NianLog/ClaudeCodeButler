@@ -10,6 +10,9 @@
 
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import os from 'os'
+import path from 'path'
+import fs from 'fs'
 import { logger } from '../utils/logger'
 import axios from 'axios'
 
@@ -52,9 +55,6 @@ class ClaudeCodeVersionService {
     try {
       logger.info('检测当前Claude Code版本...')
 
-      const os = require('os')
-      const path = require('path')
-      const fs = require('fs')
       const userHome = os.homedir()
 
       // 构建检测命令列表 - 按优先级排序
@@ -63,7 +63,7 @@ class ClaudeCodeVersionService {
       // 1. 检查用户本地安装 (.claude/local) - 如果存在则优先使用
       const localClaudePath = path.join(userHome, '.claude', 'local', 'node_modules', '.bin', 'claude')
       if (fs.existsSync(localClaudePath)) {
-        commands.push(localClaudePath + ' --version')
+        commands.push(`${localClaudePath  } --version`)
         logger.debug(`发现本地Claude安装: ${localClaudePath}`)
       }
 
@@ -248,7 +248,7 @@ class ClaudeCodeVersionService {
         'npm install -g @anthropic-ai/claude-code@latest'
       ]
 
-      let lastError: any = null
+      let lastError: unknown = null
       let output = ''
 
       for (const cmd of updateCommands) {

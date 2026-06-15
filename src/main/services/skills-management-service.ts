@@ -229,7 +229,7 @@ class SkillsManagementService {
       const match = content.match(frontmatterRegex)
 
       if (!match) {
-        logger.warn('未找到YAML frontmatter，返回默认元数据')
+        logger.debug('未找到YAML frontmatter，返回默认元数据')
         return {
           name: '',
           description: ''
@@ -244,7 +244,9 @@ class SkillsManagementService {
         description: metadata.description || ''
       }
     } catch (error) {
-      logger.error('解析YAML frontmatter失败:', error)
+      // YAML 解析失败是预期行为（部分 Skill frontmatter 含特殊字符），
+      // 降级为 debug 避免扫描时刷 ERROR/WARNING 噪音
+      logger.debug('解析YAML frontmatter失败，返回默认元数据:', error)
       return {
         name: '',
         description: ''
@@ -264,11 +266,15 @@ class SkillsManagementService {
     const dirPath = path.join(this.skillsDir, dirName)
 
     // 检查目录是否已存在
+    // 注意：独立捕获 fs.access 的 ENOENT，避免与“已存在”判断共用 catch 导致同名 Skill 被静默覆盖。
+    let skillExists = true
     try {
       await fs.access(dirPath)
-      throw new Error(`Skill "${formData.name}" 已存在`)
     } catch {
-      // 目录不存在，可以继续
+      skillExists = false
+    }
+    if (skillExists) {
+      throw new Error(`Skill "${formData.name}" 已存在`)
     }
 
     // 创建目录
@@ -538,8 +544,8 @@ class SkillsManagementService {
       .toLowerCase()
       .trim()
       .replace(/\s+/g, '-') // 空格替换为连字符
-      .replace(/[^\w\-]+/g, '') // 移除非单词字符
-      .replace(/\-\-+/g, '-') // 移除多个连字符
+      .replace(/[^\w-]+/g, '') // 移除非单词字符
+      .replace(/--+/g, '-') // 移除多个连字符
       .replace(/^-+/, '') // 移除前导连字符
       .replace(/-+$/, '') // 移除尾部连字符
   }

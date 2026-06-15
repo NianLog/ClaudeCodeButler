@@ -74,8 +74,8 @@ export interface SettingsSaveOptions {
 export interface SettingsChangeEvent {
   tab: SettingsTab
   key: string
-  oldValue: any
-  newValue: any
+  oldValue: unknown
+  newValue: unknown
   timestamp: Date
 }
 
@@ -87,8 +87,8 @@ export interface SettingsValidationRule {
   type: 'string' | 'number' | 'boolean' | 'object' | 'array'
   min?: number
   max?: number
-  enum?: any[]
-  validator?: (value: any) => boolean | string
+  enum?: unknown[]
+  validator?: (value: unknown) => boolean | string
 }
 
 // 设置模块状态

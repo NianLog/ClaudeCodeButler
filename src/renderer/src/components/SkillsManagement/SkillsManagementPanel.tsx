@@ -45,9 +45,11 @@ import {
 } from '@ant-design/icons'
 import { useSkillsManagementStore } from '@/store/skills-management-store'
 import { getUploadFilePath, getUploadRelativePath, readUploadFileBase64 } from '@/utils/upload'
+import type { UploadFileLike } from '@/utils/upload'
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 import { useTranslation } from '@/locales/useTranslation'
 import type { SkillDirectory, SkillFormData } from '@shared/types/skills'
+import type { UploadFile } from 'antd'
 import './SkillsManagementPanel.css'
 
 const { Title, Text } = Typography
@@ -86,7 +88,7 @@ const SkillsManagementPanel: React.FC = () => {
   } = useSkillsManagementStore()
 
   const [form] = Form.useForm()
-  const [fileList, setFileList] = useState<any[]>([])
+  const [fileList, setFileList] = useState<UploadFile[]>([])
   const [isSingleImporting, setIsSingleImporting] = useState(false)
 
   // 初始化加载
@@ -105,7 +107,7 @@ const SkillsManagementPanel: React.FC = () => {
       form.setFieldsValue({
         name: editingSkill.metadata.name,
         description: editingSkill.metadata.description,
-        content: content
+        content
       })
     }
   }, [editingSkill, isFormModalOpen, formMode, form])
@@ -125,11 +127,12 @@ const SkillsManagementPanel: React.FC = () => {
       await addSkill(values as SkillFormData)
       messageApi.success(t('skills.message.added'))
       form.resetFields()
-    } catch (error: any) {
-      if (error?.errorFields) {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) {
         return
       }
-      messageApi.error(t('skills.message.addFailed', { error: error.message || t('common.unknownError') }))
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('skills.message.addFailed', { error: msg }))
     }
   }
 
@@ -141,11 +144,12 @@ const SkillsManagementPanel: React.FC = () => {
         await updateSkill(editingSkill.id, values as SkillFormData)
         messageApi.success(t('skills.message.updated'))
       }
-    } catch (error: any) {
-      if (error?.errorFields) {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) {
         return
       }
-      messageApi.error(t('skills.message.updateFailed', { error: error.message || t('common.unknownError') }))
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('skills.message.updateFailed', { error: msg }))
     }
   }
 
@@ -154,13 +158,14 @@ const SkillsManagementPanel: React.FC = () => {
     try {
       await deleteSkill(skillId)
       messageApi.success(t('skills.message.deleted'))
-    } catch (error: any) {
-      messageApi.error(t('skills.message.deleteFailed', { error: error?.message || t('common.unknownError') }))
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('skills.message.deleteFailed', { error: msg }))
     }
   }
 
   // 处理单个目录导入
-  const buildSkillImportGroups = async (files: any[]) => {
+  const buildSkillImportGroups = async (files: UploadFileLike[]) => {
     const groups = new Map<string, { rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> }>()
 
     for (const file of files) {
@@ -179,13 +184,16 @@ const SkillsManagementPanel: React.FC = () => {
       if (!groups.has(rootDirName)) {
         groups.set(rootDirName, { rootDirName, files: [] })
       }
-      groups.get(rootDirName)!.files.push({ relativePath: innerPath, contentBase64 })
+      const group = groups.get(rootDirName)
+      if (group) {
+        group.files.push({ relativePath: innerPath, contentBase64 })
+      }
     }
 
     return Array.from(groups.values())
   }
 
-  const handleSingleImportFiles = async (files: any[]) => {
+  const handleSingleImportFiles = async (files: UploadFile[]) => {
     if (isSingleImporting) return
     setIsSingleImporting(true)
     try {
@@ -221,8 +229,9 @@ const SkillsManagementPanel: React.FC = () => {
       } else {
         messageApi.error(t('skills.message.importFailed', { error: contentResult.error || t('common.unknownError') }))
       }
-    } catch (error: any) {
-      messageApi.error(t('skills.message.importFailed', { error: error.message || t('common.unknownError') }))
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('skills.message.importFailed', { error: msg }))
     } finally {
       setIsSingleImporting(false)
     }
@@ -292,8 +301,9 @@ const SkillsManagementPanel: React.FC = () => {
       } else {
         messageApi.error(t('skills.message.batchImportFailed', { error: '' }))
       }
-    } catch (error: any) {
-      messageApi.error(t('skills.message.batchImportFailed', { error: error.message || t('common.unknownError') }))
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('skills.message.batchImportFailed', { error: msg }))
     }
   }
 
@@ -324,7 +334,7 @@ const SkillsManagementPanel: React.FC = () => {
     {
       title: t('skills.table.structure'),
       key: 'structure',
-      render: (_: any, record: SkillDirectory) => {
+      render: (_value: unknown, record: SkillDirectory) => {
         return (
           <Space>
             <FileTextOutlined />
@@ -352,7 +362,7 @@ const SkillsManagementPanel: React.FC = () => {
       title: t('skills.table.actions'),
       key: 'actions',
       width: 200,
-      render: (_: any, record: SkillDirectory) => (
+      render: (_value: unknown, record: SkillDirectory) => (
         <Space size="small">
           <Tooltip title={t('skills.table.viewDetail')}>
             <Button

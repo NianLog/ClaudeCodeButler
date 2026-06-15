@@ -43,6 +43,13 @@ export const pathManager = {
   ruleExecutionsLogFile: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.DATA_DIR, 'rule-executions.json'),
   settingsFile: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.CONFIG_DIR, CONFIG_FILES.SETTINGS),
 
+  // Claude 用户目录相关路径（~/.claude）—— v2.0 新增，消除全代码库 os.homedir()+'.claude' 散落拼接
+  claudeDir: path.join(HOME_DIR, '.claude'),
+  userSettingsPath: path.join(HOME_DIR, '.claude', 'settings.json'),
+  claudeJsonPath: path.join(HOME_DIR, '.claude.json'),
+  claudeMdPath: path.join(HOME_DIR, '.claude', 'CLAUDE.md'),
+  claudeProjectsDir: path.join(HOME_DIR, '.claude', 'projects'),
+
   /**
    * 获取 Claude 配置文件的绝对路径
    * @param fileName 文件名 (如 'CLAUDE.md', '.claude.json')

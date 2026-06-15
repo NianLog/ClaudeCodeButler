@@ -39,7 +39,7 @@ export interface RuleCondition {
   /** 操作符 */
   operator: 'equals' | 'between' | 'in' | 'custom'
   /** 条件值 */
-  value: any
+  value: unknown
 }
 
 /**
@@ -77,7 +77,7 @@ export interface RuleAction {
   /** 动作类型 */
   type: 'switchConfig' | 'notification' | 'custom'
   /** 动作参数 */
-  params: Record<string, any>
+  params: Record<string, unknown>
 }
 
 /**
@@ -91,7 +91,7 @@ export interface RuleExecution {
   /** 是否成功 */
   success: boolean
   /** 执行结果 */
-  result?: any
+  result?: unknown
   /** 错误信息 */
   error?: string
   /** 执行耗时（毫秒） */
@@ -115,5 +115,5 @@ export interface ExecutionLog {
   /** 错误信息 */
   error?: string
   /** 上下文信息 */
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 }

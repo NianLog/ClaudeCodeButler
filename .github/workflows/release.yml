@@ -61,12 +61,23 @@ jobs:
       - name: Build proxy-server
         run: npm run build --prefix src/proxy-server
 
-      - name: Lint (informational)
+      - name: Lint (informational, 渐进治理中)
+        # 当前存在 71 个 error（多为 @typescript-eslint/ban-types 的 `{}` 类型与 no-explicit-any），
+        # 暂不阻塞 CI，避免一次性卡死构建。治理路线：分批修复后改为阻塞式门禁。
+        # 详见 docs/13-项目SDLC规范化分析报告.md 的「质量门禁加固」章节。
         continue-on-error: true
         run: npm run lint
 
-      - name: Run tests
-        run: npm run test -- --run
+      - name: Run tests with coverage
+        run: npm run test -- --run --coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ github.ref_name }}
+          path: coverage/
+          if-no-files-found: warn
 
       - name: Build application
         run: npm run build

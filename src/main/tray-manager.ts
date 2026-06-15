@@ -3,11 +3,12 @@
  * 负责创建和管理系统托盘图标及菜单
  */
 
-import { Tray, Menu, nativeImage, BrowserWindow, Notification, type NativeImage } from 'electron'
+import { Tray, Menu, nativeImage, BrowserWindow, Notification, app, dialog, type NativeImage } from 'electron'
 import { join } from 'path'
+import fs from 'fs'
 import { APP_INFO } from '@shared/constants'
 import { logger } from './utils/logger'
-import { configService } from './ipc-handlers'
+import { configService, managedModeService } from './ipc-handlers'
 
 interface TrayConfigSummary {
   name: string
@@ -51,9 +52,6 @@ export class TrayManager {
    */
   private getTrayIcon(): NativeImage {
     try {
-      const fs = require('fs')
-      const { nativeImage } = require('electron')
-
       // 优先使用专用的托盘图标
       const trayIconPath = join(__dirname, '../../resources/icons/tray.png')
       if (fs.existsSync(trayIconPath)) {
@@ -262,9 +260,17 @@ export class TrayManager {
 
   /**
    * 切换配置（实际激活配置文件）
+   * @description 托管模式开启时禁止从托盘切换配置，仅弹出系统通知提示用户。
    */
   private async switchConfig(configName: string, configPath: string): Promise<void> {
     try {
+      // 托管模式拦截：开启托管模式时不允许通过托盘切换配置（任务 4c）
+      if (managedModeService.isManagedModeEnabled()) {
+        this.showManagedModeBlockedNotification(configName)
+        logger.info(`托管模式已开启，已拦截托盘切换配置: ${configName} (${configPath})`)
+        return
+      }
+
       // activateConfig 返回 void，如果没有抛出异常就表示成功
       await configService.activateConfig(configPath)
 
@@ -275,10 +281,6 @@ export class TrayManager {
       }
 
       // 显示成功通知
-      const { Notification } = require('electron')
-      const { join } = require('path')
-      const fs = require('fs')
-
       // 获取图标路径
       let iconPath = ''
       if (process.platform === 'win32') {
@@ -302,7 +304,6 @@ export class TrayManager {
       logger.error('切换配置失败:', error)
 
       // 显示失败通知
-      const { Notification } = require('electron')
       new Notification({
         title: '配置切换失败',
         body: error instanceof Error ? error.message : String(error),
@@ -310,6 +311,34 @@ export class TrayManager {
           appUserModelId: APP_INFO.FULL_NAME
         })
       }).show()
+    }
+  }
+
+  /**
+   * 托管模式拦截托盘切换配置时的系统通知
+   * @param configName 被拦截切换的配置名称
+   */
+  private showManagedModeBlockedNotification(configName: string): void {
+    try {
+      // 获取图标路径（与 switchConfig 保持一致）
+      let iconPath = ''
+      if (process.platform === 'win32') {
+        const icoPath = join(__dirname, '../../resources/icons/ccb.ico')
+        if (fs.existsSync(icoPath)) {
+          iconPath = icoPath
+        }
+      }
+
+      new Notification({
+        title: '配置切换被拦截',
+        body: `托管模式已开启，不允许切换到配置: ${configName}。请先关闭托管模式再操作。`,
+        icon: iconPath || undefined,
+        ...(process.platform === 'win32' && {
+          appUserModelId: APP_INFO.FULL_NAME
+        })
+      }).show()
+    } catch (error) {
+      logger.error('显示托管模式拦截通知失败:', error)
     }
   }
 
@@ -327,7 +356,6 @@ export class TrayManager {
    * 显示关于对话框
    */
   private showAbout(): void {
-    const { dialog } = require('electron')
     const mainWindow = BrowserWindow.getAllWindows()[0]
 
     dialog.showMessageBox(mainWindow, {
@@ -343,7 +371,6 @@ export class TrayManager {
    * 退出应用
    */
   private quitApp(): void {
-    const { app } = require('electron')
     app.quit()
   }
 

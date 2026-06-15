@@ -210,7 +210,7 @@ const StatisticsPanel: React.FC = () => {
   /**
    * 配置使用表格列定义
    */
-  const configColumns: ColumnsType<any> = [
+  const configColumns: ColumnsType<StatisticsData['configUsage'][number]> = [
     {
       title: t('statistics.config.columns.name'),
       dataIndex: 'configName',
@@ -256,7 +256,7 @@ const StatisticsPanel: React.FC = () => {
   /**
    * 规则执行表格列定义
    */
-  const ruleColumns: ColumnsType<any> = [
+  const ruleColumns: ColumnsType<StatisticsData['ruleExecution'][number]> = [
     {
       title: t('statistics.rules.columns.name'),
       dataIndex: 'ruleName',

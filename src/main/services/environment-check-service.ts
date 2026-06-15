@@ -14,6 +14,7 @@ import path from 'path'
 import os from 'os'
 import { app } from 'electron'
 import { logger } from '../utils/logger'
+import { executeCommand } from '../utils/command-executor'
 import { terminalManagementService } from './terminal-management-service'
 import {
   PredefinedCheckType,
@@ -56,7 +57,7 @@ class EnvironmentCheckService {
       })
 
       return result
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         stdout: '',
         stderr: '',
@@ -187,13 +188,15 @@ class EnvironmentCheckService {
         icon: '🤖',
         isCustom: false
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorCode = error instanceof Error && 'code' in error ? (error as { code?: unknown }).code : undefined
+      const errorMessage = error instanceof Error ? error.message : String(error)
       return {
         id: PredefinedCheckType.CLAUDE_CODE,
         name: 'Claude Code',
         type: PredefinedCheckType.CLAUDE_CODE,
-        status: error.code === 'ENOENT' ? EnvironmentCheckStatus.NOT_FOUND : EnvironmentCheckStatus.ERROR,
-        error: error.code === 'ENOENT' ? 'Claude Code未安装或版本文件不存在' : error.message,
+        status: errorCode === 'ENOENT' ? EnvironmentCheckStatus.NOT_FOUND : EnvironmentCheckStatus.ERROR,
+        error: errorCode === 'ENOENT' ? 'Claude Code未安装或版本文件不存在' : errorMessage,
         lastCheckTime: checkTime,
         icon: '🤖',
         isCustom: false
@@ -321,22 +324,22 @@ class EnvironmentCheckService {
   public async checkCustom(customCheck: CustomEnvironmentCheck): Promise<EnvironmentCheckResult> {
     const now = new Date()
 
-    const result = await this.executeCommandWithTerminal(
-      customCheck.command,
-      { timeout: 10000 }
-    )
+    // v2.0 安全重做：自定义命令改用参数化 command-executor，消除 shell 拼接导致的 RCE 风险
+    const result = await executeCommand(customCheck.command, { timeout: 10000 })
 
-    if (result.error) {
+    if (!result.success) {
+      const errorMsg = result.error?.message || `命令执行失败 (exit ${result.exitCode})`
+      const isNotFound = errorMsg.includes('not found') || errorMsg.includes('ENOENT')
       return {
         id: customCheck.id,
         name: customCheck.name,
         type: 'custom',
-        status: result.error.message.includes('not found') || result.error.message.includes('ENOENT')
+        status: isNotFound
           ? EnvironmentCheckStatus.NOT_FOUND
           : EnvironmentCheckStatus.ERROR,
-        error: result.error.message.includes('not found') || result.error.message.includes('ENOENT')
+        error: isNotFound
           ? '未找到该命令'
-          : result.error.message,
+          : errorMsg,
         lastCheckTime: now,
         icon: customCheck.icon,
         isCustom: true
@@ -395,8 +398,9 @@ class EnvironmentCheckService {
         ...check,
         createdAt: new Date(check.createdAt)
       }))
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      const errorCode = error instanceof Error && 'code' in error ? (error as { code?: unknown }).code : undefined
+      if (errorCode === 'ENOENT') {
         return []
       }
       logger.error('读取自定义检查失败:', error)
@@ -414,7 +418,7 @@ class EnvironmentCheckService {
       const checks = await this.getCustomChecks()
 
       // 生成唯一ID
-      const id = this.slugify(formData.name) + '-' + Date.now()
+      const id = `${this.slugify(formData.name)  }-${  Date.now()}`
 
       const newCheck: CustomEnvironmentCheck = {
         id,
@@ -568,8 +572,8 @@ class EnvironmentCheckService {
       .toLowerCase()
       .trim()
       .replace(/\s+/g, '-')
-      .replace(/[^\w\-]+/g, '')
-      .replace(/\-\-+/g, '-')
+      .replace(/[^\w-]+/g, '')
+      .replace(/--+/g, '-')
       .replace(/^-+/, '')
       .replace(/-+$/, '')
   }

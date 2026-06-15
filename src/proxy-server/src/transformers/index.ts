@@ -34,15 +34,28 @@ registerBuiltinTransformers()
  */
 export function getTransformer(name?: string): Transformer {
   if (!name) {
-    return transformerRegistry.get('anthropic')!
+    return getTransformerByName('anthropic')
   }
 
   const transformer = transformerRegistry.get(name)
   if (!transformer) {
     console.warn(`转换器 "${name}" 不存在,使用默认转换器(anthropic)`)
-    return transformerRegistry.get('anthropic')!
+    return getTransformerByName('anthropic')
   }
 
+  return transformer
+}
+
+/**
+ * 根据名称从注册表获取转换器
+ * @param name 转换器名称
+ * @returns 转换器实例
+ */
+function getTransformerByName(name: string): Transformer {
+  const transformer = transformerRegistry.get(name)
+  if (!transformer) {
+    throw new Error(`默认转换器 "${name}" 未注册`)
+  }
   return transformer
 }
 

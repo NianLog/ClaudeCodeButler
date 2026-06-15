@@ -99,7 +99,7 @@ export interface ManagedModeConfig {
     port: number | string
   }
   /** settings.json配置数据（用于持久化用户在GUI/JSON编辑器中的修改） */
-  configData?: any
+  configData?: unknown
 }
 
 /**

@@ -53,20 +53,20 @@ export class GeminiTransformer extends BaseTransformer {
   /**
    * 转换请求格式
    */
-  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<any> {
-    const transformed: any = {}
+  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<unknown> {
+    const transformed: Record<string, unknown> = {}
 
     // 映射模型名称
     transformed.model = this.modelMapping[request.model] || 'gemini-1.5-pro'
 
     // Gemini使用contents而不是messages
-    transformed.contents = []
+    const contents: Array<Record<string, unknown>> = []
 
     // 转换消息格式
     if (request.messages) {
       for (const message of request.messages) {
-        const geminiContent: any = {
-          parts: [],
+        const geminiContent: Record<string, unknown> = {
+          parts: [] as Array<Record<string, unknown>>,
           role: this.mapRoleToGemini(message.role)
         }
 
@@ -74,42 +74,44 @@ export class GeminiTransformer extends BaseTransformer {
         if (Array.isArray(message.content)) {
           for (const part of message.content) {
             if (part.type === 'text') {
-              geminiContent.parts.push({
+              (geminiContent.parts as Array<Record<string, unknown>>).push({
                 text: part.text
               })
             } else if (part.type === 'image') {
               // 处理图像
-              geminiContent.parts.push({
+              const imgSource = part.source as { media_type: string; data: string }
+              ;(geminiContent.parts as Array<Record<string, unknown>>).push({
                 inline_data: {
-                  mime_type: part.source.media_type,
-                  data: part.source.data
+                  mime_type: imgSource.media_type,
+                  data: imgSource.data
                 }
               })
             }
           }
         } else if (typeof message.content === 'string') {
-          geminiContent.parts.push({
+          (geminiContent.parts as Array<Record<string, unknown>>).push({
             text: message.content
           })
         }
 
-        transformed.contents.push(geminiContent)
+        contents.push(geminiContent)
       }
     }
+    transformed.contents = contents
 
     // Gemini使用generationConfig而不是其他参数
     transformed.generationConfig = {}
 
     if (request.max_tokens) {
-      transformed.generationConfig.maxOutputTokens = request.max_tokens
+      transformed.generationConfig = { maxOutputTokens: request.max_tokens }
     }
 
     if (request.temperature !== undefined) {
-      transformed.generationConfig.temperature = request.temperature
+      transformed.generationConfig = { ...(transformed.generationConfig as object), temperature: request.temperature }
     }
 
     if (request.top_p !== undefined) {
-      transformed.generationConfig.topP = request.top_p
+      transformed.generationConfig = { ...(transformed.generationConfig as object), topP: request.top_p }
     }
 
     // Gemini使用safetySettings
@@ -139,7 +141,7 @@ export class GeminiTransformer extends BaseTransformer {
 
     // 流式传输
     if (request.stream) {
-      transformed.generationConfig.candidateCount = 1
+      transformed.generationConfig = { ...(transformed.generationConfig as object), candidateCount: 1 }
     }
 
     return transformed
@@ -148,41 +150,48 @@ export class GeminiTransformer extends BaseTransformer {
   /**
    * 转换响应格式
    */
-  async transformResponse(response: any, _provider: ApiProvider): Promise<ClaudeResponse> {
+  async transformResponse(response: unknown, _provider: ApiProvider): Promise<ClaudeResponse> {
+    const resp = response as Record<string, unknown>
+    const candidates = resp.candidates as Array<Record<string, unknown>> | undefined
+    const firstCandidate = candidates?.[0]
+    const usageMetadata = resp.usageMetadata as { promptTokenCount?: number; candidatesTokenCount?: number } | undefined
+
     const transformed: ClaudeResponse = {
       id: `msg_${Date.now()}`,
       type: 'message',
       role: 'assistant',
       content: [],
-      model: response.modelVersion || 'gemini-1.5-pro',
-      stop_reason: this.mapFinishReason(response.candidates?.[0]?.finishReason),
-      stop_sequence: response.candidates?.[0]?.finishMessage || null,
+      model: (resp.modelVersion as string) || 'gemini-1.5-pro',
+      stop_reason: this.mapFinishReason(firstCandidate?.finishReason as string | undefined),
+      stop_sequence: (firstCandidate?.finishMessage as string | null | undefined) || null,
       usage: {
-        input_tokens: response.usageMetadata?.promptTokenCount || 0,
-        output_tokens: response.usageMetadata?.candidatesTokenCount || 0
+        input_tokens: usageMetadata?.promptTokenCount || 0,
+        output_tokens: usageMetadata?.candidatesTokenCount || 0
       }
     }
 
     // Gemini响应格式处理
-    if (response.candidates && response.candidates.length > 0) {
-      const candidate = response.candidates[0]
+    if (candidates && candidates.length > 0) {
+      const candidate = candidates[0]
 
       // 处理内容
-      if (candidate.content && candidate.content.parts) {
-        for (const part of candidate.content.parts) {
+      const candidateContent = candidate.content as { parts?: Array<Record<string, unknown>> } | undefined
+      if (candidateContent && candidateContent.parts) {
+        for (const part of candidateContent.parts) {
           if (part.text) {
             transformed.content.push({
               type: 'text',
-              text: part.text
+              text: part.text as string
             })
           } else if (part.inline_data) {
             // 处理图像响应
+            const inlineData = part.inline_data as { mime_type?: string; data?: string }
             transformed.content.push({
               type: 'image',
               source: {
                 type: 'base64',
-                media_type: part.inline_data.mime_type,
-                data: part.inline_data.data
+                media_type: inlineData.mime_type,
+                data: inlineData.data
               }
             })
           }
@@ -190,8 +199,8 @@ export class GeminiTransformer extends BaseTransformer {
       }
 
       // 处理停止原因
-      transformed.stop_reason = this.mapFinishReason(candidate.finishReason)
-      transformed.stop_sequence = candidate.finishMessage
+      transformed.stop_reason = this.mapFinishReason(candidate.finishReason as string | undefined)
+      transformed.stop_sequence = (candidate.finishMessage as string | null | undefined) ?? null
 
       // 处理安全评级
       if (candidate.safetyRatings) {
@@ -200,15 +209,15 @@ export class GeminiTransformer extends BaseTransformer {
     }
 
     // 处理使用情况信息
-    if (response.usageMetadata) {
+    if (usageMetadata) {
       transformed.usage = {
-        input_tokens: response.usageMetadata.promptTokenCount || 0,
-        output_tokens: response.usageMetadata.candidatesTokenCount || 0
+        input_tokens: usageMetadata.promptTokenCount || 0,
+        output_tokens: usageMetadata.candidatesTokenCount || 0
       }
     }
 
     // Gemini版本信息
-    transformed.model = response.modelVersion || 'gemini-1.5-pro'
+    transformed.model = (resp.modelVersion as string) || 'gemini-1.5-pro'
 
     return transformed
   }
@@ -220,31 +229,33 @@ export class GeminiTransformer extends BaseTransformer {
     try {
       // Gemini的流式响应格式
       if (chunk.includes('"candidates"')) {
-        const parsed = JSON.parse(chunk)
+        const parsed = JSON.parse(chunk) as Record<string, unknown>
 
-        const transformed: any = {
+        const transformed: Record<string, unknown> = {
           candidates: []
         }
 
-        if (parsed.candidates && parsed.candidates.length > 0) {
-          const candidate = parsed.candidates[0]
-          const transformedCandidate: any = {
+        const parsedCandidates = parsed.candidates as Array<Record<string, unknown>> | undefined
+        if (parsedCandidates && parsedCandidates.length > 0) {
+          const candidate = parsedCandidates[0]
+          const transformedCandidate: Record<string, unknown> = {
             content: {
-              parts: []
+              parts: [] as Array<Record<string, unknown>>
             }
           }
 
-          if (candidate.content && candidate.content.parts) {
-            for (const part of candidate.content.parts) {
-              transformedCandidate.content.parts.push(part)
+          const candidateContent = candidate.content as { parts?: Array<Record<string, unknown>> } | undefined
+          if (candidateContent && candidateContent.parts) {
+            for (const part of candidateContent.parts) {
+              (transformedCandidate.content as { parts: Array<Record<string, unknown>> }).parts.push(part)
             }
           }
 
           if (candidate.finishReason) {
-            transformedCandidate.finishReason = this.mapFinishReason(candidate.finishReason)
+            transformedCandidate.finishReason = this.mapFinishReason(candidate.finishReason as string)
           }
 
-          transformed.candidates.push(transformedCandidate)
+          (transformed.candidates as Array<Record<string, unknown>>).push(transformedCandidate)
         }
 
         // 处理使用情况
@@ -265,38 +276,39 @@ export class GeminiTransformer extends BaseTransformer {
   /**
    * 转换错误格式
    */
-  transformError(error: any, _provider: ApiProvider): any {
+  transformError(error: unknown, _provider: ApiProvider): unknown {
+    const err = error as Record<string, unknown>
     // Gemini错误格式
-    if (error.error) {
-      const geminiError = error.error
+    if (err.error) {
+      const geminiError = err.error as Record<string, unknown>
 
-      const transformedError: any = {
+      const transformedError: Record<string, unknown> = {
         type: 'error',
         error: {
-          type: this.errorMapping[geminiError.status] || 'api_error',
-          message: geminiError.message || 'Gemini API error'
+          type: this.errorMapping[(geminiError.status as string) || ''] || 'api_error',
+          message: (geminiError.message as string) || 'Gemini API error'
         }
       }
 
       // 添加错误详情
       if (geminiError.status) {
-        transformedError.error.code = geminiError.status
+        (transformedError.error as Record<string, unknown>).code = geminiError.status
       }
 
-      if (geminiError.details && geminiError.details.length > 0) {
-        transformedError.error.details = geminiError.details
+      if (geminiError.details && (geminiError.details as unknown[]).length > 0) {
+        (transformedError.error as Record<string, unknown>).details = geminiError.details
       }
 
       return transformedError
     }
 
     // 标准HTTP错误
-    if (error.status) {
+    if (err.status) {
       return {
         type: 'error',
         error: {
-          type: this.mapHttpError(error.status),
-          message: error.statusText || error.message || 'Gemini API error'
+          type: this.mapHttpError(err.status as number),
+          message: (err.statusText as string) || (err.message as string) || 'Gemini API error'
         }
       }
     }
@@ -306,7 +318,7 @@ export class GeminiTransformer extends BaseTransformer {
       type: 'error',
       error: {
         type: 'api_error',
-        message: error.message || 'Unknown Gemini error'
+        message: (err.message as string) || 'Unknown Gemini error'
       }
     }
   }

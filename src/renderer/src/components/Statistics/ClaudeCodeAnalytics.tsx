@@ -86,7 +86,13 @@ const ClaudeCodeAnalytics: React.FC = () => {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [analytics, setAnalytics] = useState<ClaudeCodeAnalytics | null>(null)
-  const [versionInfo, setVersionInfo] = useState<any>(null)
+  const [versionInfo, setVersionInfo] = useState<{
+    current?: string | null
+    latest?: string | null
+    updateAvailable?: boolean
+    message?: string
+    changelog?: unknown
+  } | null>(null)
   const [versionLoading, setVersionLoading] = useState(false)
   const [updating, setUpdating] = useState(false)
 
@@ -264,7 +270,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
   /**
    * 模型使用表格列配置
    */
-  const modelColumns: ColumnsType<any> = [
+  const modelColumns: ColumnsType<ClaudeCodeAnalytics['modelStats'][number]> = [
     {
       title: t('claudeAnalytics.models.columns.name'),
       dataIndex: 'modelName',
@@ -320,7 +326,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
   /**
    * 项目使用表格列配置
    */
-  const projectColumns: ColumnsType<any> = [
+  const projectColumns: ColumnsType<ClaudeCodeAnalytics['projectStats'][number]> = [
     {
       title: t('claudeAnalytics.projects.columns.name'),
       dataIndex: 'projectName',
@@ -498,7 +504,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
                   loading={updating}
                   onClick={handleUpdate}
                 >
-                  {t('claudeAnalytics.version.updateTo', { version: versionInfo.latest })}
+                  {t('claudeAnalytics.version.updateTo', { version: versionInfo.latest ?? '' })}
                 </Button>
               )}
               {versionInfo.current && !versionInfo.updateAvailable && (

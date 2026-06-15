@@ -157,20 +157,20 @@ release-installer/
 *.tmp
 temp/
 logs/
-tests/
-!tests/
-!tests/**
 test-*.js
 test-*.sh
 debug.log
 # package-lock.json - 允许提交以支持CI/CD
 
-#AI Tools config
+# AI Tools config (保持私有，不纳入版本控制)
 GEMINI.md
 AGENTS.md
 CLAUDE.md
 tools/
 web/
+
+# 项目内部文档资料（仅本地维护，不上传仓库）
+# 保留根目录 README.md / README_CN.md（项目介绍）与 CHANGELOG.md（版本记录）对外公开
 docs/
 **/README.md
 !/README.md

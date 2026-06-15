@@ -103,7 +103,7 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
 
       const promises = PREDEFINED_CHECKS.map((item) =>
         window.electronAPI.environment.checkPredefined(item.type)
-          .then((result: any) => {
+          .then((result: { success?: boolean; data?: EnvironmentCheckResult; error?: string }) => {
             if (result?.success && result.data) {
               updateResult(result.data)
             } else {
@@ -119,13 +119,13 @@ export const useEnvironmentCheckStore = create<EnvironmentCheckState>((set, get)
               } as EnvironmentCheckResult)
             }
           })
-          .catch((error: any) => {
+          .catch((error: unknown) => {
             updateResult({
               id: item.id,
               name: item.name,
               type: item.type,
               status: EnvironmentCheckStatus.ERROR,
-              error: String(error),
+              error: error instanceof Error ? error.message : String(error),
               lastCheckTime: new Date(),
               icon: item.icon,
               isCustom: false

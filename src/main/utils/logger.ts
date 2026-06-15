@@ -72,10 +72,10 @@ class Logger {
    * 安全地序列化数据
    * 处理循环引用、BigInt、特殊对象等
    */
-  private safeStringify(data: any): string {
+  private safeStringify(data: unknown): string {
     const seen = new WeakSet()
 
-    const stringify = (obj: any): string => {
+    const stringify = (obj: unknown): string => {
       try {
         // 处理Error对象
         if (obj instanceof Error) {
@@ -123,7 +123,7 @@ class Logger {
   /**
    * 格式化日志消息
    */
-  private formatMessage(level: string, message: string, data?: any): string {
+  private formatMessage(level: string, message: string, data?: unknown): string {
     const timestamp = new Date().toISOString()
     const hasData = data !== undefined && data !== null && data !== ''
     const dataStr = hasData ? ` ${this.safeStringify(data)}` : ''
@@ -133,7 +133,7 @@ class Logger {
   /**
    * 写入日志到文件
    */
-  private writeToFile(level: string, message: string, data?: any): void {
+  private writeToFile(level: string, message: string, data?: unknown): void {
     try {
       const formattedMessage = `${this.formatMessage(level, message, data)}\n`
       writeFileSync(this.logFile, formattedMessage, {
@@ -148,7 +148,7 @@ class Logger {
   /**
    * 通用日志方法
    */
-  private log(level: LogLevel, levelName: string, message: string, data?: any): void {
+  private log(level: LogLevel, levelName: string, message: string, data?: unknown): void {
     if (level < this.logLevel) {
       return
     }
@@ -246,28 +246,28 @@ class Logger {
   /**
    * 调试日志
    */
-  debug(message: string, data?: any): void {
+  debug(message: string, data?: unknown): void {
     this.log(LogLevel.DEBUG, 'DEBUG', message, data)
   }
 
   /**
    * 信息日志
    */
-  info(message: string, data?: any): void {
+  info(message: string, data?: unknown): void {
     this.log(LogLevel.INFO, 'INFO', message, data)
   }
 
   /**
    * 警告日志
    */
-  warn(message: string, data?: any): void {
+  warn(message: string, data?: unknown): void {
     this.log(LogLevel.WARN, 'WARN', message, data)
   }
 
   /**
    * 错误日志
    */
-  error(message: string, error?: Error | any): void {
+  error(message: string, error?: unknown): void {
     let errorData = error
     if (error instanceof Error) {
       errorData = {
@@ -348,19 +348,19 @@ class ChildLogger {
     return `[${this.context}] ${message}`
   }
 
-  debug(message: string, data?: any): void {
+  debug(message: string, data?: unknown): void {
     this.parent.debug(this.formatMessage(message), data)
   }
 
-  info(message: string, data?: any): void {
+  info(message: string, data?: unknown): void {
     this.parent.info(this.formatMessage(message), data)
   }
 
-  warn(message: string, data?: any): void {
+  warn(message: string, data?: unknown): void {
     this.parent.warn(this.formatMessage(message), data)
   }
 
-  error(message: string, error?: Error | any): void {
+  error(message: string, error?: unknown): void {
     this.parent.error(this.formatMessage(message), error)
   }
 

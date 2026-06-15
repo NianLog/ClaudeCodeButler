@@ -1,6 +1,11 @@
 /**
  * 现代化布局组件
  * 采用现代桌面应用设计模式，提供更好的用户体验
+ *
+ * 说明：自原生标题栏启用后，应用不再渲染自定义 header（避免与原生窗口控件重复）。
+ * 原有的 header 工具栏（搜索、主题切换、刷新、通知、帮助等）被重新组织：
+ *   - 搜索栏、刷新、通知、帮助/用户菜单 -> Content 顶部工具栏
+ *   - 主题切换、侧边栏收起 -> 侧边栏 footer
  */
 
 import React, { useState, useEffect } from 'react'
@@ -8,9 +13,6 @@ import { Layout, Button, Space, Badge, Tooltip, Dropdown, Avatar, Typography } f
 import {
   BellOutlined,
   SettingOutlined,
-  MinusOutlined,
-  BorderOutlined,
-  CloseOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   QuestionCircleOutlined,
@@ -45,7 +47,7 @@ import UpdateModal from '../Common/UpdateModal'
 import type { VersionInfo } from '../../services/version-service'
 import './ModernLayout.css'
 
-const { Header: AntHeader, Sider, Content } = Layout
+const { Sider, Content } = Layout
 const { Text } = Typography
 
 /**
@@ -80,8 +82,25 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
   // 使用默认值防止设置未加载时出现错误
   const { startupCheckUpdate = true, silentUpdateCheck = true } = notificationSettings || {}
 
-  const [searchVisible, setSearchVisible] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
   const [updateModalVisible, setUpdateModalVisible] = useState(false)
+  // v2.0：托管模式状态（用于侧边栏导航项状态标签高亮）
+  const [managedModeActive, setManagedModeActive] = useState(false)
+
+  // 查询托管模式状态（activeMainTab 变化时刷新，确保在托管面板启用后返回其他页能看到状态标签）
+  useEffect(() => {
+    const checkManagedMode = async () => {
+      try {
+        const result = await window.electronAPI.managedMode?.isEnabled()
+        if (result?.success) {
+          setManagedModeActive(result.enabled)
+        }
+      } catch {
+        // ignore — 托管模式 API 可能在初始化前不可用
+      }
+    }
+    void checkManagedMode()
+  }, [activeMainTab])
   const [updateInfo, setUpdateInfo] = useState<{
     currentVersion: string
     latestVersion: string
@@ -157,19 +176,6 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     }
   }, [startupCheckUpdate, silentUpdateCheck, addNotification])
 
-  // 窗口控制操作
-  const handleMinimize = () => {
-    window.electronAPI.window.minimize()
-  }
-
-  const handleMaximize = () => {
-    window.electronAPI.window.maximize()
-  }
-
-  const handleClose = () => {
-    window.electronAPI.window.close()
-  }
-
   // 主题切换
   const handleThemeToggle = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light'
@@ -224,6 +230,13 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
       setCheckingUpdate(false)
     }
   }
+
+  // 监听原生菜单"帮助 → 检查更新"事件，复用渲染层检查流程
+  useEffect(() => {
+    window.electronAPI.menu.onCheckUpdate(() => {
+      void handleCheckUpdate()
+    })
+  }, [])
 
   // 处理更新
   const handleUpdate = async (downloadUrl: string) => {
@@ -443,10 +456,46 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                     className={`nav-item ${activeMainTab === 'managed-mode' ? 'active' : ''}`}
                     onClick={() => setActiveMainTab('managed-mode')}
                   >
-                    <div className="nav-icon">
+                    <div className="nav-icon" style={{ position: 'relative' }}>
                       <ApiOutlined />
+                      {managedModeActive && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: -2,
+                            right: -2,
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: '#52c41a',
+                            border: '1.5px solid var(--ccb-sidebar-bg, #001529)'
+                          }}
+                        />
+                      )}
                     </div>
-                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.managedMode')}</span>}
+                    {!sidebarCollapsed && (
+                      <span
+                        className="nav-label"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        {t('layout.nav.managedMode')}
+                        {managedModeActive && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              lineHeight: '16px',
+                              color: '#52c41a',
+                              fontWeight: 600,
+                              padding: '0 4px',
+                              background: 'rgba(82, 196, 26, 0.15)',
+                              borderRadius: 3
+                            }}
+                          >
+                            ON
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </div>
                 </>
               )}
@@ -469,17 +518,33 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
           </div>
         </div>
 
+        {/* 侧边栏底部：主题切换 + 收起按钮 */}
         <div className="sidebar-footer">
-          <div className="sidebar-toggle" onClick={toggleSidebar}>
-            {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          <div className="sidebar-footer-actions">
+            <Tooltip title={theme === 'light' ? t('layout.tooltip.themeDark') : t('layout.tooltip.themeLight')}>
+              <Button
+                type="text"
+                className="sidebar-footer-btn"
+                icon={theme === 'light' ? <MoonOutlined /> : <SunOutlined />}
+                onClick={handleThemeToggle}
+              />
+            </Tooltip>
+            <Tooltip title={sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')}>
+              <Button
+                type="text"
+                className="sidebar-footer-btn"
+                icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={toggleSidebar}
+              />
+            </Tooltip>
           </div>
         </div>
       </Sider>
 
       <Layout className="modern-main">
-        {/* 现代化头部 */}
-        <AntHeader className="modern-header">
-          <div className="header-left">
+        {/* Content 顶部工具栏（替代被移除的自定义 header） */}
+        <div className="content-toolbar">
+          <div className="toolbar-left">
             <div className="breadcrumb">
               <Text className="breadcrumb-item">
                 {activeMainTab === 'configs' && t('layout.breadcrumb.configs')}
@@ -509,31 +574,20 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
             </div>
           </div>
 
-          <div className="header-center">
-            {searchVisible && (
-              <div className="search-container">
-                <div className="search-input-wrapper">
-                  <SearchOutlined className="search-icon" />
-                  <input
-                    type="text"
-                    placeholder={t('layout.search.placeholder')}
-                    className="search-input"
-                    autoFocus
-                  />
-                </div>
-                <Button
-                  type="text"
-                  size="small"
-                  onClick={() => setSearchVisible(false)}
-                >
-                  ✕
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <div className="header-right">
+          <div className="toolbar-right">
             <Space size="small">
+              {/* 搜索 */}
+              <div className="toolbar-search">
+                <SearchOutlined className="toolbar-search-icon" />
+                <input
+                  type="text"
+                  placeholder={t('layout.search.placeholder')}
+                  className="toolbar-search-input"
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                />
+              </div>
+
               {/* 全局刷新 */}
               <Tooltip title={t('layout.tooltip.refreshAll')}>
                 <Button
@@ -543,29 +597,11 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 />
               </Tooltip>
 
-              {/* 搜索按钮 */}
-              <Tooltip title={t('common.search')}>
-                <Button
-                  type="text"
-                  icon={<SearchOutlined />}
-                  onClick={() => setSearchVisible(!searchVisible)}
-                />
-              </Tooltip>
-
               {/* 通知 */}
               <Tooltip title={t('layout.tooltip.notifications')}>
                 <Badge count={notifications.length} size="small">
                   <Button type="text" icon={<BellOutlined />} />
                 </Badge>
-              </Tooltip>
-
-              {/* 主题切换 */}
-              <Tooltip title={theme === 'light' ? t('layout.tooltip.themeDark') : t('layout.tooltip.themeLight')}>
-                <Button
-                  type="text"
-                  icon={theme === 'light' ? <MoonOutlined /> : <SunOutlined />}
-                  onClick={handleThemeToggle}
-                />
               </Tooltip>
 
               {/* 帮助菜单 */}
@@ -585,38 +621,9 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
               >
                 <Avatar size="small" icon={<UserOutlined />} />
               </Dropdown>
-
-              {/* 窗口控制 */}
-              <div className="window-controls">
-                <Tooltip title={t('layout.window.minimize')}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<MinusOutlined />}
-                    onClick={handleMinimize}
-                  />
-                </Tooltip>
-                <Tooltip title={t('layout.window.maximize')}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<BorderOutlined />}
-                    onClick={handleMaximize}
-                  />
-                </Tooltip>
-                <Tooltip title={t('layout.window.close')}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CloseOutlined />}
-                    onClick={handleClose}
-                    danger
-                  />
-                </Tooltip>
-              </div>
             </Space>
           </div>
-        </AntHeader>
+        </div>
 
         {/* 主内容区域 */}
         <Content className="modern-content">

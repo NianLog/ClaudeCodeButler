@@ -43,7 +43,7 @@ export class OptimizedFileWatcher extends EventEmitter {
       // 创建文件监控实例，优化配置
       this.watcher = chokidar.watch(this.watchPath, {
         ignored: [
-          /(^|[\/\\])\../,  // 忽略隐藏文件
+          /(^|[/\\])\../,  // 忽略隐藏文件
           /node_modules/,
           /.*\.log$/,
           /.*\.tmp$/,

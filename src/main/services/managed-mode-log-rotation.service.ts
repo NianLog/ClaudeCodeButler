@@ -29,7 +29,7 @@ export interface LogEntry {
     statusCode?: number
     duration?: number
     headers?: Record<string, string>
-    body?: any
+    body?: unknown
     error?: string
   }
   source?: string
@@ -116,8 +116,8 @@ export class ManagedModeLogRotationService {
       await this.checkAndRotateIfNeeded()
 
       logger.info('[ManagedModeLogRotation] 服务初始化完成')
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 初始化失败:', error.message)
+    } catch (error: unknown) {
+      logger.error('[ManagedModeLogRotation] 初始化失败:', error instanceof Error ? error.message : String(error))
       throw error
     }
   }
@@ -146,9 +146,10 @@ export class ManagedModeLogRotationService {
       logger.info(`[ManagedModeLogRotation] 成功持久化 ${logs.length} 条日志`)
 
       return { success: true, rotated: shouldRotate }
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 持久化日志失败:', error.message)
-      return { success: false, rotated: false, error: error.message }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error('[ManagedModeLogRotation] 持久化日志失败:', errorMessage)
+      return { success: false, rotated: false, error: errorMessage }
     }
   }
 
@@ -183,8 +184,8 @@ export class ManagedModeLogRotationService {
       }
 
       return false
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 检查轮转条件失败:', error.message)
+    } catch (error: unknown) {
+      logger.error('[ManagedModeLogRotation] 检查轮转条件失败:', error instanceof Error ? error.message : String(error))
       return false
     }
   }
@@ -218,10 +219,10 @@ export class ManagedModeLogRotationService {
 
       // 异步清理过期日志（不阻塞）
       this.cleanupOldLogs().catch(error => {
-        logger.error('[ManagedModeLogRotation] 清理过期日志失败:', error.message)
+        logger.error('[ManagedModeLogRotation] 清理过期日志失败:', error instanceof Error ? error.message : String(error))
       })
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 轮转日志文件失败:', error.message)
+    } catch (error: unknown) {
+      logger.error('[ManagedModeLogRotation] 轮转日志文件失败:', error instanceof Error ? error.message : String(error))
       throw error
     } finally {
       this.isRotating = false
@@ -248,8 +249,8 @@ export class ManagedModeLogRotationService {
 
       // 写入文件
       await fs.writeFile(filepath, JSON.stringify(mergedLogs, null, 2), 'utf-8')
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 追加日志到文件失败:', error.message)
+    } catch (error: unknown) {
+      logger.error('[ManagedModeLogRotation] 追加日志到文件失败:', error instanceof Error ? error.message : String(error))
       throw error
     }
   }
@@ -282,8 +283,8 @@ export class ManagedModeLogRotationService {
           logger.info(`[ManagedModeLogRotation] 已删除过期日志: ${file}`)
         }
       }
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 清理过期日志失败:', error.message)
+    } catch (error: unknown) {
+      logger.error('[ManagedModeLogRotation] 清理过期日志失败:', error instanceof Error ? error.message : String(error))
       throw error
     }
   }
@@ -308,8 +309,8 @@ export class ManagedModeLogRotationService {
       if (stats.size >= this.config.maxFileSizeBytes) {
         await this.rotateLogFile()
       }
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 检查轮转失败:', error.message)
+    } catch (error: unknown) {
+      logger.error('[ManagedModeLogRotation] 检查轮转失败:', error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -360,8 +361,8 @@ export class ManagedModeLogRotationService {
 
       // 按时间倒序排列
       return metadata.sort((a, b) => b.timestamp - a.timestamp)
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 获取日志文件列表失败:', error.message)
+    } catch (error: unknown) {
+      logger.error('[ManagedModeLogRotation] 获取日志文件列表失败:', error instanceof Error ? error.message : String(error))
       return []
     }
   }
@@ -376,8 +377,8 @@ export class ManagedModeLogRotationService {
       const filepath = this.resolveLogFilePath(filename)
       const content = await fs.readFile(filepath, 'utf-8')
       return content.trim() ? JSON.parse(content) : []
-    } catch (error: any) {
-      logger.error(`[ManagedModeLogRotation] 读取日志文件失败: ${filename}`, error.message)
+    } catch (error: unknown) {
+      logger.error(`[ManagedModeLogRotation] 读取日志文件失败: ${filename}`, error instanceof Error ? error.message : String(error))
       return []
     }
   }
@@ -407,8 +408,8 @@ export class ManagedModeLogRotationService {
 
       // 按时间排序
       return result.sort((a, b) => b.timestamp - a.timestamp)
-    } catch (error: any) {
-      logger.error('[ManagedModeLogRotation] 按时间范围查询日志失败:', error.message)
+    } catch (error: unknown) {
+      logger.error('[ManagedModeLogRotation] 按时间范围查询日志失败:', error instanceof Error ? error.message : String(error))
       return []
     }
   }

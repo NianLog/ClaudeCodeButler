@@ -10,7 +10,7 @@ export interface OldConfigFormat {
   name: string
   description?: string
   type: string
-  content: any
+  content: unknown
   isActive?: boolean
 }
 
@@ -18,7 +18,7 @@ export interface NewConfigFormat {
   name: string
   description: string
   type: string
-  content: any
+  content: unknown
   isActive: boolean
   created: string
   lastModified: string
@@ -31,16 +31,18 @@ export class ConfigMigrationService {
   /**
    * 检查配置文件是否为旧格式
    */
-  static isOldFormat(config: any): config is OldConfigFormat {
+  static isOldFormat(config: unknown): config is OldConfigFormat {
+    if (config === null || typeof config !== 'object') {
+      return false
+    }
+    const obj = config as Record<string, unknown>
     return (
-      config &&
-      typeof config === 'object' &&
       'name' in config &&
       'type' in config &&
       'content' in config &&
       !('_metadata' in config) &&
       // 确保不是新的多层JSON格式
-      !(config.name && config.type && config.content !== undefined && config.isActive !== undefined)
+      !(obj.name && obj.type && obj.content !== undefined && obj.isActive !== undefined)
     )
   }
 

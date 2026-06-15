@@ -43,7 +43,7 @@ export class OpenRouterTransformer extends BaseTransformer {
   /**
    * 转换请求格式
    */
-  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<any> {
+  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<unknown> {
     const transformed = this.clone(request)
 
     // 映射模型名称
@@ -56,9 +56,10 @@ export class OpenRouterTransformer extends BaseTransformer {
     // OpenRouter支持stream参数，与Claude兼容
     // 不需要额外转换
 
-    // OpenRouter的max_tokens处理
-    if (transformed.max_tokens && typeof transformed.max_tokens === 'number') {
-      // OpenRouter的max_tokens应该是正数
+    // OpenRouter的max_tokens处理：保证为正数
+    // 注意：判断条件必须使用 typeof，否则 max_tokens=0 会被 falsy 短路跳过，
+    // 导致无效的 0 值透传到上游（边界缺陷修复）。
+    if (typeof transformed.max_tokens === 'number') {
       transformed.max_tokens = Math.max(1, transformed.max_tokens)
     }
 
@@ -68,26 +69,30 @@ export class OpenRouterTransformer extends BaseTransformer {
   /**
    * 转换响应格式
    */
-  async transformResponse(response: any, _provider: ApiProvider): Promise<ClaudeResponse> {
+  async transformResponse(response: unknown, _provider: ApiProvider): Promise<ClaudeResponse> {
+    const resp = response as Record<string, unknown>
+    const choices = resp.choices as Array<Record<string, unknown>> | undefined
+    const firstChoice = choices?.[0]
+    const usage = resp.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
     // OpenRouter响应格式基本与OpenAI兼容
     const transformed: ClaudeResponse = {
-      id: response.id || `msg_${Date.now()}`,
+      id: (resp.id as string) || `msg_${Date.now()}`,
       type: 'message',
       role: 'assistant',
       content: [],
-      model: response.model || 'openrouter-default',
-      stop_reason: this.mapStopReason(response.choices?.[0]?.finish_reason),
-      stop_sequence: response.choices?.[0]?.stop_sequence || null,
+      model: (resp.model as string) || 'openrouter-default',
+      stop_reason: this.mapStopReason(firstChoice?.finish_reason as string | undefined),
+      stop_sequence: (firstChoice?.stop_sequence as string | null | undefined) || null,
       usage: {
-        input_tokens: response.usage?.prompt_tokens || 0,
-        output_tokens: response.usage?.completion_tokens || 0
+        input_tokens: usage?.prompt_tokens || 0,
+        output_tokens: usage?.completion_tokens || 0
       }
     }
 
     // 处理内容
-    if (response.choices && response.choices.length > 0) {
-      const choice = response.choices[0]
-      const message = choice.message || {}
+    if (choices && choices.length > 0) {
+      const choice = choices[0]
+      const message = (choice.message as Record<string, unknown>) || {}
 
       // 确保role总是'assistant'
       transformed.role = 'assistant'
@@ -101,44 +106,46 @@ export class OpenRouterTransformer extends BaseTransformer {
           }]
         } else if (Array.isArray(message.content)) {
           // 处理多模态内容
-          transformed.content = message.content.map((item: any) => {
+          transformed.content = (message.content as Array<Record<string, unknown>>).map((item: Record<string, unknown>) => {
             if (item.type === 'text') {
               return {
                 type: 'text',
-                text: item.text
+                text: item.text as string
               }
             } else if (item.type === 'image_url') {
+              const imageUrl = item.image_url as { url?: string } | undefined
+              const url = imageUrl?.url || ''
               return {
                 type: 'image',
                 source: {
                   type: 'base64',
-                  media_type: item.image_url?.url?.startsWith('data:') ?
-                    item.image_url.url.split(':')[1].split(';')[0] : 'image/jpeg',
-                  data: item.image_url?.url?.split(',')[1] || ''
+                  media_type: url.startsWith('data:') ?
+                    url.split(':')[1].split(';')[0] : 'image/jpeg',
+                  data: url.split(',')[1] || ''
                 }
               }
             }
             return item
-          }).filter(Boolean)
+          }).filter(Boolean) as Array<{ type: string; text?: string; [key: string]: unknown }>
         }
       }
 
       // 设置停止原因
-      transformed.stop_reason = this.mapStopReason(choice.finish_reason)
-      transformed.stop_sequence = choice.stop_sequence
+      transformed.stop_reason = this.mapStopReason(choice.finish_reason as string | undefined)
+      transformed.stop_sequence = (choice.stop_sequence as string | null | undefined) ?? null
     }
 
     // 处理使用情况信息
-    if (response.usage) {
+    if (usage) {
       transformed.usage = {
-        input_tokens: response.usage.prompt_tokens || 0,
-        output_tokens: response.usage.completion_tokens || 0
+        input_tokens: usage.prompt_tokens || 0,
+        output_tokens: usage.completion_tokens || 0
       }
     }
 
     // 保留OpenRouter特定的元数据
-    if (response.model) {
-      transformed.model = response.model
+    if (resp.model) {
+      transformed.model = resp.model as string
     }
 
     return transformed
@@ -157,25 +164,27 @@ export class OpenRouterTransformer extends BaseTransformer {
           return 'data: [DONE]\n\n'
         }
 
-        const parsed = JSON.parse(data)
-        const transformed: any = {}
+        const parsed = JSON.parse(data) as Record<string, unknown>
+        const transformed: Record<string, unknown> = {}
 
         // 处理choices
-        if (parsed.choices && parsed.choices.length > 0) {
-          const choice = parsed.choices[0]
+        const parsedChoices = parsed.choices as Array<Record<string, unknown>> | undefined
+        if (parsedChoices && parsedChoices.length > 0) {
+          const choice = parsedChoices[0]
           transformed.choices = [{
             index: choice.index,
             delta: choice.delta || {},
-            finish_reason: this.mapStopReason(choice.finish_reason)
+            finish_reason: this.mapStopReason(choice.finish_reason as string | undefined)
           }]
         }
 
         // 处理usage（通常在最后一个chunk中）
-        if (parsed.usage) {
+        const parsedUsage = parsed.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
+        if (parsedUsage) {
           transformed.usage = {
-            prompt_tokens: parsed.usage.prompt_tokens,
-            completion_tokens: parsed.usage.completion_tokens,
-            total_tokens: parsed.usage.total_tokens
+            prompt_tokens: parsedUsage.prompt_tokens,
+            completion_tokens: parsedUsage.completion_tokens,
+            total_tokens: parsedUsage.total_tokens
           }
         }
 
@@ -201,39 +210,40 @@ export class OpenRouterTransformer extends BaseTransformer {
   /**
    * 转换错误格式
    */
-  transformError(error: any, _provider: ApiProvider): any {
+  transformError(error: unknown, _provider: ApiProvider): unknown {
+    const err = error as Record<string, unknown>
     // OpenRouter错误格式
-    if (error.error) {
-      const openRouterError = error.error
+    if (err.error) {
+      const openRouterError = err.error as Record<string, unknown>
 
-      const transformedError: any = {
+      const transformedError: Record<string, unknown> = {
         type: 'error',
         error: {
-          type: this.errorMapping[openRouterError.type] || 'api_error',
-          message: openRouterError.message || 'OpenRouter API error'
+          type: this.errorMapping[(openRouterError.type as string) || ''] || 'api_error',
+          message: (openRouterError.message as string) || 'OpenRouter API error'
         }
       }
 
       // 添加错误详情
       if (openRouterError.code) {
-        transformedError.error.code = openRouterError.code
+        (transformedError.error as Record<string, unknown>).code = openRouterError.code
       }
 
       // 添加使用限制信息
       if (openRouterError.ratelimit) {
-        transformedError.error.ratelimit = openRouterError.ratelimit
+        (transformedError.error as Record<string, unknown>).ratelimit = openRouterError.ratelimit
       }
 
       return transformedError
     }
 
     // 标准HTTP错误
-    if (error.status) {
+    if (err.status) {
       return {
         type: 'error',
         error: {
-          type: this.mapHttpError(error.status),
-          message: error.statusText || error.message || 'OpenRouter API error'
+          type: this.mapHttpError(err.status as number),
+          message: (err.statusText as string) || (err.message as string) || 'OpenRouter API error'
         }
       }
     }
@@ -243,7 +253,7 @@ export class OpenRouterTransformer extends BaseTransformer {
       type: 'error',
       error: {
         type: 'api_error',
-        message: error.message || 'Unknown OpenRouter error'
+        message: (err.message as string) || 'Unknown OpenRouter error'
       }
     }
   }

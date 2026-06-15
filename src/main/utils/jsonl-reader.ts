@@ -41,7 +41,7 @@ export interface JsonlReadResult<T> {
  * @param options 读取选项
  * @returns Promise<JsonlReadResult>
  */
-export async function readJsonlFile<T = any>(
+export async function readJsonlFile<T = unknown>(
   filePath: string,
   handler?: JsonlLineHandler<T>,
   options: JsonlReadOptions = {}
@@ -185,7 +185,7 @@ export async function readJsonlFile<T = any>(
  * @param extractor 信息提取函数
  * @returns Promise<统计结果>
  */
-export async function getJsonlStats<T = any, R = any>(
+export async function getJsonlStats<T = unknown, R = unknown>(
   filePath: string,
   extractor: (line: T, stats: R) => R,
   initialStats: R
@@ -236,7 +236,7 @@ export async function getJsonlStats<T = any, R = any>(
  * @param filePath JSONL文件路径
  * @returns Promise<T | null>
  */
-export async function readFirstJsonlLine<T = any>(filePath: string): Promise<T | null> {
+export async function readFirstJsonlLine<T = unknown>(filePath: string): Promise<T | null> {
   return new Promise((resolve) => {
     const fileStream = fs.createReadStream(filePath, {
       encoding: 'utf8',

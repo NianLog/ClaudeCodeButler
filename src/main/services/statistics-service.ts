@@ -32,7 +32,7 @@ export enum StatEventType {
 export interface StatEvent {
   type: StatEventType
   timestamp: number
-  data?: any
+  data?: Record<string, unknown>
 }
 
 /**
@@ -192,7 +192,7 @@ export class StatisticsService {
   /**
    * 记录事件
    */
-  public recordEvent(type: StatEventType, data?: any): void {
+  public recordEvent(type: StatEventType, data?: Record<string, unknown>): void {
     const event: StatEvent = {
       type,
       timestamp: Date.now(),
@@ -228,12 +228,12 @@ export class StatisticsService {
     const statsMap = new Map<string, ConfigUsageStats>()
 
     for (const event of configEvents) {
-      const configPath = event.data?.configPath || event.data?.path
+      const configPath = (event.data?.configPath ?? event.data?.path) as string | undefined
       if (!configPath) continue
 
       if (!statsMap.has(configPath)) {
         statsMap.set(configPath, {
-          configName: event.data?.configName || path.basename(configPath),
+          configName: (event.data?.configName as string) || path.basename(configPath),
           configPath,
           switchCount: 0,
           lastUsed: 0,
@@ -242,7 +242,8 @@ export class StatisticsService {
         })
       }
 
-      const stats = statsMap.get(configPath)!
+      const stats = statsMap.get(configPath)
+      if (!stats) continue
 
       if (event.type === StatEventType.CONFIG_SWITCH) {
         stats.switchCount++
@@ -275,13 +276,13 @@ export class StatisticsService {
     const statsMap = new Map<string, RuleExecutionStats>()
 
     for (const event of ruleEvents) {
-      const ruleId = event.data?.ruleId
+      const ruleId = event.data?.ruleId as string | undefined
       if (!ruleId) continue
 
       if (!statsMap.has(ruleId)) {
         statsMap.set(ruleId, {
           ruleId,
-          ruleName: event.data?.ruleName || ruleId,
+          ruleName: (event.data?.ruleName as string) || ruleId,
           totalExecutions: 0,
           successCount: 0,
           failureCount: 0,
@@ -290,15 +291,17 @@ export class StatisticsService {
         })
       }
 
-      const stats = statsMap.get(ruleId)!
+      const stats = statsMap.get(ruleId)
+      if (!stats) continue
 
       if (event.type === StatEventType.RULE_EXECUTE) {
         stats.totalExecutions++
         stats.lastExecuted = Math.max(stats.lastExecuted, event.timestamp)
       } else if (event.type === StatEventType.RULE_SUCCESS) {
         stats.successCount++
-        if (event.data?.duration) {
-          stats.avgDuration = (stats.avgDuration * (stats.successCount - 1) + event.data.duration) / stats.successCount
+        const duration = event.data?.duration as number | undefined
+        if (duration) {
+          stats.avgDuration = (stats.avgDuration * (stats.successCount - 1) + duration) / stats.successCount
         }
       } else if (event.type === StatEventType.RULE_FAILURE) {
         stats.failureCount++

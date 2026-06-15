@@ -12,6 +12,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { logger } from '../utils/logger'
+import { resolveSafeChildPath } from '../utils/path-security'
 import { spawn } from 'child_process'
 import { readJsonlFile, getJsonlStats, readFirstJsonlLine } from '../utils/jsonl-reader'
 import { terminalManagementService } from './terminal-management-service'
@@ -55,7 +56,7 @@ export interface ConversationMessage {
   parentUuid?: string
   type: 'user' | 'assistant' | 'system' | 'summary' | 'file-history-snapshot'
   timestamp: string
-  content?: any
+  content?: unknown
   role?: string
   model?: string
   usage?: {
@@ -66,6 +67,30 @@ export interface ConversationMessage {
   }
   costUSD?: number
   durationMs?: number
+}
+
+/**
+ * JSONL 日志中单条消息的原始结构
+ * @description 用于解析 Claude Code 项目历史会话文件，仅声明服务需要访问的字段
+ */
+interface ClaudeCodeLogMessage {
+  sessionId?: string
+  cwd?: string
+  timestamp?: string
+  type?: string
+  message?: {
+    model?: string
+    content?: unknown
+    role?: string
+    usage?: {
+      input_tokens?: number
+      output_tokens?: number
+    }
+    costUSD?: number
+    durationMs?: number
+  }
+  uuid?: string
+  parentUuid?: string
 }
 
 /**
@@ -236,7 +261,7 @@ class ProjectManagementService {
     }
 
     const result = await this.withTemporaryCopy(filePath, (safePath) =>
-      getJsonlStats<any, Stats>(
+      getJsonlStats<ClaudeCodeLogMessage, Stats>(
         safePath,
         (message, stats) => {
         stats.messageCount++
@@ -293,7 +318,7 @@ class ProjectManagementService {
 
       // 读取第一个文件的第一行获取cwd
       const firstLine = await this.withTemporaryCopy(jsonlFiles[0], (safePath) =>
-        readFirstJsonlLine<any>(safePath)
+        readFirstJsonlLine<ClaudeCodeLogMessage>(safePath)
       )
       return firstLine?.cwd || null
     } catch (error) {
@@ -308,7 +333,8 @@ class ProjectManagementService {
     try {
       logger.info(`获取项目会话列表: ${projectId}`)
 
-      const projectDir = path.join(this.claudeProjectsDir, projectId)
+      // 校验 projectId 防止路径穿越（如 ../../../../etc/passwd），超出 projects 目录直接拒绝
+      const projectDir = resolveSafeChildPath(this.claudeProjectsDir, projectId, '项目路径')
       if (!fs.existsSync(projectDir)) {
         logger.warn(`项目目录不存在: ${projectDir}`)
         return []
@@ -355,7 +381,7 @@ class ProjectManagementService {
     }
 
     const result = await this.withTemporaryCopy(jsonlFile, (safePath) =>
-      getJsonlStats<any, SessionInfo>(
+      getJsonlStats<ClaudeCodeLogMessage, SessionInfo>(
         safePath,
         (message, info) => {
         info.messageCount++
@@ -379,7 +405,7 @@ class ProjectManagementService {
 
         // 提取摘要
         if (message.type === 'summary' && message.message?.content) {
-          info.summary = message.message.content
+          info.summary = typeof message.message.content === 'string' ? message.message.content : JSON.stringify(message.message.content)
         }
 
         // 统计Token
@@ -436,14 +462,12 @@ class ProjectManagementService {
     try {
       logger.info(`加载会话对话: ${projectId}/${sessionId}`)
 
-      const projectDir = path.join(this.claudeProjectsDir, projectId)
+      // 校验 projectId 防止路径穿越；sessionId 不参与路径拼接，仅用于 basename 匹配
+      const projectDir = resolveSafeChildPath(this.claudeProjectsDir, projectId, '项目路径')
       const jsonlFiles = await this.getJsonlFiles(projectDir)
 
-      // 找到对应的JSONL文件
-      const sessionFile = jsonlFiles.find(file => {
-        const fileName = path.basename(file, '.jsonl')
-        return fileName === sessionId || file.includes(sessionId)
-      })
+      // 严格 basename 匹配，移除原 file.includes(sessionId) 子串放宽（防止 sessionId 子串命中非目标文件）
+      const sessionFile = jsonlFiles.find(file => path.basename(file, '.jsonl') === sessionId)
 
       if (!sessionFile) {
         logger.warn(`找不到会话文件: ${sessionId}`)
@@ -466,7 +490,7 @@ class ProjectManagementService {
     limit?: number
   ): Promise<SessionConversation | null> {
     const result = await this.withTemporaryCopy(jsonlFile, (safePath) =>
-      readJsonlFile<any>(
+      readJsonlFile<ClaudeCodeLogMessage>(
         safePath,
         undefined,
         { limit, skipErrors: true }
@@ -494,7 +518,7 @@ class ProjectManagementService {
     }
 
     // 转换为ConversationMessage格式
-    const messages: ConversationMessage[] = result.data.map((rawMessage, index) => ({
+    const messages = result.data.map((rawMessage, index) => ({
       uuid: rawMessage.uuid || `msg-${index + 1}`,
       parentUuid: rawMessage.parentUuid,
       type: rawMessage.type || 'system',
@@ -518,7 +542,7 @@ class ProjectManagementService {
     logger.info(`加载了 ${messages.length} 条消息`)
     return {
       sessionId,
-      messages,
+      messages: messages as ConversationMessage[],
       totalMessages: messages.length,
       totalTokens
     }

@@ -49,7 +49,7 @@ const AppContent: React.FC = () => {
 
   // 权限警告状态
   const [privilegeWarningVisible, setPrivilegeWarningVisible] = useState(false)
-  const [privilegeWarning, _setPrivilegeWarning] = useState<any>(null)
+  const [privilegeWarning] = useState<unknown>(null)
   
   // 全局加载状态
   const [isAppLoading, setIsAppLoading] = useState(true)
@@ -62,14 +62,16 @@ const AppContent: React.FC = () => {
       refreshConfigs()
     }
 
-    // 监听托盘配置切换事件
-    window.electronAPI.tray?.onSwitchConfig?.(handleTraySwitchConfig)
+    // v2.0 修复：保存 unsubscribe，cleanup 时调用，避免托盘切换监听器在 refreshConfigs 变化时累积
+    const unsubscribe = window.electronAPI.tray?.onSwitchConfig?.(handleTraySwitchConfig)
 
     // 监听权限警告事件
     // 移除安全警告监听
 
     return () => {
-      // 清理事件监听
+      if (unsubscribe) {
+        unsubscribe()
+      }
     }
   }, [refreshConfigs])
 
@@ -218,7 +220,7 @@ const AppContent: React.FC = () => {
       {/* 权限警告模态框 */}
       <PrivilegeWarningModal
         visible={privilegeWarningVisible}
-        warning={privilegeWarning}
+        warning={privilegeWarning as never}
         onClose={() => setPrivilegeWarningVisible(false)}
         onElevate={handleElevatePrivileges}
         onRelaunchAsAdmin={handleRelaunchAsAdmin}

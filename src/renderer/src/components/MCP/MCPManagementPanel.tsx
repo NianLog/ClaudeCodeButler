@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react'
 import {
+  App,
   Button,
   Empty,
   Spin,
@@ -38,7 +39,7 @@ import { useMCPManagementStore } from '../../store/mcp-management-store'
 import { useTranslation } from '../../locales/useTranslation'
 import { useMessage } from '../../hooks/useMessage'
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
-import type { MCPServerListItem } from '@shared/types/mcp'
+import type { MCPServerListItem, MCPTransportType } from '@shared/types/mcp'
 import './MCPManagementPanel.css'
 
 const { Title, Text } = Typography
@@ -50,6 +51,8 @@ const { Option } = Select
  */
 const MCPManagementPanel: React.FC = () => {
   const message = useMessage()
+  // v2.0：使用 App context 的 modal 替代静态 Modal.confirm，消除 antd 静态函数警告
+  const { modal } = App.useApp()
   const { t } = useTranslation()
   // Zustand状态 - 使用selector避免类型错误,确保所有数组类型都有类型检查
   const servers = useMCPManagementStore(state => Array.isArray(state.servers) ? state.servers : [])
@@ -155,42 +158,35 @@ const MCPManagementPanel: React.FC = () => {
       }
 
       // 解析JSON
-      const newConfig = JSON.parse(editingJson)
-      const transportType = newConfig.type === 'http' || newConfig.type === 'sse'
-        ? newConfig.type
-        : 'stdio'
+      const newConfig = JSON.parse(editingJson) as Record<string, unknown>
+      const argsValue = Array.isArray(newConfig.args) ? (newConfig.args as unknown[]) : undefined
+      const envValue = newConfig.env && typeof newConfig.env === 'object' ? newConfig.env : undefined
+      const autoApproveValue = Array.isArray(newConfig.autoApprove) ? (newConfig.autoApprove as unknown[]) : undefined
       const normalizedCommand = typeof newConfig.command === 'string' ? newConfig.command.trim() : ''
       const normalizedUrl = typeof newConfig.url === 'string' ? newConfig.url.trim() : ''
 
-      // 验证必填字段
-      if (transportType === 'stdio' && !normalizedCommand) {
-        message.error(t('mcp.validation.commandRequired'))
-        return
-      }
-
-      if (transportType !== 'stdio' && !normalizedUrl) {
-        message.error(t('mcp.validation.urlRequired'))
-        return
-      }
+      // v2.0 兼容性：不再强制校验 command/url，允许 {url, headers} 等 Claude Code 原生 MCP 格式
 
       // 调用API更新服务器配置
       const saveResult = await window.electronAPI.mcp.addOrUpdateServer({
         id: normalizedServerId,
         command: normalizedCommand || undefined,
         url: normalizedUrl || undefined,
-        type: transportType,
-        argsText: newConfig.args ? newConfig.args.join('\n') : undefined,
-        envText: newConfig.env ? JSON.stringify(newConfig.env, null, 2) : undefined,
-        disabled: newConfig.disabled || false,
-        timeout: newConfig.timeout,
-        autoApproveText: newConfig.autoApprove ? newConfig.autoApprove.join(', ') : undefined,
-        fromGalleryId: newConfig.fromGalleryId,
-        targetScope: editingServer?.scope || (selectedScope === 'all' ? 'global' : selectedScope)
+        type: newConfig.type as MCPTransportType | undefined,
+        argsText: argsValue ? argsValue.join('\n') : undefined,
+        envText: envValue ? JSON.stringify(envValue, null, 2) : undefined,
+        disabled: Boolean(newConfig.disabled) || false,
+        timeout: newConfig.timeout as number | undefined,
+        autoApproveText: autoApproveValue ? autoApproveValue.join(', ') : undefined,
+        fromGalleryId: newConfig.fromGalleryId as string | undefined,
+        targetScope: editingServer?.scope || (selectedScope === 'all' ? 'global' : selectedScope),
+        rawConfig: editingJson
       })
 
       if (!saveResult.success) {
-        const detailMessage = (saveResult as any).details
-          ? Object.values((saveResult as any).details).filter(Boolean).join('；')
+        const details = (saveResult as { details?: Record<string, unknown> }).details
+        const detailMessage = details
+          ? Object.values(details).filter(Boolean).join('；')
           : ''
         throw new Error(detailMessage || saveResult.error || t('mcp.errors.saveFailed', { error: t('common.unknownError') }))
       }
@@ -234,7 +230,7 @@ const MCPManagementPanel: React.FC = () => {
 
   // 删除服务器
   const handleDeleteServer = async (server: MCPServerListItem) => {
-    Modal.confirm({
+    modal.confirm({
       title: t('mcp.confirm.deleteTitle'),
       content: t('mcp.confirm.deleteContent', { id: server.id }),
       okText: t('common.delete'),

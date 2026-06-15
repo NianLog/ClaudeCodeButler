@@ -98,7 +98,7 @@ export class SettingsService {
         key: 'defaultConfigTemplate',
         required: true,
         type: 'string',
-        validator: (value: string) => validateNewConfigTemplate(value)
+        validator: (value: unknown) => validateNewConfigTemplate(typeof value === 'string' ? value : String(value))
       },
 
       // 通知设置验证
@@ -173,7 +173,7 @@ export class SettingsService {
    * 合并默认设置(仅在加载时补充缺失字段)
    * 注意: loaded settings 应该覆盖 defaults,而不是相反
    */
-  private mergeWithDefaults(loadedSettings: any): AppSettings {
+  private mergeWithDefaults(loadedSettings: Partial<AppSettings>): AppSettings {
     const defaults = this.getDefaultSettings()
     return {
       basic: { ...defaults.basic, ...loadedSettings.basic },
@@ -203,8 +203,8 @@ export class SettingsService {
       // 保存旧值用于事件
       const oldValues = { ...this.settings[tab] }
 
-      // 更新设置
-      this.settings[tab] = { ...this.settings[tab], ...tabData }
+      // 更新设置（动态 key 赋值，用 Record 绕过联合/交叉类型冲突）
+      ;(this.settings as unknown as Record<string, Record<string, unknown>>)[tab] = { ...(this.settings[tab] as Record<string, unknown>), ...(tabData as Record<string, unknown>) }
 
       // 保存到文件
       if (!options.silent) {
@@ -212,7 +212,7 @@ export class SettingsService {
       }
 
       // 触发变更事件
-      this.triggerChangeEvents(tab, oldValues, this.settings[tab])
+      this.triggerChangeEvents(tab, oldValues, this.settings[tab] as unknown as Record<string, unknown>)
 
       logger.info(`${tab} 设置保存成功`)
 
@@ -259,14 +259,14 @@ export class SettingsService {
   /**
    * 提取标签页数据
    */
-  private extractTabData(tab: SettingsTab, data: Partial<AppSettings>): any {
-    return data[tab] || {}
+  private extractTabData(tab: SettingsTab, data: Partial<AppSettings>): Record<string, unknown> {
+    return (data[tab] || {}) as Record<string, unknown>
   }
 
   /**
    * 验证标签页设置
    */
-  private validateTabSettings(tab: SettingsTab, data: any): { isValid: boolean; errors: string[] } {
+  private validateTabSettings(tab: SettingsTab, data: Record<string, unknown>): { isValid: boolean; errors: string[] } {
     const errors: string[] = []
     const tabRules = this.validationRules.filter(rule => rule.tab === tab)
 
@@ -327,7 +327,7 @@ export class SettingsService {
     const allErrors: string[] = []
 
     for (const tab of ['basic', 'editor', 'notifications', 'advanced', 'window'] as SettingsTab[]) {
-      const validation = this.validateTabSettings(tab, settings[tab])
+      const validation = this.validateTabSettings(tab, settings[tab] as unknown as Record<string, unknown>)
       allErrors.push(...validation.errors)
     }
 
@@ -343,9 +343,9 @@ export class SettingsService {
   private fixInvalidSettings(settings: AppSettings): AppSettings {
     const defaults = this.getDefaultSettings()
     const fixed = { ...settings }
-    const fixedByTab = fixed as Record<Exclude<SettingsTab, 'about'>, any>
-    const settingsByTab = settings as Record<Exclude<SettingsTab, 'about'>, any>
-    const defaultsByTab = defaults as Record<Exclude<SettingsTab, 'about'>, any>
+    const fixedByTab = fixed as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
+    const settingsByTab = settings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
+    const defaultsByTab = defaults as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
 
     // 简单修复：使用默认值替换无效值
     const tabs: Array<Exclude<SettingsTab, 'about'>> = ['basic', 'editor', 'notifications', 'advanced', 'window']
@@ -362,7 +362,7 @@ export class SettingsService {
   /**
    * 触发变更事件
    */
-  private triggerChangeEvents(tab: SettingsTab, oldValues: any, newValues: any): void {
+  private triggerChangeEvents(tab: SettingsTab, oldValues: Record<string, unknown>, newValues: Record<string, unknown>): void {
     const handlers = this.changeHandlers.get(tab) || []
 
     for (const [key, newValue] of Object.entries(newValues)) {
@@ -394,7 +394,10 @@ export class SettingsService {
       this.changeHandlers.set(tab, [])
     }
 
-    this.changeHandlers.get(tab)!.push(handler)
+    const handlers = this.changeHandlers.get(tab)
+    if (handlers) {
+      handlers.push(handler)
+    }
 
     // 返回取消注册函数
     return () => {
@@ -418,7 +421,7 @@ export class SettingsService {
   /**
    * 获取特定标签页设置
    */
-  getTabSettings(tab: SettingsTab): any {
+  getTabSettings(tab: SettingsTab): Record<string, unknown> {
     if (tab === 'about') {
       return {}
     }
@@ -437,13 +440,13 @@ export class SettingsService {
         }
         // 重置特定标签页
         const defaults = this.getDefaultSettings()
-        const settingsByTab = this.settings as Record<Exclude<SettingsTab, 'about'>, any>
-        const defaultsByTab = defaults as Record<Exclude<SettingsTab, 'about'>, any>
+        const settingsByTab = this.settings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
+        const defaultsByTab = defaults as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
         const oldValues = { ...settingsByTab[tab] }
         settingsByTab[tab] = { ...defaultsByTab[tab] }
 
         await this.saveToFile()
-        this.triggerChangeEvents(tab, oldValues, this.settings[tab])
+        this.triggerChangeEvents(tab, oldValues, this.settings[tab] as unknown as Record<string, unknown>)
 
         logger.info(`${tab} 设置已重置`)
       } else {
@@ -455,8 +458,8 @@ export class SettingsService {
 
         // 触发所有标签页的变更事件
         const tabs: Array<Exclude<SettingsTab, 'about'>> = ['basic', 'editor', 'notifications', 'advanced', 'window']
-        const oldSettingsByTab = oldSettings as Record<Exclude<SettingsTab, 'about'>, any>
-        const newSettingsByTab = this.settings as Record<Exclude<SettingsTab, 'about'>, any>
+        const oldSettingsByTab = oldSettings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
+        const newSettingsByTab = this.settings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
         for (const tabKey of tabs) {
           this.triggerChangeEvents(tabKey, oldSettingsByTab[tabKey], newSettingsByTab[tabKey])
         }
@@ -525,12 +528,12 @@ export class SettingsService {
   /**
    * 检查设置格式是否有效
    */
-  private isValidSettingsFormat(settings: any): boolean {
+  private isValidSettingsFormat(settings: unknown): boolean {
     return (
       typeof settings === 'object' &&
       settings !== null &&
       ['basic', 'editor', 'notifications', 'advanced', 'window'].every(
-        key => typeof settings[key] === 'object' && settings[key] !== null
+        key => typeof (settings as Record<string, unknown>)[key] === 'object' && (settings as Record<string, unknown>)[key] !== null
       )
     )
   }

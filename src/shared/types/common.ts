@@ -5,7 +5,7 @@
 /**
  * API 响应格式
  */
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   /** 是否成功 */
   success: boolean
   /** 数据 */
@@ -104,7 +104,7 @@ export interface LogEntry {
   /** 时间戳 */
   timestamp: Date
   /** 额外数据 */
-  data?: any
+  data?: unknown
   /** 来源 */
   source?: string
 }

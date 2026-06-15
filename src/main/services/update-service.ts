@@ -4,8 +4,11 @@
  */
 
 import axios from 'axios';
-import { app } from 'electron';
+import { app, Notification, shell } from 'electron';
+import { join } from 'path';
+import fs from 'fs';
 import { logger } from '../utils/logger';
+import { APP_INFO } from '@shared/constants';
 
 const VERSION_URL = 'https://dev.niansir.com/software/ccb/version.txt';
 
@@ -59,11 +62,6 @@ class UpdateService {
   }
 
   private notifyUser(versionInfo: { version: string | null; text: string | null }): void {
-    const { Notification, shell } = require('electron');
-    const { join } = require('path');
-    const fs = require('fs');
-    const { APP_INFO } = require('@shared/constants');
-
     // 获取图标路径
     let iconPath = '';
     if (process.platform === 'win32') {

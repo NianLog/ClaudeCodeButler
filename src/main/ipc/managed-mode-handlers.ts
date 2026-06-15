@@ -17,6 +17,18 @@ import type {
 const managedModeHandlersLogger = logger.child('ManagedModeHandlers')
 
 /**
+ * 从未知错误对象中安全提取错误消息
+ * @param error - 捕获到的错误对象
+ * @returns 错误消息字符串
+ */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return String(error)
+}
+
+/**
  * 注册托管模式IPC处理程序
  */
 export function registerManagedModeHandlers(): void {
@@ -31,8 +43,8 @@ export function registerManagedModeHandlers(): void {
         notifyStatusChanged()
 
         return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -48,8 +60,8 @@ export function registerManagedModeHandlers(): void {
         notifyStatusChanged()
 
         return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -65,8 +77,8 @@ export function registerManagedModeHandlers(): void {
         notifyStatusChanged()
 
         return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -101,8 +113,8 @@ export function registerManagedModeHandlers(): void {
         notifyStatusChanged()
 
         return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -118,8 +130,8 @@ export function registerManagedModeHandlers(): void {
         notifyStatusChanged()
 
         return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -131,8 +143,8 @@ export function registerManagedModeHandlers(): void {
       try {
         await managedModeService.addProvider(provider)
         return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -148,8 +160,8 @@ export function registerManagedModeHandlers(): void {
         notifyStatusChanged()
 
         return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -161,8 +173,8 @@ export function registerManagedModeHandlers(): void {
       try {
         await managedModeService.deleteProvider(providerId)
         return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -182,8 +194,8 @@ export function registerManagedModeHandlers(): void {
       try {
         const newAccessToken = await managedModeService.resetAccessToken()
         return { success: true, data: { accessToken: newAccessToken } }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -200,8 +212,8 @@ export function registerManagedModeHandlers(): void {
             accessToken: accessToken || ''
           }
         }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -217,8 +229,8 @@ export function registerManagedModeHandlers(): void {
         notifyStatusChanged()
 
         return result
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -234,8 +246,8 @@ export function registerManagedModeHandlers(): void {
         notifyStatusChanged()
 
         return result
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -247,7 +259,7 @@ export function registerManagedModeHandlers(): void {
       try {
         const enabled = managedModeService.isManagedModeEnabled()
         return { success: true, enabled }
-      } catch (error: any) {
+      } catch {
         return { success: false, enabled: false }
       }
     }
@@ -260,7 +272,7 @@ export function registerManagedModeHandlers(): void {
       try {
         const hasBackup = await managedModeService.checkSystemSettingsBackup()
         return { success: true, hasBackup }
-      } catch (error: any) {
+      } catch {
         return { success: false, hasBackup: false }
       }
     }
@@ -269,12 +281,12 @@ export function registerManagedModeHandlers(): void {
   // 更新系统settings配置
   ipcMain.handle(
     IPC_CHANNELS.MANAGED_MODE_UPDATE_SETTINGS_CONFIG,
-    async (_event, configData: any): Promise<{ success: boolean; error?: string }> => {
+    async (_event, configData: Record<string, unknown>): Promise<{ success: boolean; error?: string }> => {
       try {
         const result = await managedModeService.updateSettingsConfig(configData)
         return result
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -287,8 +299,8 @@ export function registerManagedModeHandlers(): void {
         await managedModeService.syncProviders()
         const config = managedModeService.getConfig()
         return { success: true, config }
-      } catch (error: any) {
-        return { success: false, config: null, error: error.message }
+      } catch (error: unknown) {
+        return { success: false, config: null, error: getErrorMessage(error) }
       }
     }
   )
@@ -336,7 +348,7 @@ export async function initializeManagedMode(): Promise<void> {
     })
 
     managedModeHandlersLogger.info('托管模式事件监听器已设置')
-  } catch (error: any) {
+  } catch (error: unknown) {
     managedModeHandlersLogger.error('托管模式初始化失败', error)
   }
 }
@@ -347,7 +359,7 @@ export async function initializeManagedMode(): Promise<void> {
 export async function disposeManagedMode(): Promise<void> {
   try {
     await managedModeService.dispose()
-  } catch (error: any) {
+  } catch (error: unknown) {
     managedModeHandlersLogger.error('托管模式清理失败', error)
   }
 }

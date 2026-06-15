@@ -112,5 +112,5 @@ export interface RuleExecutionLog {
 export interface RuleExecutionResult {
   success: boolean;
   message: string;
-  result?: any;
+  result?: unknown;
 }

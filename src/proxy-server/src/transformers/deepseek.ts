@@ -50,8 +50,9 @@ export class DeepSeekTransformer extends BaseTransformer {
   /**
    * 转换请求格式
    */
-  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<any> {
-    const transformed = this.clone(request)
+  async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<unknown> {
+    // 转换为通用对象以便自由调整DeepSeek特有字段
+    const transformed: Record<string, unknown> = JSON.parse(JSON.stringify(request))
 
     // 映射模型名称
     if (this.modelMapping[request.model]) {
@@ -65,13 +66,13 @@ export class DeepSeekTransformer extends BaseTransformer {
     // DeepSeek特定的参数调整
     if (transformed.max_tokens && typeof transformed.max_tokens === 'number') {
       // DeepSeek的max_tokens限制可能不同
-      transformed.max_tokens = Math.min(transformed.max_tokens, 4096)
+      transformed.max_tokens = Math.min(transformed.max_tokens as number, 4096)
     }
 
     // 处理消息格式
     if (transformed.messages) {
-      transformed.messages = transformed.messages.map((msg: any) => {
-        const newMsg: any = {
+      transformed.messages = (transformed.messages as Array<Record<string, unknown>>).map((msg: Record<string, unknown>) => {
+        const newMsg: Record<string, unknown> = {
           role: msg.role === 'assistant' ? 'assistant' : 'user',
           content: msg.content
         }
@@ -79,9 +80,9 @@ export class DeepSeekTransformer extends BaseTransformer {
         // 处理内容格式
         if (Array.isArray(msg.content)) {
           // 将Claude的多模态内容转换为DeepSeek支持的格式
-          const textContent = msg.content
-            .filter((item: any) => item.type === 'text')
-            .map((item: any) => item.text)
+          const textContent = (msg.content as Array<Record<string, unknown>>)
+            .filter((item: Record<string, unknown>) => item.type === 'text')
+            .map((item: Record<string, unknown>) => item.text as string)
             .join('\n')
 
           newMsg.content = textContent
@@ -102,25 +103,30 @@ export class DeepSeekTransformer extends BaseTransformer {
   /**
    * 转换响应格式
    */
-  async transformResponse(response: any, _provider: ApiProvider): Promise<ClaudeResponse> {
+  async transformResponse(response: unknown, _provider: ApiProvider): Promise<ClaudeResponse> {
+    const resp = response as Record<string, unknown>
+    const choices = resp.choices as Array<Record<string, unknown>> | undefined
+    const firstChoice = choices?.[0]
+    const usage = resp.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
+
     const transformed: ClaudeResponse = {
-      id: response.id || `msg_${Date.now()}`,
+      id: (resp.id as string) || `msg_${Date.now()}`,
       type: 'message',
       role: 'assistant',
       content: [],
-      model: response.model || 'deepseek-chat',
-      stop_reason: this.mapStopReason(response.choices?.[0]?.finish_reason),
-      stop_sequence: response.choices?.[0]?.stop_sequence || null,
+      model: (resp.model as string) || 'deepseek-chat',
+      stop_reason: this.mapStopReason(firstChoice?.finish_reason as string | undefined),
+      stop_sequence: (firstChoice?.stop_sequence as string | null | undefined) || null,
       usage: {
-        input_tokens: response.usage?.prompt_tokens || 0,
-        output_tokens: response.usage?.completion_tokens || 0
+        input_tokens: usage?.prompt_tokens || 0,
+        output_tokens: usage?.completion_tokens || 0
       }
     }
 
     // 处理内容
-    if (response.choices && response.choices.length > 0) {
-      const choice = response.choices[0]
-      const message = choice.message || {}
+    if (choices && choices.length > 0) {
+      const choice = choices[0]
+      const message = (choice.message as Record<string, unknown>) || {}
 
       // 确保role总是'assistant'
       transformed.role = 'assistant'
@@ -134,35 +140,35 @@ export class DeepSeekTransformer extends BaseTransformer {
           }]
         } else if (Array.isArray(message.content)) {
           // 处理多模态内容（DeepSeek可能不支持）
-          transformed.content = message.content.map((item: any) => {
+          transformed.content = (message.content as Array<Record<string, unknown>>).map((item: Record<string, unknown>) => {
             if (item.type === 'text') {
               return {
                 type: 'text',
-                text: item.text
+                text: item.text as string
               }
             }
             // DeepSeek可能不支持图像，忽略非文本内容
             return null
-          }).filter(Boolean)
+          }).filter(Boolean) as Array<{ type: string; text?: string; [key: string]: unknown }>
         }
       }
 
       // 设置停止原因
-      transformed.stop_reason = this.mapStopReason(choice.finish_reason)
-      transformed.stop_sequence = choice.stop_sequence
+      transformed.stop_reason = this.mapStopReason(choice.finish_reason as string | undefined)
+      transformed.stop_sequence = (choice.stop_sequence as string | null | undefined) ?? null
     }
 
     // 处理使用情况信息
-    if (response.usage) {
+    if (usage) {
       transformed.usage = {
-        input_tokens: response.usage.prompt_tokens || 0,
-        output_tokens: response.usage.completion_tokens || 0
+        input_tokens: usage.prompt_tokens || 0,
+        output_tokens: usage.completion_tokens || 0
       }
     }
 
     // 保留DeepSeek特定的元数据
-    if (response.model) {
-      transformed.model = response.model
+    if (resp.model) {
+      transformed.model = resp.model as string
     }
 
     return transformed
@@ -181,25 +187,27 @@ export class DeepSeekTransformer extends BaseTransformer {
           return 'data: [DONE]\n\n'
         }
 
-        const parsed = JSON.parse(data)
-        const transformed: any = {}
+        const parsed = JSON.parse(data) as Record<string, unknown>
+        const transformed: Record<string, unknown> = {}
 
         // 处理choices
-        if (parsed.choices && parsed.choices.length > 0) {
-          const choice = parsed.choices[0]
+        const parsedChoices = parsed.choices as Array<Record<string, unknown>> | undefined
+        if (parsedChoices && parsedChoices.length > 0) {
+          const choice = parsedChoices[0]
           transformed.choices = [{
             index: choice.index,
             delta: choice.delta || {},
-            finish_reason: this.mapStopReason(choice.finish_reason)
+            finish_reason: this.mapStopReason(choice.finish_reason as string | undefined)
           }]
         }
 
         // 处理usage
-        if (parsed.usage) {
+        const parsedUsage = parsed.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
+        if (parsedUsage) {
           transformed.usage = {
-            prompt_tokens: parsed.usage.prompt_tokens,
-            completion_tokens: parsed.usage.completion_tokens,
-            total_tokens: parsed.usage.total_tokens
+            prompt_tokens: parsedUsage.prompt_tokens,
+            completion_tokens: parsedUsage.completion_tokens,
+            total_tokens: parsedUsage.total_tokens
           }
         }
 
@@ -225,40 +233,41 @@ export class DeepSeekTransformer extends BaseTransformer {
   /**
    * 转换错误格式
    */
-  transformError(error: any, _provider: ApiProvider): any {
+  transformError(error: unknown, _provider: ApiProvider): unknown {
+    const err = error as Record<string, unknown>
     // DeepSeek错误格式
-    if (error.error) {
-      const deepSeekError = error.error
+    if (err.error) {
+      const deepSeekError = err.error as Record<string, unknown>
 
-      const transformedError: any = {
+      const transformedError: Record<string, unknown> = {
         type: 'error',
         error: {
-          type: this.errorMapping[deepSeekError.type] || 'api_error',
-          message: deepSeekError.message || 'DeepSeek API error'
+          type: this.errorMapping[(deepSeekError.type as string) || ''] || 'api_error',
+          message: (deepSeekError.message as string) || 'DeepSeek API error'
         }
       }
 
       // 添加错误详情
       if (deepSeekError.code) {
-        transformedError.error.code = deepSeekError.code
+        (transformedError.error as Record<string, unknown>).code = deepSeekError.code
       }
 
       // 添加中文错误信息处理
-      if (deepSeekError.message && this.containsChinese(deepSeekError.message)) {
+      if (deepSeekError.message && this.containsChinese(deepSeekError.message as string)) {
         // 如果错误信息包含中文，保持原文
-        transformedError.error.message = deepSeekError.message
+        (transformedError.error as Record<string, unknown>).message = deepSeekError.message
       }
 
       return transformedError
     }
 
     // 标准HTTP错误
-    if (error.status) {
+    if (err.status) {
       return {
         type: 'error',
         error: {
-          type: this.mapHttpError(error.status),
-          message: error.statusText || error.message || 'DeepSeek API error'
+          type: this.mapHttpError(err.status as number),
+          message: (err.statusText as string) || (err.message as string) || 'DeepSeek API error'
         }
       }
     }
@@ -268,7 +277,7 @@ export class DeepSeekTransformer extends BaseTransformer {
       type: 'error',
       error: {
         type: 'api_error',
-        message: error.message || 'Unknown DeepSeek error'
+        message: (err.message as string) || 'Unknown DeepSeek error'
       }
     }
   }

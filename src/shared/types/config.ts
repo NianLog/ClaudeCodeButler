@@ -44,7 +44,7 @@ export interface ConfigFile {
   /** 最后修改时间 */
   lastModified: Date
   /** 配置内容 */
-  content?: any
+  content?: unknown
   /** 是否有效 */
   isValid?: boolean
   /** 错误信息 */
@@ -101,7 +101,7 @@ export interface ValidationResult {
   /** 警告列表 */
   warnings: ValidationWarning[]
   /** 验证后的数据 */
-  data?: any
+  data?: unknown
 }
 
 /**
@@ -120,5 +120,5 @@ export interface ValidationError {
   path: string
   message: string
   code?: string
-  value?: any
+  value?: unknown
 }

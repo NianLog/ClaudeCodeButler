@@ -55,9 +55,9 @@ export class MCPManagementService {
       })
 
       return { success: true, data: config }
-    } catch (error: any) {
+    } catch (error: unknown) {
       mcpLogger.error('读取配置文件失败', error)
-      if (error.code === 'ENOENT') {
+      if (error instanceof Error && 'code' in error && (error as { code?: unknown }).code === 'ENOENT') {
         return {
           success: false,
           error: 'Claude配置文件不存在',
@@ -66,7 +66,7 @@ export class MCPManagementService {
       }
       return {
         success: false,
-        error: `读取配置文件失败: ${error.message}`,
+        error: `读取配置文件失败: ${error instanceof Error ? error.message : String(error)}`,
         details: error
       }
     }
@@ -96,10 +96,10 @@ export class MCPManagementService {
         content = JSON.stringify(config, null, 2)
         // 验证能否正确解析回来
         JSON.parse(content)
-      } catch (jsonError: any) {
+      } catch (jsonError: unknown) {
         return {
           success: false,
-          error: `配置对象无法序列化为有效JSON: ${jsonError.message}`
+          error: `配置对象无法序列化为有效JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`
         }
       }
 
@@ -109,9 +109,13 @@ export class MCPManagementService {
         // 文件存在,创建备份
         await fs.copyFile(this.configPath, backupPath)
         backupCreated = true
-      } catch (accessError: any) {
+      } catch (accessError: unknown) {
         // 文件不存在,无需备份
-        if (accessError.code !== 'ENOENT') {
+        if (
+          accessError instanceof Error &&
+          'code' in accessError &&
+          (accessError as { code?: unknown }).code !== 'ENOENT'
+        ) {
           return {
             success: false,
             error: `无法访问配置文件: ${accessError.message}`
@@ -129,7 +133,8 @@ export class MCPManagementService {
 
         // 原子性重命名
         await fs.rename(tempPath, this.configPath)
-      } catch (writeError: any) {
+      } catch (writeError: unknown) {
+        const writeErrorMessage = writeError instanceof Error ? writeError.message : String(writeError)
         // 写入失败,恢复备份
         if (backupCreated) {
           try {
@@ -139,13 +144,13 @@ export class MCPManagementService {
             return {
               success: false,
               error: `保存失败且无法恢复备份: ${(restoreError as Error).message}`,
-              details: { originalError: writeError.message }
+              details: { originalError: writeErrorMessage }
             }
           }
         }
         return {
           success: false,
-          error: `写入配置文件失败: ${writeError.message}`,
+          error: `写入配置文件失败: ${writeErrorMessage}`,
           details: writeError
         }
       }
@@ -160,7 +165,7 @@ export class MCPManagementService {
       }
 
       return { success: true }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 未预期的错误,尝试恢复备份
       if (backupCreated) {
         try {
@@ -171,7 +176,7 @@ export class MCPManagementService {
       }
       return {
         success: false,
-        error: `保存配置文件失败: ${error.message}`,
+        error: `保存配置文件失败: ${error instanceof Error ? error.message : String(error)}`,
         details: error
       }
     }
@@ -366,10 +371,37 @@ export class MCPManagementService {
 
     const config = configResult.data
 
-    const transportType = this.getTransportType(formData)
-
-    // 转换表单数据为服务器配置
-    const serverConfig: MCPServerConfig = {
+    // v2.0 兼容性：若提供了原始 JSON 配置，以 rawConfig 为基础保留 headers 等原生字段，
+    // 再叠加 UI 结构化字段（disabled/timeout/autoApprove 等用户显式编辑的值）
+    let serverConfig: MCPServerConfig
+    if (formData.rawConfig) {
+      try {
+        serverConfig = JSON.parse(formData.rawConfig) as MCPServerConfig
+      } catch {
+        return { success: false, error: '原始配置 JSON 解析失败' }
+      }
+      // 叠加 UI 显式编辑的结构化字段（覆盖 rawConfig 中的同名键）
+      if (formData.type) {
+        serverConfig.type = formData.type
+      }
+      if (formData.disabled !== undefined) {
+        serverConfig.disabled = formData.disabled
+      }
+      if (formData.timeout) {
+        serverConfig.timeout = formData.timeout
+      }
+      if (formData.autoApproveText) {
+        serverConfig.autoApprove = formData.autoApproveText
+          .split(',')
+          .map(tool => tool.trim())
+          .filter(tool => tool.length > 0)
+      }
+      if (formData.fromGalleryId) {
+        serverConfig.fromGalleryId = formData.fromGalleryId.trim()
+      }
+    } else {
+      const transportType = this.getTransportType(formData)
+      serverConfig = {
       type: transportType
     }
 
@@ -427,6 +459,7 @@ export class MCPManagementService {
     if (formData.fromGalleryId) {
       serverConfig.fromGalleryId = formData.fromGalleryId.trim()
     }
+    } // 结束 else（结构化组装）
 
     // 根据目标范围添加到配置
     if (formData.targetScope === 'global') {
@@ -447,7 +480,8 @@ export class MCPManagementService {
       if (!config.projects[projectPath].mcpServers) {
         config.projects[projectPath].mcpServers = {}
       }
-      config.projects[projectPath].mcpServers![formData.id] = serverConfig
+      const mcpServers = config.projects[projectPath].mcpServers
+      mcpServers[formData.id] = serverConfig
     }
 
     // 保存配置
@@ -485,9 +519,9 @@ export class MCPManagementService {
         config.projects &&
         config.projects[projectPath] &&
         config.projects[projectPath].mcpServers &&
-        config.projects[projectPath].mcpServers![serverId]
+        config.projects[projectPath].mcpServers[serverId]
       ) {
-        delete config.projects[projectPath].mcpServers![serverId]
+        delete config.projects[projectPath].mcpServers[serverId]
       } else {
         return {
           success: false,
@@ -541,9 +575,9 @@ export class MCPManagementService {
         } else {
           const projectPath = scope
           if (!config.projects) config.projects = {}
-          if (!config.projects[projectPath]) config.projects[projectPath] = { mcpServers: {} } as any
+          if (!config.projects[projectPath]) config.projects[projectPath] = { mcpServers: {} }
           if (!config.projects[projectPath].mcpServers) config.projects[projectPath].mcpServers = {}
-          config.projects[projectPath].mcpServers![serverId] = restoredConfig
+          config.projects[projectPath].mcpServers[serverId] = restoredConfig
         }
 
         // 保存配置
@@ -598,7 +632,7 @@ export class MCPManagementService {
         } else {
           const projectPath = scope
           if (config.projects?.[projectPath]?.mcpServers) {
-            delete config.projects[projectPath].mcpServers![serverId]
+            delete config.projects[projectPath].mcpServers[serverId]
           }
         }
 
@@ -679,13 +713,14 @@ export class MCPManagementService {
       if (!config.projects[projectPath].mcpServers) {
         config.projects[projectPath].mcpServers = {}
       }
-      if (config.projects[projectPath].mcpServers![newServerId]) {
+      const mcpServers = config.projects[projectPath].mcpServers
+      if (mcpServers[newServerId]) {
         return {
           success: false,
           error: `项目 "${projectPath}" 的MCP服务器 "${newServerId}" 已存在`
         }
       }
-      config.projects[projectPath].mcpServers![newServerId] = newServerConfig
+      mcpServers[newServerId] = newServerConfig
     }
 
     // 保存配置
@@ -912,50 +947,17 @@ export class MCPManagementService {
           message
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: true,
         data: {
           valid: false,
           transportType,
-          message: `远程MCP连通性验证失败: ${error.message}`
+          message: `远程MCP连通性验证失败: ${error instanceof Error ? error.message : String(error)}`
         }
       }
     } finally {
       clearTimeout(timer)
-    }
-  }
-
-  /**
-   * 验证MCP服务器配置对象
-   * @param serverConfig 服务器配置
-   * @returns 验证结果
-   */
-  private validateServerConfig(serverConfig: MCPServerConfig): MCPServerValidation {
-    const errors: Record<string, string> = {}
-    const transportType = this.getTransportType(serverConfig)
-
-    if (transportType === 'stdio') {
-      if (!serverConfig.command || serverConfig.command.trim().length === 0) {
-        errors.command = 'STDIO 类型服务器必须提供 command'
-      }
-    } else if (!serverConfig.url || serverConfig.url.trim().length === 0) {
-      errors.url = '远程MCP服务器必须提供 URL'
-    } else {
-      try {
-        new URL(serverConfig.url)
-      } catch {
-        errors.url = '远程MCP服务器 URL 格式无效'
-      }
-    }
-
-    if (serverConfig.timeout !== undefined && serverConfig.timeout < 0) {
-      errors.timeout = '超时时间不能为负数'
-    }
-
-    return {
-      valid: Object.keys(errors).length === 0,
-      errors: Object.keys(errors).length > 0 ? errors : undefined
     }
   }
 
@@ -966,7 +968,6 @@ export class MCPManagementService {
    */
   private validateServerFormData(formData: MCPServerFormData): MCPServerValidation {
     const errors: Record<string, string> = {}
-    const transportType = this.getTransportType(formData)
 
     // 验证ID
     if (!formData.id || formData.id.trim().length === 0) {
@@ -979,19 +980,8 @@ export class MCPManagementService {
       errors.type = '不支持的传输类型'
     }
 
-    if (transportType === 'stdio') {
-      if (!formData.command || formData.command.trim().length === 0) {
-        errors.command = 'STDIO 类型服务器必须提供 command'
-      }
-    } else if (!formData.url || formData.url.trim().length === 0) {
-      errors.url = '远程MCP服务器必须提供 URL'
-    } else {
-      try {
-        new URL(formData.url)
-      } catch {
-        errors.url = '远程MCP服务器 URL 格式无效'
-      }
-    }
+    // v2.0 兼容性：不再强制校验 command/url 字段，允许 {url, headers} 等 Claude Code 原生 MCP 格式
+    // （某些合法 MCP 服务器可能无 command 或无 url，具体格式由 Claude Code 自行解析处理）
 
     // 验证环境变量格式
     if (formData.envText) {
@@ -1054,10 +1044,10 @@ export class MCPManagementService {
     try {
       const jsonString = JSON.stringify(serverConfig, null, 2)
       return { success: true, data: jsonString }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: `导出配置失败: ${error.message}`
+        error: `导出配置失败: ${error instanceof Error ? error.message : String(error)}`
       }
     }
   }
@@ -1077,12 +1067,12 @@ export class MCPManagementService {
     try {
       const serverConfig = JSON.parse(jsonString) as MCPServerConfig
 
-      const validation = this.validateServerConfig(serverConfig)
-      if (!validation.valid) {
+      // v2.0 兼容性：放宽导入校验，只保留 JSON 格式校验（合法 JSON 对象），
+      // 不再强制 type/command/url 字段，以兼容 Claude Code 原生的多种 MCP 格式（如 {url, headers}）
+      if (!serverConfig || typeof serverConfig !== 'object' || Array.isArray(serverConfig)) {
         return {
           success: false,
-          error: '导入的配置不合法',
-          details: validation.errors
+          error: '导入的配置必须是 JSON 对象'
         }
       }
 
@@ -1110,15 +1100,15 @@ export class MCPManagementService {
         if (!config.projects[projectPath].mcpServers) {
           config.projects[projectPath].mcpServers = {}
         }
-        config.projects[projectPath].mcpServers![serverId] = serverConfig
+        config.projects[projectPath].mcpServers[serverId] = serverConfig
       }
 
       // 保存配置
       return await this.saveClaudeConfig(config)
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: `导入配置失败: ${error.message}`
+        error: `导入配置失败: ${error instanceof Error ? error.message : String(error)}`
       }
     }
   }

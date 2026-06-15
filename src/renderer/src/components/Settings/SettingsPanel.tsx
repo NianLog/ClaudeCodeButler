@@ -28,6 +28,7 @@ import { versionService } from '../../services/version-service'
 import UpdateModal from '../Common/UpdateModal'
 import TerminalManagement from './TerminalManagement'
 import type { VersionInfo } from '../../services/version-service'
+import type { SettingsTab } from '@shared/types/settings'
 import {
   normalizeNewConfigTemplate,
   validateNewConfigTemplate
@@ -213,7 +214,18 @@ const SettingsPanel: React.FC = () => {
   const handleSaveTab = async (tab: string) => {
     try {
       setLoading(true)
-      const values = await form.validateFields()
+      const values = await form.validateFields() as {
+        basic?: Record<string, unknown>
+        editor?: { defaultConfigTemplate?: string } & Record<string, unknown>
+        window?: {
+          width?: number
+          height?: number
+          minWidth?: number
+          minHeight?: number
+          rememberPosition?: boolean
+        }
+        [key: string]: unknown
+      }
 
       if (tab === 'editor' && typeof values.editor?.defaultConfigTemplate === 'string') {
         const normalizedTemplate = normalizeNewConfigTemplate(values.editor.defaultConfigTemplate)
@@ -221,19 +233,24 @@ const SettingsPanel: React.FC = () => {
         form.setFieldValue(['editor', 'defaultConfigTemplate'], normalizedTemplate)
       }
 
+      const tabKey = tab as SettingsTab
+
       // 对于basic标签页，需要特殊处理嵌套的window设置
-      let tabData: any = { [tab]: {} }
+      // tabData 仅用于记录即将保存的标签数据快照（便于调试），实际保存通过 store/saveSettings 完成
+      const tabData: Record<string, Record<string, unknown>> = { [tab]: {} }
       if (tab === 'basic') {
         // 提取basic设置
         tabData[tab] = values.basic || {}
         // 确保window设置也被包含
         if (values.window) {
-          tabData.window = values.window
+          tabData.window = values.window as Record<string, unknown>
         }
       } else {
         // 其他标签页直接使用原有逻辑
-        tabData = { [tab]: values[tab] || values }
+        const fallbackData = (values[tab] as Record<string, unknown> | undefined) || (values as Record<string, unknown>)
+        tabData[tab] = fallbackData
       }
+      console.debug('[SettingsPanel] tabData snapshot:', tabData)
 
       // 先获取当前表单值
       const currentFormValues = form.getFieldsValue()
@@ -241,16 +258,16 @@ const SettingsPanel: React.FC = () => {
       // 先更新store中的设置
       if (tab === 'basic') {
         // 对于basic标签页，分别更新basic和window设置
-        setTabSettings(tab as any, values.basic || {})
+        setTabSettings(tabKey, values.basic || {})
         if (values.window) {
-          setTabSettings('window' as any, values.window)
+          setTabSettings('window', values.window as Record<string, unknown>)
         }
       } else {
-        setTabSettings(tab as any, values[tab] || values)
+        setTabSettings(tabKey, (values[tab] as Record<string, unknown>) || values)
       }
 
       // 然后保存
-      await saveSettings(tab as any)
+      await saveSettings(tabKey)
 
       // 保存成功后，确保表单显示最新的值
       form.setFieldsValue(currentFormValues)
@@ -267,12 +284,12 @@ const SettingsPanel: React.FC = () => {
             ? values.window.rememberPosition
             : (windowSettings?.rememberPosition ?? true)
         }
-        setTabSettings('window' as any, completeWindowSettings)
-        await saveSettings('window' as any)
-        markTabSaved('window' as any)
+        setTabSettings('window', completeWindowSettings as unknown as Record<string, unknown>)
+        await saveSettings('window')
+        markTabSaved('window')
       }
 
-      markTabSaved(tab as any)
+      markTabSaved(tabKey)
       message.success(t('message.settings.saved', { tab: getTabName(tab) }))
     } catch (error) {
       message.error(t('message.settings.saveFailed', { tab: getTabName(tab) }))
@@ -288,7 +305,7 @@ const SettingsPanel: React.FC = () => {
   const handleReset = async () => {
     const tabName = getTabName(activeTab)
     try {
-      await resetAppSettings(activeTab as any)
+      await resetAppSettings(activeTab as SettingsTab)
       await initialize()
       message.success(t('message.settings.reset', { tab: tabName }))
     } catch (error) {

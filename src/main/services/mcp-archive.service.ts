@@ -60,8 +60,9 @@ class MCPArchiveService {
       if (!archive.projects) archive.projects = {}
 
       return archive
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      const errorCode = error instanceof Error && 'code' in error ? (error as { code?: unknown }).code : undefined
+      if (errorCode === 'ENOENT') {
         // 文件不存在,返回空结构
         logger.info('Archive 文件不存在,创建新的空 Archive')
         return {

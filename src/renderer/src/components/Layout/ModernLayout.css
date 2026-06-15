@@ -173,6 +173,31 @@
   flex-shrink: 0;
 }
 
+/* sidebar-footer 内的操作按钮组（主题切换 + 收起） */
+.sidebar-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+}
+
+.sidebar-footer-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  border: none;
+  background: transparent;
+}
+
+.sidebar-footer-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
 .sidebar-toggle {
   width: 100%;
   height: 36px;
@@ -323,6 +348,66 @@
   color: white;
 }
 
+/* Content 顶部工具栏（替代被移除的自定义 header） */
+.content-toolbar {
+  flex-shrink: 0;
+  height: 56px;
+  padding: 0 var(--space-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  z-index: var(--z-sticky);
+}
+
+.toolbar-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+}
+
+/* 工具栏中的搜索框 */
+.toolbar-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 240px;
+}
+
+.toolbar-search-icon {
+  position: absolute;
+  left: var(--space-md);
+  color: var(--text-tertiary);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.toolbar-search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--space-md) 0 36px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  background: var(--bg-primary);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+}
+
+.toolbar-search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+}
+
 /* 主内容区域 */
 .modern-content {
   flex: 1;
@@ -368,6 +453,11 @@
   .window-controls {
     display: none;
   }
+
+  /* 窄屏隐藏工具栏搜索框，避免挤压操作按钮 */
+  .toolbar-search {
+    display: none;
+  }
 }
 
 /* 暗色主题适配 */
@@ -388,6 +478,22 @@
 }
 
 [data-theme="dark"] .search-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1);
+}
+
+[data-theme="dark"] .content-toolbar {
+  background: var(--bg-elevated);
+  border-bottom-color: var(--border-light);
+}
+
+[data-theme="dark"] .toolbar-search-input {
+  background: var(--bg-tertiary);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .toolbar-search-input:focus {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1);
 }

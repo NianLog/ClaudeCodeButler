@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Input, Switch, Modal, Empty, Spin, Tag, Typography } from 'antd';
+import { Card, Button, Input, Switch, App, Empty, Spin, Tag, Typography } from 'antd';
 import { PlusOutlined, PlayCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useRuleStore } from '../../store/rule-store';
+import { AutomationRule } from '@shared/types/rules';
 import RuleEditor from './RuleEditor';
 import './AutomationPanel.css'
 import { useTranslation } from '../../locales/useTranslation'
@@ -37,6 +38,8 @@ const AutomationPanel: React.FC = () => {
 
   const { t } = useTranslation()
   const message = useMessage()
+  // v2.0：使用 App context 的 modal 替代静态 Modal.info，消除 antd 静态函数警告
+  const { modal } = App.useApp()
 
   const [searchText, setSearchText] = useState('')
   const [editorVisible, setEditorVisible] = useState(false)
@@ -63,7 +66,7 @@ const AutomationPanel: React.FC = () => {
   }
 
   // 处理规则选择
-  const handleRuleSelect = (rule: any) => {
+  const handleRuleSelect = (rule: AutomationRule) => {
     setSelectedRule(rule)
   }
 
@@ -80,13 +83,13 @@ const AutomationPanel: React.FC = () => {
   // 处理规则执行
   const handleExecuteRule = async (ruleId: string) => {
     try {
-      const result = await executeRule(ruleId)
+      const result = await executeRule(ruleId) as { result?: { stdout?: unknown; stderr?: unknown } } | undefined
       const stdout = result?.result?.stdout
       const stderr = result?.result?.stderr
       const hasOutput = (stdout && String(stdout).trim().length > 0) || (stderr && String(stderr).trim().length > 0)
 
       if (hasOutput) {
-        Modal.info({
+        modal.info({
           title: t('automation.executeResult'),
           width: 640,
           content: (
@@ -114,7 +117,7 @@ const AutomationPanel: React.FC = () => {
   }
 
   // 打开编辑器
-  const openEditor = (rule: any | null) => {
+  const openEditor = (rule: AutomationRule | null) => {
     setSelectedRule(rule);
     setEditorVisible(true);
   }
@@ -170,7 +173,7 @@ const AutomationPanel: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '24px', fontWeight: 600, color: '#1890ff', marginBottom: '4px' }}>
-                {stats.totalRules || rules.length}
+                {Number(stats.totalRules) || rules.length}
               </div>
               <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.totalRules')}</div>
             </div>
@@ -178,7 +181,7 @@ const AutomationPanel: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '24px', fontWeight: 600, color: '#52c41a', marginBottom: '4px' }}>
-                {stats.activeRules || rules.filter(r => r.enabled).length}
+                {Number(stats.activeRules) || rules.filter(r => r.enabled).length}
               </div>
               <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.activeRules')}</div>
             </div>
@@ -186,7 +189,7 @@ const AutomationPanel: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '24px', fontWeight: 600, color: '#faad14', marginBottom: '4px' }}>
-                {stats.totalExecutions || 0}
+                {Number(stats.totalExecutions) || 0}
               </div>
               <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.totalExecutions')}</div>
             </div>
@@ -194,7 +197,7 @@ const AutomationPanel: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '24px', fontWeight: 600, color: '#f5222d', marginBottom: '4px' }}>
-                {stats.failedExecutions || 0}
+                {Number(stats.failedExecutions) || 0}
               </div>
               <div style={{ color: '#666', fontSize: '12px' }}>{t('automation.stats.failedExecutions')}</div>
             </div>

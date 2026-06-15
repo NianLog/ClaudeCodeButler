@@ -14,6 +14,11 @@ import {
 } from '@ant-design/icons'
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 import type * as monaco from 'monaco-editor'
+// Monaco 语言 worker（Vite ?worker 导入）。修复原空 blob worker 导致语法诊断/tokenization
+// 退回主线程执行造成的内存与 CPU 开销（v2.0 性能根因之一）。
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { useTranslation } from '../../locales/useTranslation'
 
 const { Text } = Typography
@@ -26,20 +31,25 @@ type MonacoEditorComponent = typeof import('@monaco-editor/react')['default']
  * @description 使用运行时配置，避免入口包静态引入 Monaco 运行时代码。
  */
 const ensureMonacoEnvironment = (): void => {
-  if (typeof window === 'undefined' || (window as any).__CCB_MONACO_ENV_READY__) {
+  const win = window as unknown as { __CCB_MONACO_ENV_READY__?: boolean; MonacoEnvironment?: Record<string, unknown> }
+  if (typeof window === 'undefined' || win.__CCB_MONACO_ENV_READY__) {
     return
   }
 
-  ;(window as any).__CCB_MONACO_ENV_READY__ = true
-  ;(window as any).MonacoEnvironment = {
-    getWorker(_: any, _label: string) {
-      return new Worker(
-        URL.createObjectURL(
-          new Blob(['self.MonacoEnvironment = { baseUrl: "" };'], {
-            type: 'text/javascript'
-          })
-        )
-      )
+  win.__CCB_MONACO_ENV_READY__ = true
+  win.MonacoEnvironment = {
+    // 通过 Vite ?worker 导入真实语言 worker，使语法诊断 / tokenization 在 worker 线程执行，
+    // 避免原空 blob worker 导致这些工作退回主线程造成的内存与 CPU 开销（修复内存根因）。
+    getWorker(_workerId: string, label: string) {
+      switch (label) {
+        case 'json':
+          return new jsonWorker()
+        case 'typescript':
+        case 'javascript':
+          return new tsWorker()
+        default:
+          return new editorWorker()
+      }
     }
   }
 }
@@ -60,7 +70,7 @@ interface CodeEditorProps {
   onValidate?: (isValid: boolean, errors?: string[]) => void
   placeholder?: string
   /** Monaco Editor 配置选项 */
-  options?: Record<string, any>
+  options?: Record<string, unknown>
 }
 
 /**
@@ -81,7 +91,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   // 支持两种只读属性名称，优先使用 readOnly
   const isReadOnly = readOnly ?? readonly
   const { t } = useTranslation()
-  const editorRef = useRef<any>(null)
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<MonacoRuntime | null>(null)
   const [isValid, setIsValid] = useState(true)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
@@ -166,8 +176,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }
 
   // 合并外部传入的选项
-  const editorOptions = externalOptions 
-    ? { ...defaultEditorOptions, ...externalOptions }
+  const editorOptions = externalOptions
+    ? { ...defaultEditorOptions, ...(externalOptions as Record<string, unknown>) }
     : defaultEditorOptions
 
   // 验证JSON内容
@@ -270,7 +280,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [onValidate])
 
   // 编辑器挂载后的处理
-  const handleEditorDidMount = useCallback((editor: any) => {
+  const handleEditorDidMount = useCallback((editor: monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor
 
     // 设置初始验证

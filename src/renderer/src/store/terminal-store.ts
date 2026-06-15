@@ -143,7 +143,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           error
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         stdout: '',
         stderr: '',

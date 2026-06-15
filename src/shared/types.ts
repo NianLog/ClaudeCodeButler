@@ -17,7 +17,7 @@ export interface ConfigFile {
   description?: string
   type: ConfigType
   path: string
-  content?: Record<string, any>
+  content?: Record<string, unknown>
   size: number
   lastModified: Date
   isActive?: boolean
@@ -64,7 +64,7 @@ export interface ValidationResult {
   isValid: boolean
   errors: ValidationError[]
   warnings: ValidationWarning[]
-  data?: any
+  data?: unknown
 }
 
 /**
@@ -96,7 +96,7 @@ export interface Rule {
   isRunning: boolean
   trigger: {
     type: 'time' | 'file' | 'manual' | 'system'
-    config: Record<string, any>
+    config: Record<string, unknown>
   }
   conditions: RuleCondition[]
   actions: RuleAction[]
@@ -113,7 +113,7 @@ export interface RuleCondition {
   type: 'time' | 'file' | 'config' | 'system'
   operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than'
   field: string
-  value: any
+  value: unknown
 }
 
 /**
@@ -121,7 +121,7 @@ export interface RuleCondition {
  */
 export interface RuleAction {
   type: 'switch_config' | 'backup_config' | 'notification' | 'log' | 'custom'
-  config: Record<string, any>
+  config: Record<string, unknown>
 }
 
 /**
@@ -136,13 +136,13 @@ export interface RuleExecution {
   endTime?: Date
   duration?: number
   error?: string
-  result?: any
+  result?: unknown
 }
 
 /**
  * API响应接口
  */
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string
@@ -215,7 +215,7 @@ export interface LogEntry {
   message: string
   timestamp: Date
   module: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /**
@@ -224,7 +224,7 @@ export interface LogEntry {
 export interface FileWatchEvent {
   type: 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir'
   path: string
-  stats?: any
+  stats?: unknown
   timestamp: Date
 }
 
@@ -239,5 +239,5 @@ export interface TaskSchedule {
   nextRun?: Date
   lastRun?: Date
   taskType: string
-  config: Record<string, any>
+  config: Record<string, unknown>
 }

@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 interface MarkdownRendererProps {
@@ -11,8 +11,15 @@ interface MarkdownRendererProps {
   className?: string
 }
 
+type SyntaxHighlighterComponent = React.FC<{
+  language?: string
+  style?: Record<string, React.CSSProperties>
+  PreTag?: React.ElementType
+  children?: React.ReactNode
+}> & { registerLanguage?: (...args: unknown[]) => unknown }
+
 type SyntaxModule = {
-  SyntaxHighlighter: any
+  SyntaxHighlighter: SyntaxHighlighterComponent
   theme: Record<string, React.CSSProperties>
 }
 
@@ -29,7 +36,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
         ])
         if (!cancelled) {
           setSyntaxModule({
-            SyntaxHighlighter: Prism,
+            SyntaxHighlighter: Prism as unknown as SyntaxHighlighterComponent,
             theme: themeModule.vscDarkPlus as Record<string, React.CSSProperties>
           })
         }
@@ -44,8 +51,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
     }
   }, [])
 
-  const components = useMemo(() => ({
-    code({ className: codeClassName, children, node, ...rest }: any) {
+  const components = useMemo<Components>(() => ({
+    code(props) {
+      const { className: codeClassName, children, ...rest } = props as { className?: string; children?: React.ReactNode } & Record<string, unknown>
       const match = /language-(\w+)/.exec(codeClassName || '')
       const codeText = String(children).replace(/\n$/, '')
       if (match && syntaxModule?.SyntaxHighlighter) {

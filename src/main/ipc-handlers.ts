@@ -29,6 +29,7 @@ import {
   ensurePathWithinBase,
   sanitizeFileName
 } from './utils/path-security'
+import { ensureExternalUrl } from './utils/ssrf-guard'
 
 
 // 服务实例
@@ -36,15 +37,15 @@ const configService = new ConfigService()
 const settingsService = new SettingsService()
 
 // 导出 configService 供其他模块使用
-export { configService, settingsService }
+export { configService, settingsService, managedModeService }
 
 /**
  * 简化的IPC处理器包装器
  */
-function createSimpleHandler<T extends any[], R>(
+function createSimpleHandler<T extends unknown[], R>(
   handler: (...args: T) => Promise<R> | R
 ) {
-  return async (_event: Electron.IpcMainInvokeEvent, ...args: T): Promise<any> => {
+  return async (_event: Electron.IpcMainInvokeEvent, ...args: T): Promise<{ success: boolean; data?: R } | { success: boolean; error: string }> => {
     try {
       const result = await Promise.resolve(handler(...args))
       return { success: true, data: result }
@@ -108,13 +109,13 @@ function setupConfigHandlers(): void {
   ipcMain.handle('config:list', createSimpleHandler(() => configService.scanConfigs()))
   ipcMain.handle('config:refreshSnapshot', createSimpleHandler(() => configService.getRefreshSnapshot()))
   ipcMain.handle('config:get', createSimpleHandler((path: string) => configService.getConfig(path)))
-  ipcMain.handle('config:save', createSimpleHandler(async (path: string, content: any, metadata?: any) => {
-    const result = await configService.saveConfig(path, content, metadata)
+  ipcMain.handle('config:save', createSimpleHandler(async (path: string, content: unknown, metadata?: Record<string, unknown>) => {
+    const result = await configService.saveConfig(path, content, metadata as Parameters<typeof configService.saveConfig>[2])
     // 配置保存后，同步托管模式 providers
     await syncProvidersAfterConfigChange()
     return result
   }))
-  ipcMain.handle('config:saveMetadata', createSimpleHandler((path: string, metadata: any) => configService.saveConfigMetadata(path, metadata)))
+  ipcMain.handle('config:saveMetadata', createSimpleHandler((path: string, metadata: Record<string, unknown>) => configService.saveConfigMetadata(path, metadata as Parameters<typeof configService.saveConfigMetadata>[1])))
   ipcMain.handle('config:getMetadata', createSimpleHandler((path: string) => configService.getConfigMetadata(path)))
   ipcMain.handle('config:create', createSimpleHandler(async (name: string, template?: string) => {
     const path = await configService.createConfig(name, template)
@@ -128,7 +129,7 @@ function setupConfigHandlers(): void {
     await syncProvidersAfterConfigChange()
     return result
   }))
-  ipcMain.handle('config:validate', createSimpleHandler((content: any) => configService.validateConfig(content)))
+  ipcMain.handle('config:validate', createSimpleHandler((content: unknown) => configService.validateConfig(content)))
   ipcMain.handle('config:createBackup', createSimpleHandler((path: string) => configService.createBackup(path)))
   ipcMain.handle('config:restoreBackup', createSimpleHandler((backupId: string) => configService.restoreBackup(backupId)))
   ipcMain.handle('config:listBackups', createSimpleHandler((configPath: string) => configService.listBackups(configPath)))
@@ -174,8 +175,8 @@ function setupConfigHandlers(): void {
  */
 function setupRuleHandlers(): void {
   ipcMain.handle('rule:list', createSimpleHandler(() => ruleEngineService.getAllRules()))
-  ipcMain.handle('rule:create', createSimpleHandler((ruleData: any) => ruleEngineService.createRule(ruleData)))
-  ipcMain.handle('rule:update', createSimpleHandler((id: string, updates: Partial<any>) => ruleEngineService.updateRule(id, updates)))
+  ipcMain.handle('rule:create', createSimpleHandler((ruleData: Parameters<typeof ruleEngineService.createRule>[0]) => ruleEngineService.createRule(ruleData)))
+  ipcMain.handle('rule:update', createSimpleHandler((id: string, updates: Partial<Parameters<typeof ruleEngineService.updateRule>[1]>) => ruleEngineService.updateRule(id, updates)))
   ipcMain.handle('rule:delete', createSimpleHandler((id: string) => ruleEngineService.deleteRule(id)))
   ipcMain.handle('rule:toggle', createSimpleHandler((id: string, enabled: boolean) => ruleEngineService.updateRule(id, { enabled })))
   
@@ -203,7 +204,7 @@ function setupRuleHandlers(): void {
  */
 function setupAppHandlers(): void {
   ipcMain.handle('app:getVersion', createSimpleHandler(() => Promise.resolve(app.getVersion())))
-  ipcMain.handle('app:getPath', createSimpleHandler((name: string) => Promise.resolve(app.getPath(name as any))))
+  ipcMain.handle('app:getPath', createSimpleHandler((name: string) => Promise.resolve(app.getPath(name as Parameters<typeof app.getPath>[0]))))
   ipcMain.handle('app:quit', createSimpleHandler(() => { app.quit(); return Promise.resolve(); }))
   ipcMain.handle('app:relaunch', createSimpleHandler(() => { app.relaunch(); app.exit(); return Promise.resolve(); }))
   ipcMain.handle('app:getInfo', createSimpleHandler(() => Promise.resolve({
@@ -375,7 +376,10 @@ function setupSystemHandlers(): void {
               logger.error(`已接收 ${receivedBytes} / ${totalBytes} 字节`)
 
               // 获取更详细的错误信息
+              // Electron DownloadItem 在部分版本提供 getLastErrorMessage 但类型未导出
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const lastErrorMessage = typeof (item as any).getLastErrorMessage === 'function'
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ? (item as any).getLastErrorMessage()
                 : '未知原因'
               logger.error(`中断原因: ${lastErrorMessage}`)
@@ -432,6 +436,8 @@ function setupSystemHandlers(): void {
   ipcMain.handle('system:fetchUrl', async (_, url: string) => {
     try {
       const safeUrl = ensureAllowedUrl(url, ['http:', 'https:'], '抓取地址')
+      // v2.0 SSRF 防护：拒绝内网/环回/链路本地地址，防止渲染进程探测内网服务或云元数据端点
+      await ensureExternalUrl(safeUrl, '抓取地址')
       const https = await import('https')
       const http = await import('http')
 
@@ -530,17 +536,17 @@ function setupSettingsHandlers(): void {
   ipcMain.handle('settings:getAll', createSimpleHandler(() => settingsService.getSettings()))
 
   // 获取特定标签页设置
-  ipcMain.handle('settings:getTab', createSimpleHandler((tab: string) => settingsService.getTabSettings(tab as any)))
+  ipcMain.handle('settings:getTab', createSimpleHandler((tab: string) => settingsService.getTabSettings(tab as Parameters<typeof settingsService.getTabSettings>[0])))
 
   // 保存特定标签页设置
-  ipcMain.handle('settings:saveTab', createSimpleHandler(async (tab: string, data: any, options?: any) => {
+  ipcMain.handle('settings:saveTab', createSimpleHandler(async (tab: string, data: Parameters<typeof settingsService.saveSettings>[1], options?: Parameters<typeof settingsService.saveSettings>[2]) => {
     const newSettingsService = new SettingsService() // 创建新实例以更新设置
     await newSettingsService.loadSettings() // 先加载现有设置
-    await newSettingsService.saveSettings(tab as any, data, options)
+    await newSettingsService.saveSettings(tab as Parameters<typeof newSettingsService.saveSettings>[0], data, options)
   }))
 
   // 保存所有设置
-  ipcMain.handle('settings:saveAll', createSimpleHandler(async (data: any) => {
+  ipcMain.handle('settings:saveAll', createSimpleHandler(async (data: Parameters<typeof settingsService.saveSettings>[1]) => {
     const newSettingsService = new SettingsService() // 创建新实例以更新设置
     await newSettingsService.loadSettings() // 先加载现有设置
     await newSettingsService.saveSettings('basic', data)
@@ -552,7 +558,7 @@ function setupSettingsHandlers(): void {
 
   // 重置设置
   ipcMain.handle('settings:reset', createSimpleHandler(async (tab?: string) => {
-    await settingsService.resetSettings(tab as any)
+    await settingsService.resetSettings(tab as Parameters<typeof settingsService.resetSettings>[0])
   }))
 
   // 导出设置
@@ -577,7 +583,7 @@ function setupSettingsHandlers(): void {
  */
 function setupManagedModeLogRotationHandlers(): void {
   // 持久化日志到文件
-  ipcMain.handle('managedModeLogRotation:persistLogs', createSimpleHandler((logs: any[]) =>
+  ipcMain.handle('managedModeLogRotation:persistLogs', createSimpleHandler((logs: Parameters<typeof managedModeLogRotationService.persistLogs>[0]) =>
     managedModeLogRotationService.persistLogs(logs)
   ))
 
@@ -602,7 +608,7 @@ function setupManagedModeLogRotationHandlers(): void {
   ))
 
   // 更新配置
-  ipcMain.handle('managedModeLogRotation:updateConfig', createSimpleHandler((config: any) =>
+  ipcMain.handle('managedModeLogRotation:updateConfig', createSimpleHandler((config: Parameters<typeof managedModeLogRotationService.updateConfig>[0]) =>
     managedModeLogRotationService.updateConfig(config)
   ))
 }
@@ -629,7 +635,7 @@ function setupMCPHandlers(): void {
   })
 
   // 添加或更新MCP服务器
-  ipcMain.handle('mcp:add-or-update-server', async (_, formData: any) => {
+  ipcMain.handle('mcp:add-or-update-server', async (_, formData: Parameters<typeof mcpManagementService.addOrUpdateServer>[0]) => {
     return await mcpManagementService.addOrUpdateServer(formData)
   })
 
@@ -674,7 +680,7 @@ function setupMCPHandlers(): void {
   })
 
   // 保存Claude配置文件
-  ipcMain.handle('mcp:save-claude-config', async (_, config: any) => {
+  ipcMain.handle('mcp:save-claude-config', async (_, config: Parameters<typeof mcpManagementService.saveClaudeConfig>[0]) => {
     return await mcpManagementService.saveClaudeConfig(config)
   })
 }
@@ -690,28 +696,28 @@ function setupAgentsHandlers(): void {
   ipcMain.handle('agents:get', createSimpleHandler((agentId: string) => agentsManagementService.getAgent(agentId)))
 
   // 添加新Agent
-  ipcMain.handle('agents:add', createSimpleHandler((formData: any) => agentsManagementService.addAgent(formData)))
+  ipcMain.handle('agents:add', createSimpleHandler((formData: Parameters<typeof agentsManagementService.addAgent>[0]) => agentsManagementService.addAgent(formData)))
 
   // 删除Agent
   ipcMain.handle('agents:delete', createSimpleHandler((agentId: string) => agentsManagementService.deleteAgent(agentId)))
 
   // 导入单个Agent
-  ipcMain.handle('agents:import', createSimpleHandler((sourceFilePath: string, options?: any) =>
+  ipcMain.handle('agents:import', createSimpleHandler((sourceFilePath: string, options?: Parameters<typeof agentsManagementService.importAgent>[1]) =>
     agentsManagementService.importAgent(sourceFilePath, options)
   ))
 
   // 导入Agent内容
-  ipcMain.handle('agents:import-content', createSimpleHandler((content: string, options?: any) =>
+  ipcMain.handle('agents:import-content', createSimpleHandler((content: string, options?: Parameters<typeof agentsManagementService.importAgentContent>[1]) =>
     agentsManagementService.importAgentContent(content, options)
   ))
 
   // 批量导入Agent
-  ipcMain.handle('agents:batch-import', createSimpleHandler((sourceFilePaths: string[], options?: any) =>
+  ipcMain.handle('agents:batch-import', createSimpleHandler((sourceFilePaths: string[], options?: Parameters<typeof agentsManagementService.batchImportAgents>[1]) =>
     agentsManagementService.batchImportAgents(sourceFilePaths, options)
   ))
 
   // 批量导入Agent内容
-  ipcMain.handle('agents:batch-import-content', createSimpleHandler((contents: any[], options?: any) =>
+  ipcMain.handle('agents:batch-import-content', createSimpleHandler((contents: Parameters<typeof agentsManagementService.batchImportAgentsContent>[0], options?: Parameters<typeof agentsManagementService.batchImportAgentsContent>[1]) =>
     agentsManagementService.batchImportAgentsContent(contents, options)
   ))
 }
@@ -727,28 +733,28 @@ function setupSkillsHandlers(): void {
   ipcMain.handle('skills:get', createSimpleHandler((skillId: string) => skillsManagementService.getSkill(skillId)))
 
   // 添加新Skill
-  ipcMain.handle('skills:add', createSimpleHandler((formData: any) => skillsManagementService.addSkill(formData)))
+  ipcMain.handle('skills:add', createSimpleHandler((formData: Parameters<typeof skillsManagementService.addSkill>[0]) => skillsManagementService.addSkill(formData)))
 
   // 删除Skill
   ipcMain.handle('skills:delete', createSimpleHandler((skillId: string) => skillsManagementService.deleteSkill(skillId)))
 
   // 导入单个Skill
-  ipcMain.handle('skills:import', createSimpleHandler((sourceDirPath: string, options?: any) =>
+  ipcMain.handle('skills:import', createSimpleHandler((sourceDirPath: string, options?: Parameters<typeof skillsManagementService.importSkill>[1]) =>
     skillsManagementService.importSkill(sourceDirPath, options)
   ))
 
   // 导入Skill文件列表
-  ipcMain.handle('skills:import-files', createSimpleHandler((payload: any, options?: any) =>
+  ipcMain.handle('skills:import-files', createSimpleHandler((payload: Parameters<typeof skillsManagementService.importSkillFiles>[0], options?: Parameters<typeof skillsManagementService.importSkillFiles>[1]) =>
     skillsManagementService.importSkillFiles(payload, options)
   ))
 
   // 批量导入Skill
-  ipcMain.handle('skills:batch-import', createSimpleHandler((sourceDirPaths: string[], options?: any) =>
+  ipcMain.handle('skills:batch-import', createSimpleHandler((sourceDirPaths: string[], options?: Parameters<typeof skillsManagementService.batchImportSkills>[1]) =>
     skillsManagementService.batchImportSkills(sourceDirPaths, options)
   ))
 
   // 批量导入Skill文件列表
-  ipcMain.handle('skills:batch-import-files', createSimpleHandler((payloads: any[], options?: any) =>
+  ipcMain.handle('skills:batch-import-files', createSimpleHandler((payloads: Parameters<typeof skillsManagementService.batchImportSkillsFiles>[0], options?: Parameters<typeof skillsManagementService.batchImportSkillsFiles>[1]) =>
     skillsManagementService.batchImportSkillsFiles(payloads, options)
   ))
 }
@@ -764,11 +770,11 @@ function setupEnvironmentHandlers(): void {
 
   // 检查单个预定义环境
   ipcMain.handle('environment:check-predefined', createSimpleHandler((checkType: string) =>
-    environmentCheckService.checkPredefined(checkType as any)
+    environmentCheckService.checkPredefined(checkType as Parameters<typeof environmentCheckService.checkPredefined>[0])
   ))
 
   // 检查单个自定义环境
-  ipcMain.handle('environment:check-custom', createSimpleHandler((customCheck: any) =>
+  ipcMain.handle('environment:check-custom', createSimpleHandler((customCheck: Parameters<typeof environmentCheckService.checkCustom>[0]) =>
     environmentCheckService.checkCustom(customCheck)
   ))
 
@@ -778,12 +784,12 @@ function setupEnvironmentHandlers(): void {
   ))
 
   // 添加自定义检查
-  ipcMain.handle('environment:add-custom-check', createSimpleHandler((formData: any) =>
+  ipcMain.handle('environment:add-custom-check', createSimpleHandler((formData: Parameters<typeof environmentCheckService.addCustomCheck>[0]) =>
     environmentCheckService.addCustomCheck(formData)
   ))
 
   // 更新自定义检查
-  ipcMain.handle('environment:update-custom-check', createSimpleHandler((params: any) =>
+  ipcMain.handle('environment:update-custom-check', createSimpleHandler((params: { checkId: Parameters<typeof environmentCheckService.updateCustomCheck>[0]; formData: Parameters<typeof environmentCheckService.updateCustomCheck>[1] }) =>
     environmentCheckService.updateCustomCheck(params.checkId, params.formData)
   ))
 
@@ -798,7 +804,7 @@ function setupEnvironmentHandlers(): void {
   ))
 
   // 计算检查结果汇总
-  ipcMain.handle('environment:calculate-summary', createSimpleHandler(async (results: any[]) =>
+  ipcMain.handle('environment:calculate-summary', createSimpleHandler(async (results: Parameters<typeof environmentCheckService.calculateSummary>[0]) =>
     environmentCheckService.calculateSummary(results)
   ))
 }
@@ -813,17 +819,17 @@ function setupTerminalHandlers(): void {
   ))
 
   // 添加或更新终端配置
-  ipcMain.handle('terminal:upsert-terminal', createSimpleHandler((config: any) =>
+  ipcMain.handle('terminal:upsert-terminal', createSimpleHandler((config: Parameters<typeof terminalManagementService.upsertTerminal>[0]) =>
     terminalManagementService.upsertTerminal(config)
   ))
 
   // 删除终端配置
-  ipcMain.handle('terminal:delete-terminal', createSimpleHandler((type: any) =>
+  ipcMain.handle('terminal:delete-terminal', createSimpleHandler((type: Parameters<typeof terminalManagementService.deleteTerminal>[0]) =>
     terminalManagementService.deleteTerminal(type)
   ))
 
   // 设置默认终端
-  ipcMain.handle('terminal:set-default', createSimpleHandler((type: any) =>
+  ipcMain.handle('terminal:set-default', createSimpleHandler((type: Parameters<typeof terminalManagementService.setDefaultTerminal>[0]) =>
     terminalManagementService.setDefaultTerminal(type)
   ))
 
@@ -833,12 +839,12 @@ function setupTerminalHandlers(): void {
   ))
 
   // 设置执行配置
-  ipcMain.handle('terminal:set-execution-config', createSimpleHandler((checkId: string, config: any) =>
+  ipcMain.handle('terminal:set-execution-config', createSimpleHandler((checkId: string, config: Parameters<typeof terminalManagementService.setExecutionConfig>[1]) =>
     terminalManagementService.setExecutionConfig(checkId, config)
   ))
 
   // 执行命令
-  ipcMain.handle('terminal:execute-command', createSimpleHandler(async (command: string, options?: any) =>
+  ipcMain.handle('terminal:execute-command', createSimpleHandler(async (command: string, options?: Parameters<typeof terminalManagementService.executeIpcCommand>[1]) =>
     terminalManagementService.executeIpcCommand(command, options)
   ))
 }

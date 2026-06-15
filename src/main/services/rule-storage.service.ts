@@ -22,9 +22,14 @@ class RuleStorageService {
   private async ensureStorageFile(): Promise<void> {
     try {
       await fs.access(this.storagePath);
-    } catch (error) {
+    } catch {
       logger.info('规则文件不存在，正在创建...');
-      await this.writeRules([]);
+      try {
+        await this.writeRules([]);
+      } catch (error) {
+        // 初始化创建失败不致命（readRules 会返回 [] 兜底），仅记录日志
+        logger.error('初始化规则文件失败:', error);
+      }
     }
   }
 
@@ -48,11 +53,22 @@ class RuleStorageService {
    * @returns {Promise<void>}
    */
   public async writeRules(rules: AutomationRule[]): Promise<void> {
+    const data = JSON.stringify(rules, null, 2);
+    const tempPath = `${this.storagePath}.tmp`;
     try {
-      const data = JSON.stringify(rules, null, 2);
-      await fs.writeFile(this.storagePath, data, 'utf-8');
+      // 原子写：先写临时文件再 rename，避免写入中断导致规则文件损坏
+      await fs.writeFile(tempPath, data, 'utf-8');
+      await fs.rename(tempPath, this.storagePath);
     } catch (error) {
       logger.error('写入规则文件失败:', error);
+      // 清理可能残留的临时文件
+      try {
+        await fs.unlink(tempPath);
+      } catch {
+        // 临时文件不存在，忽略
+      }
+      // 抛出错误让调用方感知失败（修复原 catch 吞错导致规则静默丢失的 P0 缺陷）
+      throw new Error(`写入规则文件失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

@@ -100,7 +100,7 @@ export interface ClaudeMessage {
   role: 'user' | 'assistant'
   content: string | Array<{
     type: string
-    [key: string]: any
+    [key: string]: unknown
   }>
 }
 
@@ -117,7 +117,7 @@ export interface ClaudeRequest {
   stream?: boolean
   system?: string
   stop_sequences?: string[]
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**
@@ -130,7 +130,7 @@ export interface ClaudeResponse {
   content: Array<{
     type: string
     text?: string
-    [key: string]: any
+    [key: string]: unknown
   }>
   model: string
   stop_reason: string | null
@@ -153,7 +153,7 @@ export interface StreamChunk {
   model?: string
   choices?: Array<{
     index: number
-    delta: any
+    delta: unknown
     finish_reason?: string
   }>
   usage?: {
@@ -170,9 +170,9 @@ export interface Transformer {
   /** 转换器名称 */
   name: string
   /** 转换请求 */
-  transformRequest: (request: ClaudeRequest, provider: ApiProvider) => Promise<any>
+  transformRequest: (request: ClaudeRequest, provider: ApiProvider) => Promise<unknown>
   /** 转换响应 */
-  transformResponse: (response: any, provider: ApiProvider) => Promise<ClaudeResponse>
+  transformResponse: (response: unknown, provider: ApiProvider) => Promise<ClaudeResponse>
   /** 转换流式响应 */
   transformStreamChunk?: (chunk: string, provider: ApiProvider) => string | null
 }

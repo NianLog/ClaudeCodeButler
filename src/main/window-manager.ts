@@ -5,6 +5,7 @@
 
 import { BrowserWindow, screen } from 'electron'
 import { join } from 'path'
+import * as fs from 'fs'
 import { DEFAULT_SETTINGS, APP_INFO } from '@shared/constants'
 import { logger } from './utils/logger'
 import { SettingsService } from './services/settings-service'
@@ -68,8 +69,10 @@ export class WindowManager {
       minHeight: DEFAULT_SETTINGS.window.minHeight,
       show: false, // 先不显示，等加载完成后再显示
       backgroundColor: '#0f172a',
-      autoHideMenuBar: true,
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+      // 使用操作系统原生标题栏（含最小化/最大化/关闭按钮），
+      // 渲染层不再渲染自定义 header，避免与原生标题栏重复。
+      // 注意：不设置 titleBarStyle，使用各平台默认的完整原生标题栏。
+      autoHideMenuBar: false,
       icon: this.getAppIcon(),
       webPreferences: {
         nodeIntegration: false,
@@ -77,7 +80,9 @@ export class WindowManager {
         preload: join(__dirname, '../preload/index.js'),
         webSecurity: true,
         allowRunningInsecureContent: false,
-        experimentalFeatures: false
+        experimentalFeatures: false,
+        // v2.0 性能：窗口隐藏到托盘时降低后台定时器/重渲染频率，减少驻留期 CPU 占用
+        backgroundThrottling: true
       }
     })
     this.hasShownMainWindow = false
@@ -277,7 +282,6 @@ export class WindowManager {
    */
   private getAppIcon(): string {
     try {
-      const fs = require('fs')
 
       // Windows 和 Linux 优先使用 .ico 格式
       if (process.platform !== 'darwin') {
@@ -401,7 +405,7 @@ export class WindowManager {
   /**
    * 获取窗口信息
    */
-  getWindowInfo(): any {
+  getWindowInfo(): Record<string, unknown> | null {
     if (!this.mainWindow) {
       return null
     }
@@ -430,7 +434,7 @@ export class WindowManager {
   /**
    * 发送消息到渲染进程
    */
-  sendToRenderer(channel: string, ...args: any[]): void {
+  sendToRenderer(channel: string, ...args: unknown[]): void {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send(channel, ...args)
     }

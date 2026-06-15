@@ -23,8 +23,10 @@ import {
   Input,
   Statistic,
   Tooltip,
-  Typography
+  Typography,
+  App
 } from 'antd'
+import type { BadgeProps } from 'antd'
 import {
   ReloadOutlined,
   PlusOutlined,
@@ -40,6 +42,7 @@ import { useEnvironmentCheckStore } from '@/store/environment-check-store'
 import { useTranslation } from '../../locales/useTranslation'
 import { useMessage } from '../../hooks/useMessage'
 import { EnvironmentCheckStatus, PredefinedCheckType } from '@shared/types/environment'
+import type { EnvironmentCheckResult, CustomEnvironmentCheck } from '@shared/types/environment'
 import './EnvironmentCheckPanel.css'
 
 const { Title, Text } = Typography
@@ -49,6 +52,8 @@ const { Title, Text } = Typography
  */
 const EnvironmentCheckPanel: React.FC = () => {
   const messageApi = useMessage()
+  // v2.0：使用 App context 的 modal 替代静态 Modal.success/confirm，消除 antd 静态函数警告
+  const { modal } = App.useApp()
   const { t } = useTranslation()
   const {
     predefinedResults,
@@ -126,7 +131,7 @@ const EnvironmentCheckPanel: React.FC = () => {
 
       messageApi.success({ content: t('environment.messages.updateSuccess'), key: 'claudeUpdate' })
       const outputText = [result?.data?.stdout, result?.data?.stderr].filter(Boolean).join('\n').trim()
-      Modal.success({
+      modal.success({
         title: t('environment.messages.updateOutputTitle'),
         content: (
           <pre style={{ maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
@@ -145,7 +150,7 @@ const EnvironmentCheckPanel: React.FC = () => {
     {
       title: t('environment.predefined.columns.name'),
       key: 'name',
-      render: (_: any, record: any) => (
+      render: (_value: unknown, record: EnvironmentCheckResult) => (
         <Space>
           {record.icon && <span style={{ fontSize: 18 }}>{record.icon}</span>}
           <Text strong>{record.name}</Text>
@@ -158,7 +163,7 @@ const EnvironmentCheckPanel: React.FC = () => {
       key: 'status',
       render: (status: EnvironmentCheckStatus) => (
         <Badge
-          status={statusMap[status] as any}
+          status={statusMap[status] as BadgeProps['status']}
           text={statusTextMap[status]}
         />
       )
@@ -188,7 +193,7 @@ const EnvironmentCheckPanel: React.FC = () => {
     {
       title: t('environment.predefined.columns.actions'),
       key: 'actions',
-      render: (_: any, record: any) => (
+      render: (_value: unknown, record: EnvironmentCheckResult) => (
         <Tooltip title={t('environment.actions.refresh')}>
           <Button
             size="small"
@@ -221,25 +226,27 @@ const EnvironmentCheckPanel: React.FC = () => {
         messageApi.success(t('environment.messages.customAdded'))
       }
       customCheckForm.resetFields()
-    } catch (error: any) {
-      if (error?.errorFields) {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) {
         return // 表单验证错误
       }
-      messageApi.error(`${t('environment.messages.actionFailed')}: ${error.message || t('common.unknownError')}`)
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(`${t('environment.messages.actionFailed')}: ${msg}`)
     }
   }
 
   // 处理删除自定义检查
   const handleDeleteCustomCheck = async (checkId: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: t('environment.messages.confirmDeleteTitle'),
       content: t('environment.messages.confirmDeleteContent'),
       onOk: async () => {
         try {
           await deleteCustomCheck(checkId)
           messageApi.success(t('environment.messages.deleteSuccess'))
-        } catch (error: any) {
-          messageApi.error(`${t('environment.messages.deleteFailed')}: ${error.message || t('common.unknownError')}`)
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : t('common.unknownError')
+          messageApi.error(`${t('environment.messages.deleteFailed')}: ${msg}`)
         }
       }
     })
@@ -276,11 +283,11 @@ const EnvironmentCheckPanel: React.FC = () => {
     {
       title: t('environment.custom.columns.status'),
       key: 'status',
-      render: (_: any, record: { id: string }) => {
+      render: (_value: unknown, record: CustomEnvironmentCheck) => {
         const result = customResults.find(r => r.id === record.id)
         return result ? (
           <Badge
-            status={statusMap[result.status] as any}
+            status={statusMap[result.status] as BadgeProps['status']}
             text={statusTextMap[result.status]}
           />
         ) : (
@@ -291,7 +298,7 @@ const EnvironmentCheckPanel: React.FC = () => {
     {
       title: t('environment.custom.columns.version'),
       key: 'version',
-      render: (_: any, record: { id: string }) => {
+      render: (_value: unknown, record: CustomEnvironmentCheck) => {
         const result = customResults.find(r => r.id === record.id)
         return result?.version ? (
           <Text code style={{ fontSize: 12 }}>
@@ -309,7 +316,7 @@ const EnvironmentCheckPanel: React.FC = () => {
     {
       title: t('environment.custom.columns.actions'),
       key: 'actions',
-      render: (_: any, record: { id: string; name: string }) => (
+      render: (_value: unknown, record: CustomEnvironmentCheck) => (
         <Space size="small">
           <Tooltip title={t('environment.actions.refresh')}>
             <Button

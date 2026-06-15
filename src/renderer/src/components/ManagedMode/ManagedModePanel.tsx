@@ -86,7 +86,7 @@ const ManagedModePanel: React.FC = () => {
         configData: configData.configData ? {
           ...configData.configData,
           env: {
-            ...(configData.configData.env || {}),
+            ...((configData.configData as Record<string, unknown>).env || {}),
             ANTHROPIC_AUTH_TOKEN: accessToken
           }
         } : configData.configData
@@ -94,10 +94,11 @@ const ManagedModePanel: React.FC = () => {
 
       setStatus(statusData)
       setConfig(resolvedConfig)
-      const resolvedConfigs = (configsData as any)?.data || configsData || []
+      const resolvedConfigs = (configsData as { data?: ConfigFile[] } | undefined)?.data || configsData || []
       setConfigs(Array.isArray(resolvedConfigs) ? resolvedConfigs : [])
-    } catch (error: any) {
-      message.error(t('managedMode.messages.loadFailed', { error: error.message }))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      message.error(t('managedMode.messages.loadFailed', { error: msg }))
     } finally {
       setInitialLoading(false)
     }
@@ -176,8 +177,9 @@ const ManagedModePanel: React.FC = () => {
       } else {
         message.error(result.error || t('managedMode.messages.enableFailed'))
       }
-    } catch (error: any) {
-      message.error(t('managedMode.messages.enableFailedWithError', { error: error.message }))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      message.error(t('managedMode.messages.enableFailedWithError', { error: msg }))
     } finally {
       setLoading(false)
     }
@@ -196,8 +198,9 @@ const ManagedModePanel: React.FC = () => {
       } else {
         message.error(result.error || t('managedMode.messages.disableFailed'))
       }
-    } catch (error: any) {
-      message.error(t('managedMode.messages.disableFailedWithError', { error: error.message }))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      message.error(t('managedMode.messages.disableFailedWithError', { error: msg }))
     } finally {
       setLoading(false)
     }
@@ -211,8 +214,9 @@ const ManagedModePanel: React.FC = () => {
     try {
       message.success(t('managedMode.messages.restartSuccess'))
       await loadData()
-    } catch (error: any) {
-      message.error(t('managedMode.messages.restartFailed', { error: error.message }))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      message.error(t('managedMode.messages.restartFailed', { error: msg }))
     } finally {
       setLoading(false)
     }
@@ -222,15 +226,15 @@ const ManagedModePanel: React.FC = () => {
    * 配置变更处理
    * @description 处理托管模式配置变更，确保配置更新、服务重启和状态同步的正确顺序
    */
-  const handleConfigChange = async (newConfig: any) => {
+  const handleConfigChange = async (newConfig: Record<string, unknown>) => {
     try {
       setLoading(true)
 
-      const configData = newConfig.configData || {}
+      const configData = (newConfig.configData as Record<string, unknown>) || {}
 
       // 1. 先更新托管模式配置（端口、令牌、日志、服务商等）
       // 提取托管模式配置字段
-      const managedConfig: any = {}
+      const managedConfig: Record<string, unknown> = {}
       if (newConfig.port !== undefined) managedConfig.port = newConfig.port
       if (newConfig.accessToken !== undefined) managedConfig.accessToken = newConfig.accessToken
       if (newConfig.logging !== undefined) managedConfig.logging = newConfig.logging
@@ -242,7 +246,7 @@ const ManagedModePanel: React.FC = () => {
       // 更新托管模式配置（会自动重启服务）
       if (Object.keys(managedConfig).length > 0) {
         console.log('更新托管模式配置:', managedConfig)
-        const updateResult = await window.electronAPI.managedMode.updateConfig(managedConfig)
+        const updateResult = await window.electronAPI.managedMode.updateConfig(managedConfig as Partial<ManagedModeConfig>)
         if (!updateResult.success) {
           throw new Error(updateResult.error || t('managedMode.messages.updateConfigFailed'))
         }
@@ -266,9 +270,10 @@ const ManagedModePanel: React.FC = () => {
 
       message.success(t('managedMode.messages.updateSuccess'))
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('更新配置失败:', error)
-      message.error(t('managedMode.messages.updateFailed', { error: error.message }))
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      message.error(t('managedMode.messages.updateFailed', { error: msg }))
     } finally {
       setLoading(false)
     }

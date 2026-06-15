@@ -49,9 +49,10 @@ export async function loadConfig(): Promise<ManagedModeConfig> {
         level: config.logging?.level ?? 'info'
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // 配置文件不存在或读取失败,返回默认配置
-    console.warn(`配置文件加载失败: ${error.message}, 使用默认配置`)
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`配置文件加载失败: ${message}, 使用默认配置`)
     return DEFAULT_CONFIG
   }
 }
@@ -68,8 +69,9 @@ export async function saveConfig(config: ManagedModeConfig): Promise<void> {
 
     // 写入配置文件
     await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
-  } catch (error: any) {
-    console.error(`配置文件保存失败: ${error.message}`)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`配置文件保存失败: ${message}`)
     throw error
   }
 }

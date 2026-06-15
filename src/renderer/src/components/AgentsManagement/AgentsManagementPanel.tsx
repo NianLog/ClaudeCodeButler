@@ -19,7 +19,6 @@ import {
   Modal,
   Form,
   Input,
-  message,
   Upload,
   Row,
   Col,
@@ -48,7 +47,10 @@ import { useAgentsManagementStore } from '@/store/agents-management-store'
 import { getUploadFilePath, readUploadFileText } from '@/utils/upload'
 import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 import { useTranslation } from '@/locales/useTranslation'
+import { useMessage } from '@/hooks/useMessage'
 import type { AgentFile, AgentFormData } from '@shared/types/agents'
+import type { UploadFile } from 'antd'
+import type { UploadFileLike } from '@/utils/upload'
 import './AgentsManagementPanel.css'
 
 const { Title, Text } = Typography
@@ -73,7 +75,7 @@ const normalizeTools = (tools: string | string[] | undefined): string[] => {
  * Agent管理面板组件
  */
 const AgentsManagementPanel: React.FC = () => {
-  const messageApi = message
+  const messageApi = useMessage()
   const { t } = useTranslation()
   const {
     agents,
@@ -102,7 +104,7 @@ const AgentsManagementPanel: React.FC = () => {
   } = useAgentsManagementStore()
 
   const [form] = Form.useForm()
-  const [fileList, setFileList] = useState<any[]>([])
+  const [fileList, setFileList] = useState<UploadFile[]>([])
 
   // 初始化加载
   useEffect(() => {
@@ -125,7 +127,7 @@ const AgentsManagementPanel: React.FC = () => {
           : editingAgent.metadata.tools || '',
         model: editingAgent.metadata.model || '',
         color: editingAgent.metadata.color || '',
-        content: content
+        content
       })
     }
   }, [editingAgent, isFormModalOpen, formMode, form])
@@ -144,41 +146,43 @@ const AgentsManagementPanel: React.FC = () => {
   // 处理添加Agent
   const handleAdd = async () => {
     try {
-      const values = await form.validateFields()
+      const values = await form.validateFields() as { tools?: string | string[]; [key: string]: unknown }
       // 将tools字符串转换为数组
       const formData: AgentFormData = {
         ...values,
         tools: normalizeTools(values.tools)
-      }
+      } as AgentFormData
       await addAgent(formData)
       messageApi.success(t('agents.message.added'))
       form.resetFields()
-    } catch (error: any) {
-      if (error?.errorFields) {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) {
         return // 表单验证错误
       }
-      messageApi.error(t('agents.message.addFailed', { error: error?.message || t('common.unknownError') }))
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('agents.message.addFailed', { error: msg }))
     }
   }
 
   // 处理编辑Agent
   const handleEdit = async () => {
     try {
-      const values = await form.validateFields()
+      const values = await form.validateFields() as { tools?: string | string[]; [key: string]: unknown }
       if (editingAgent) {
         // 将tools字符串转换为数组
         const formData: AgentFormData = {
           ...values,
           tools: normalizeTools(values.tools)
-        }
+        } as AgentFormData
         await updateAgent(editingAgent.id, formData)
         messageApi.success(t('agents.message.updated'))
       }
-    } catch (error: any) {
-      if (error?.errorFields) {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) {
         return
       }
-      messageApi.error(t('agents.message.updateFailed', { error: error?.message || t('common.unknownError') }))
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('agents.message.updateFailed', { error: msg }))
     }
   }
 
@@ -187,13 +191,14 @@ const AgentsManagementPanel: React.FC = () => {
     try {
       await deleteAgent(agentId)
       messageApi.success(t('agents.message.deleted'))
-    } catch (error: any) {
-      messageApi.error(t('agents.message.deleteFailed', { error: error?.message || t('common.unknownError') }))
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('agents.message.deleteFailed', { error: msg }))
     }
   }
 
   // 处理单个文件导入
-  const handleSingleImport = async (file: any) => {
+  const handleSingleImport = async (file: UploadFileLike | File) => {
     try {
       const filePath = getUploadFilePath(file)
       const result = filePath
@@ -208,8 +213,9 @@ const AgentsManagementPanel: React.FC = () => {
       } else {
         messageApi.error(t('agents.message.importFailed', { error: result.error || t('common.unknownError') }))
       }
-    } catch (error: any) {
-      messageApi.error(t('agents.message.importFailed', { error: error.message || t('common.unknownError') }))
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('agents.message.importFailed', { error: msg }))
     }
   }
 
@@ -227,10 +233,13 @@ const AgentsManagementPanel: React.FC = () => {
       const contentFiles = await Promise.all(
         fileList
           .filter(file => !getUploadFilePath(file))
-          .map(async file => ({
-            name: file?.name || file?.originFileObj?.name,
-            content: await readUploadFileText(file)
-          }))
+          .map(async file => {
+            const origin = file.originFileObj as (UploadFile & { name?: string }) | undefined
+            return {
+              name: file.name || origin?.name,
+              content: await readUploadFileText(file)
+            }
+          })
       )
 
       if (filePaths.length === 0 && contentFiles.length === 0) {
@@ -280,8 +289,9 @@ const AgentsManagementPanel: React.FC = () => {
       } else {
         messageApi.error(t('agents.message.batchImportFailed', { error: '' }))
       }
-    } catch (error: any) {
-      messageApi.error(t('agents.message.batchImportFailed', { error: error.message || t('common.unknownError') }))
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError')
+      messageApi.error(t('agents.message.batchImportFailed', { error: msg }))
     }
   }
 
@@ -358,7 +368,7 @@ const AgentsManagementPanel: React.FC = () => {
     {
       title: t('agents.table.fileInfo'),
       key: 'fileInfo',
-      render: (_: any, record: AgentFile) => (
+      render: (_value: unknown, record: AgentFile) => (
         <Space direction="vertical" size="small">
           <Text type="secondary" style={{ fontSize: 12 }}>
             {record.fileName}
@@ -373,7 +383,7 @@ const AgentsManagementPanel: React.FC = () => {
       title: t('agents.table.actions'),
       key: 'actions',
       width: 200,
-      render: (_: any, record: AgentFile) => (
+      render: (_value: unknown, record: AgentFile) => (
         <Space size="small">
           <Tooltip title={t('agents.table.viewDetail')}>
             <Button

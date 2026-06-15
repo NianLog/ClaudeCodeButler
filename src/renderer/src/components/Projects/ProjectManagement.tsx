@@ -50,8 +50,16 @@ import {
   DownOutlined
 } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash'
+import json from 'react-syntax-highlighter/dist/esm/languages/prism/json'
+import markdown from 'react-syntax-highlighter/dist/esm/languages/prism/markdown'
+
+// v2.0 性能：原 Prism 全量打包所有语言（~600KB），改用 PrismAsyncLight 仅注册实际需要的语言
+SyntaxHighlighter.registerLanguage('bash', bash)
+SyntaxHighlighter.registerLanguage('json', json)
+SyntaxHighlighter.registerLanguage('markdown', markdown)
 import { useTerminalStore } from '@/store/terminal-store'
 import { useTranslation } from '../../locales/useTranslation'
 import type { TerminalConfig, TerminalType } from '@shared/types/terminal'
@@ -98,7 +106,7 @@ interface ConversationMessage {
   parentUuid?: string
   type: 'user' | 'assistant' | 'system' | 'summary' | 'file-history-snapshot'
   timestamp: string
-  content?: any
+  content?: unknown
   role?: string
   model?: string
   usage?: {
@@ -488,7 +496,7 @@ const ProjectManagement: React.FC = () => {
           const firstMatchPos = lowerContent.indexOf(lowerSearch)
           const start = Math.max(0, firstMatchPos - 50)
           const end = Math.min(contentStr.length, firstMatchPos + lowerSearch.length + 50)
-          preview = '...' + contentStr.substring(start, end) + '...'
+          preview = `...${  contentStr.substring(start, end)  }...`
 
           // 在JSON中查找包含此消息UUID的行号
           const msgUuid = msg.uuid
@@ -651,7 +659,7 @@ const ProjectManagement: React.FC = () => {
       title: t('common.actions'),
       key: 'actions',
       width: 120,
-      render: (_: any, record: ClaudeProject) => (
+      render: (_value: unknown, record: ClaudeProject) => (
         <Space>
           <Button
             type="primary"
@@ -719,7 +727,7 @@ const ProjectManagement: React.FC = () => {
       title: t('common.actions'),
       key: 'actions',
       width: 220,
-      render: (_: any, record: ProjectSession) => (
+      render: (_value: unknown, record: ProjectSession) => (
         <Space>
           <Button
             size="small"
@@ -749,7 +757,13 @@ const ProjectManagement: React.FC = () => {
 
     // 如果content是数组(Claude API格式)
     if (Array.isArray(msg.content)) {
-      return msg.content.map((item: any, index: number) => {
+      type ContentItem = {
+        type?: string
+        text?: string
+        name?: string
+        [key: string]: unknown
+      }
+      return (msg.content as ContentItem[]).map((item, index: number) => {
         if (item.type === 'text') {
           const textContent = item.text || ''
 
@@ -771,7 +785,7 @@ const ProjectManagement: React.FC = () => {
                     return <li>{children}</li>
                   },
                   // 代码块处理
-                  code({ className, children, ...props }: any) {
+                  code({ className, children, ...props }: { className?: string; children?: React.ReactNode; inline?: boolean }) {
                     const match = /language-(\w+)/.exec(className || '')
                     const isInline = Boolean(props.inline)
                     return !isInline && match ? (
@@ -779,12 +793,12 @@ const ProjectManagement: React.FC = () => {
                         style={vscDarkPlus as Record<string, React.CSSProperties>}
                         language={match[1]}
                         PreTag="div"
-                        {...props}
+                        {...props as Record<string, unknown>}
                       >
                         {String(children).replace(/\n$/, '')}
                       </SyntaxHighlighter>
                     ) : (
-                      <code className={className} {...props}>
+                      <code className={className} {...props as Record<string, unknown>}>
                         {shouldHighlight && typeof children === 'string'
                           ? highlightText(String(children), debouncedSearchText)
                           : children
@@ -802,7 +816,7 @@ const ProjectManagement: React.FC = () => {
           return (
             <div key={`${msg.uuid}-tool-${index}`} className="message-tool-use">
               <Tag icon={<ThunderboltOutlined />} color="processing">
-                {t('projects.messages.toolCall', { name: item.name })}
+                {t('projects.messages.toolCall', { name: item.name ?? '' })}
               </Tag>
             </div>
           )

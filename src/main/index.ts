@@ -3,8 +3,10 @@
  * 负责应用生命周期管理、窗口创建和系统级功能
  */
 
-import { app, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, Notification, dialog } from 'electron'
 import { execSync } from 'child_process'
+import { join } from 'path'
+import * as fsSync from 'fs'
 import { WindowManager } from './window-manager'
 import { TrayManager } from './tray-manager'
 import { FileWatcher } from './file-watcher'
@@ -25,7 +27,7 @@ import { pathManager } from './utils/path-manager'
 class CCBApp {
   private windowManager: WindowManager
   private trayManager: TrayManager
-  private fileWatcher: FileWatcher
+  private fileWatcher: FileWatcher | null
   private taskScheduler: TaskScheduler
   private ruleEngine: typeof ruleEngineService // 添加规则引擎属性
   private enableDevTools: boolean // 是否启用开发者工具
@@ -34,7 +36,7 @@ class CCBApp {
     this.windowManager = new WindowManager()
     this.trayManager = new TrayManager()
     // 使用正确的路径引用,稍后在 onReady 中动态初始化
-    this.fileWatcher = null as any // 临时赋值,在 onReady 中初始化
+    this.fileWatcher = null // 临时赋值,在 onReady 中初始化
     this.taskScheduler = new TaskScheduler()
     this.ruleEngine = ruleEngineService // 实例化
 
@@ -117,15 +119,11 @@ class CCBApp {
     })
 
     ipcMain.handle('notification:show', (_event, { title, body }: { title: string, body: string }) => {
-      const { Notification } = require('electron')
-      const { join } = require('path')
-      const fs = require('fs')
-
       // 获取图标路径
       let iconPath = ''
       if (process.platform === 'win32') {
         const icoPath = join(__dirname, '../../resources/icons/ccb.ico')
-        if (fs.existsSync(icoPath)) {
+        if (fsSync.existsSync(icoPath)) {
           iconPath = icoPath
         }
       }
@@ -319,17 +317,43 @@ class CCBApp {
         label: '帮助',
         submenu: [
           {
+            label: '文档',
+            click: async () => {
+              const { shell } = await import('electron')
+              await shell.openExternal('https://dev.niansir.com/software/ccb/docs')
+            }
+          },
+          {
+            label: '检查更新',
+            click: () => {
+              // 通知渲染层触发更新检查流程（复用已有的 UI 反馈逻辑）
+              this.windowManager.getMainWindow()?.webContents.send('menu:check-update')
+            }
+          },
+          {
+            label: 'GitHub 主页',
+            click: async () => {
+              const { shell } = await import('electron')
+              await shell.openExternal('https://github.com/NianLog')
+            }
+          },
+          {
+            label: '官网',
+            click: async () => {
+              const { shell } = await import('electron')
+              await shell.openExternal('https://dev.niansir.com/software/ccb')
+            }
+          },
+          { type: 'separator' },
+          {
             label: '关于',
             click: () => {
               this.showAboutDialog()
             }
           },
           {
-            label: '用户手册',
-            click: async () => {
-              const { shell } = await import('electron')
-              await shell.openExternal('https://dev.niansir.com/software/ccb/docs')
-            }
+            label: `版本: v${APP_INFO.VERSION}`,
+            enabled: false
           }
         ]
       }
@@ -343,9 +367,11 @@ class CCBApp {
    * 显示关于对话框
    */
   private showAboutDialog(): void {
-    const { dialog } = require('electron')
-
-    dialog.showMessageBox(this.windowManager.getMainWindow()!, {
+    const mainWindow = this.windowManager.getMainWindow()
+    if (!mainWindow) {
+      return
+    }
+    dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: `关于 ${APP_INFO.FULL_NAME}`,
       message: APP_INFO.FULL_NAME,
@@ -364,10 +390,6 @@ class CCBApp {
       await fs.mkdir(pathManager.cacheDir, { recursive: true })
 
       logger.info('缓存清理完成')
-
-      const { Notification } = require('electron')
-      const { join } = require('path')
-      const fsSync = require('fs')
 
       // 获取图标路径
       let iconPath = ''

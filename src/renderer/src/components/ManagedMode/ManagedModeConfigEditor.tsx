@@ -52,7 +52,7 @@ const { Text } = Typography
 interface ManagedModeConfigEditorProps {
   managedModeConfig: ManagedModeConfig | null
   configs: ConfigFile[]
-  onConfigChange: (config: any) => void
+  onConfigChange: (config: Record<string, unknown>) => void
   onRestartService: () => Promise<void>
 }
 
@@ -68,6 +68,26 @@ const normalizePortValue = (
   return Number.isFinite(normalizedValue) && normalizedValue > 0
     ? normalizedValue
     : fallback
+}
+
+/** 自定义配置字段结构 */
+type CustomField = { key: string; value: unknown; type: string }
+
+/** 配置数据结构（动态字段，包含 env/permissions/statusLine 及任意自定义键） */
+type ConfigData = Record<string, unknown> & {
+  env?: Record<string, unknown>
+  permissions?: Record<string, unknown>
+  statusLine?: Record<string, unknown>
+}
+
+/** 托管模式完整保存载荷 */
+type ManagedModeCompleteConfig = {
+  port: number
+  accessToken: string
+  logging: { enabled: boolean; level: string }
+  currentProvider: string
+  networkProxy: { enabled: boolean; host: string; port: number }
+  configData: ConfigData
 }
 
 /**
@@ -91,7 +111,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   const [selectedProviderId, setSelectedProviderId] = useState<string>('') // 稳定的provider ID（格式：config-{hash}）
   const [accessToken, setAccessToken] = useState('')
   const [servicePort, setServicePort] = useState(8487)
-  const [customFields, setCustomFields] = useState<Array<{ key: string; value: any; type: string }>>([])
+  const [customFields, setCustomFields] = useState<CustomField[]>([])
   const [networkProxyHost, setNetworkProxyHost] = useState('127.0.0.1')
   const [networkProxyPort, setNetworkProxyPort] = useState(8080)
   const [localProviders, setLocalProviders] = useState<ApiProvider[]>([]) // 本地providers列表
@@ -147,11 +167,11 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
 
       // 提取自定义字段
       const standardFields = ['env', 'permissions', 'statusLine']
-      const initialCustomFields: Array<{ key: string; value: any; type: string }> = []
+      const initialCustomFields: CustomField[] = []
 
       Object.keys(initialConfig).forEach(key => {
         if (!standardFields.includes(key)) {
-          const value = initialConfig[key]
+          const value = (initialConfig as Record<string, unknown>)[key]
           const type = Array.isArray(value) ? 'array' : typeof value
           initialCustomFields.push({
             key,
@@ -248,16 +268,16 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   /**
    * 更新配置字段
    */
-  const updateConfigField = (fieldPath: string, value: any) => {
-    const config = { ...form.getFieldsValue() }
+  const updateConfigField = (fieldPath: string, value: unknown) => {
+    const config: Record<string, unknown> = { ...form.getFieldsValue(true) }
     const pathParts = fieldPath.split('.')
 
-    let current = config
+    let current: Record<string, unknown> = config
     for (let i = 0; i < pathParts.length - 1; i++) {
       if (!current[pathParts[i]]) {
         current[pathParts[i]] = {}
       }
-      current = current[pathParts[i]]
+      current = current[pathParts[i]] as Record<string, unknown>
     }
 
     current[pathParts[pathParts.length - 1]] = value
@@ -268,18 +288,18 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   /**
    * 清理空字段
    */
-  const cleanEmptyFields = (obj: any): any => {
+  const cleanEmptyFields = <T,>(obj: T): T => {
     if (typeof obj !== 'object' || obj === null) {
       return obj
     }
 
-    const cleaned: any = {}
+    const cleaned: Record<string, unknown> = {}
     for (const key in obj) {
-      const value = obj[key]
+      const value = (obj as Record<string, unknown>)[key]
       if (value !== null && value !== undefined && value !== '') {
         if (typeof value === 'object') {
           const cleanedValue = cleanEmptyFields(value)
-          if (Object.keys(cleanedValue).length > 0) {
+          if (Object.keys(cleanedValue as Record<string, unknown>).length > 0) {
             cleaned[key] = cleanedValue
           }
         } else {
@@ -287,7 +307,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
         }
       }
     }
-    return cleaned
+    return cleaned as T
   }
 
   /**
@@ -313,7 +333,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   /**
    * 更新自定义字段
    */
-  const updateCustomField = (index: number, field: string, value: any) => {
+  const updateCustomField = (index: number, field: keyof CustomField, value: unknown) => {
     const updatedFields = [...customFields]
     updatedFields[index] = { ...updatedFields[index], [field]: value }
     setCustomFields(updatedFields)
@@ -332,11 +352,11 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   const handleSave = async () => {
     setLoading(true)
     try {
-      let configData: any
+      let configData: ConfigData
 
       if (configMode === 'gui') {
         // GUI模式：从表单和自定义字段构建配置
-        const formData = form.getFieldsValue(true)
+        const formData = form.getFieldsValue(true) as Record<string, unknown>
 
         // 只包含标准字段，确保删除的自定义字段不会残留
         configData = {
@@ -344,12 +364,12 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
             ANTHROPIC_BASE_URL: `http://127.0.0.1:${servicePort}`,
             ANTHROPIC_AUTH_TOKEN: accessToken,
             CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-            ...formData.env
+            ...((formData.env as Record<string, unknown>) || {})
           },
-          permissions: formData.permissions || {
+          permissions: (formData.permissions as Record<string, unknown>) || {
             defaultMode: 'bypassPermissions'
           },
-          statusLine: formData.statusLine || {
+          statusLine: (formData.statusLine as Record<string, unknown>) || {
             type: 'command',
             command: 'ccline',
             padding: 0
@@ -358,13 +378,14 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
 
         // 只添加当前customFields中的字段（删除的字段不会被添加）
         customFields.forEach(field => {
-          if (field.key && field.value) {
+          const fieldValue = field.value
+          if (field.key && fieldValue) {
             try {
               // 尝试解析JSON字符串
-              configData[field.key] = JSON.parse(field.value)
+              configData[field.key] = JSON.parse(String(fieldValue))
             } catch {
               // 如果解析失败，保持原始字符串
-              configData[field.key] = field.value
+              configData[field.key] = fieldValue
             }
           }
         })
@@ -377,9 +398,9 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       } else {
         // JSON模式：解析JSON内容
         try {
-          configData = JSON.parse(jsonContent)
-        } catch (error: any) {
-          message.error(t('managedMode.config.jsonInvalid', { error: error.message }))
+          configData = JSON.parse(jsonContent) as ConfigData
+        } catch (error) {
+          message.error(t('managedMode.config.jsonInvalid', { error: error instanceof Error ? error.message : String(error) }))
           return
         }
 
@@ -388,7 +409,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
 
         // 提取并更新自定义字段
         const standardFields = ['env', 'permissions', 'statusLine']
-        const extractedCustomFields: Array<{ key: string; value: any; type: string }> = []
+        const extractedCustomFields: CustomField[] = []
 
         Object.keys(configData).forEach(key => {
           if (!standardFields.includes(key)) {
@@ -415,7 +436,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       configData.env.ANTHROPIC_AUTH_TOKEN = accessToken
 
       // 构建完整的托管模式配置
-      const completeConfig = {
+      const completeConfig: ManagedModeCompleteConfig = {
         port: servicePort,
         accessToken,
         logging: {
@@ -435,7 +456,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       console.log('保存配置数据:', { completeConfig, configData })
 
       // 调用配置变更处理（包含状态同步和服务重启）
-      await onConfigChange(completeConfig)
+      await onConfigChange(completeConfig as unknown as Record<string, unknown>)
 
       // 显示成功消息并提醒用户
       message.success({
@@ -449,9 +470,9 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
         ),
         duration: 6 // 显示6秒
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('保存配置失败:', error)
-      message.error(t('managedMode.config.saveFailed', { error: error.message }))
+      message.error(t('managedMode.config.saveFailed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
     } finally {
       setLoading(false)
     }
@@ -462,7 +483,9 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
    */
   const copyConfig = async () => {
     try {
-      const config = configMode === 'gui' ? form.getFieldsValue() : JSON.parse(jsonContent)
+      const config: Record<string, unknown> = configMode === 'gui'
+        ? form.getFieldsValue() as Record<string, unknown>
+        : JSON.parse(jsonContent) as Record<string, unknown>
       await navigator.clipboard.writeText(JSON.stringify(cleanEmptyFields(config), null, 2))
       message.success(t('managedMode.config.copySuccess'))
     } catch (error) {
@@ -688,7 +711,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
               <Col span={10}>
                 <Input
                   placeholder={t('managedMode.config.customFields.valuePlaceholder')}
-                  value={field.value}
+                  value={field.value as string | number | undefined}
                   onChange={(e) => updateCustomField(index, 'value', e.target.value)}
                 />
               </Col>

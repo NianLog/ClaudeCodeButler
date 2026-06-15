@@ -113,7 +113,7 @@ export interface ClaudeConfig {
   /** 缓存的Statsig开关 */
   cachedStatsigGates?: Record<string, boolean>
   /** 缓存的动态配置 */
-  cachedDynamicConfigs?: Record<string, any>
+  cachedDynamicConfigs?: Record<string, unknown>
   /** 全局MCP服务器配置 */
   mcpServers?: Record<string, MCPServerConfig>
   /** 项目配置映射 (路径 -> 项目配置) */
@@ -214,6 +214,8 @@ export interface MCPServerFormData {
   fromGalleryId?: string
   /** 目标范围: 'global' | 项目路径 */
   targetScope: string
+  /** 原始 JSON 配置字符串（v2.0：透传 Claude Code 原生格式，保留 headers 等非结构化字段） */
+  rawConfig?: string
 }
 
 /**
@@ -260,7 +262,7 @@ export interface MCPServerAvailabilityResult {
 /**
  * MCP配置文件操作结果
  */
-export interface MCPConfigResult<T = any> {
+export interface MCPConfigResult<T = unknown> {
   /** 是否成功 */
   success: boolean
   /** 返回数据 */
@@ -268,5 +270,5 @@ export interface MCPConfigResult<T = any> {
   /** 错误信息 */
   error?: string
   /** 错误详情 */
-  details?: any
+  details?: unknown
 }

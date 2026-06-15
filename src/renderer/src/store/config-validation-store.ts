@@ -19,7 +19,7 @@ interface ConfigValidationStore {
   clearValidation: () => void
 
   // 验证操作
-  validateConfig: (content: any) => ValidationResult
+  validateConfig: (content: unknown) => ValidationResult
   validateConfigFile: (configPath: string) => Promise<ValidationResult>
 }
 
@@ -64,10 +64,13 @@ export const useConfigValidationStore = create<ConfigValidationStore>((set, get)
         return { isValid: false, errors, warnings }
       }
 
+      // 统一转换为 Record 进行字段访问
+      const record = content as Record<string, unknown>
+
       // 检查必要字段
       const requiredFields = ['name', 'version']
       requiredFields.forEach(field => {
-        if (!content[field]) {
+        if (!record[field]) {
           warnings.push({
             path: field,
             message: `建议添加 ${field} 字段`,
@@ -77,7 +80,7 @@ export const useConfigValidationStore = create<ConfigValidationStore>((set, get)
       })
 
       // 检查版本格式
-      if (content.version && typeof content.version !== 'string') {
+      if (record.version && typeof record.version !== 'string') {
         errors.push({
           path: 'version',
           message: '版本号必须是字符串',
@@ -86,7 +89,7 @@ export const useConfigValidationStore = create<ConfigValidationStore>((set, get)
       }
 
       // 检查名称格式
-      if (content.name && typeof content.name !== 'string') {
+      if (record.name && typeof record.name !== 'string') {
         errors.push({
           path: 'name',
           message: '名称必须是字符串',
@@ -95,7 +98,7 @@ export const useConfigValidationStore = create<ConfigValidationStore>((set, get)
       }
 
       // 检查配置类型
-      if (content.type && !['claude-code', 'custom', 'settings'].includes(content.type)) {
+      if (record.type && !['claude-code', 'custom', 'settings'].includes(record.type as string)) {
         warnings.push({
           path: 'type',
           message: '未知的配置类型',
@@ -125,9 +128,9 @@ export const useConfigValidationStore = create<ConfigValidationStore>((set, get)
     const isValid = errors.length === 0
 
     // 更新状态
-    set({ 
-      validationErrors: errors, 
-      validationWarnings: warnings 
+    set({
+      validationErrors: errors,
+      validationWarnings: warnings
     })
 
     return { isValid, errors, warnings }

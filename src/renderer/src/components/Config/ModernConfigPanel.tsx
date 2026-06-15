@@ -16,10 +16,9 @@ import {
   Typography,
   Modal,
   App,
-  Card,
-  Switch,
   Alert
 } from 'antd'
+import type { MenuProps } from 'antd'
 import {
   PlusOutlined,
   MoreOutlined,
@@ -33,14 +32,12 @@ import {
   StarFilled,
   FileTextOutlined,
   ReloadOutlined,
-  CloudOutlined,
-  LockOutlined,
-  WarningOutlined
+  LockOutlined
 } from '@ant-design/icons'
 import { useConfigListStore } from '../../store/config-list-store'
 import { useConfigEditorStore } from '../../store/config-editor-store'
 import { ConfigFile } from '@shared/types'
-import type { ConfigEditorDraft } from './ConfigEditor'
+import type { ConfigEditorDraft, ConfigSavePayload } from './ConfigEditor'
 const ConfigEditor = React.lazy(() => import('./ConfigEditor'))
 const ConfigImportModal = React.lazy(() => import('./ConfigImportModal'))
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
@@ -61,7 +58,8 @@ const { Option } = Select
  */
 const ModernConfigPanel: React.FC = () => {
   const { t } = useTranslation()
-  const { message } = App.useApp()
+  // v2.0：使用 App context 的 message/modal 替代静态 message/Modal.confirm/info，消除 antd 静态函数警告
+  const { message, modal } = App.useApp()
 
   const {
     configs,
@@ -84,8 +82,10 @@ const ModernConfigPanel: React.FC = () => {
   } = useConfigEditorStore()
 
   // 托管模式相关状态
+  // 注意：托管开关的开启/关闭已迁移至「托管模式面板」，配置页仅保留状态用于：
+  // 1) 拦截系统 settings 配置编辑（见 handleEditConfig）
+  // 2) 拦截配置切换/激活（见 handleConfigSave）
   const [managedModeEnabled, setManagedModeEnabled] = useState(false)
-  const [managedModeLoading, setManagedModeLoading] = useState(false)
   // hasBackup 用于检查备份状态，当前仅设置但未读取（预留为后续功能）
   const [, setHasBackup] = useState(false)
 
@@ -162,96 +162,6 @@ const ModernConfigPanel: React.FC = () => {
   }
 
   /**
-   * 启用托管模式
-   */
-  const handleEnableManagedMode = async () => {
-    setManagedModeLoading(true)
-    try {
-      const result = await window.electronAPI.managedMode.enable()
-      if (result.success) {
-        setManagedModeEnabled(true)
-        message.success(result.message || t('managedMode.messages.enabled'))
-        await refreshConfigs()
-      } else {
-        message.error(result.error || t('managedMode.messages.enableFailed'))
-      }
-    } catch (error: any) {
-      message.error(t('managedMode.messages.enableFailedWithError', { error: error.message }))
-    } finally {
-      setManagedModeLoading(false)
-    }
-  }
-
-  /**
-   * 禁用托管模式
-   */
-  const handleDisableManagedMode = async () => {
-    setManagedModeLoading(true)
-    try {
-      const result = await window.electronAPI.managedMode.disable()
-      if (result.success) {
-        setManagedModeEnabled(false)
-        message.success(result.message || t('managedMode.messages.disabled'))
-        await refreshConfigs()
-      } else {
-        message.error(result.error || t('managedMode.messages.disableFailed'))
-      }
-    } catch (error: any) {
-      message.error(t('managedMode.messages.disableFailedWithError', { error: error.message }))
-    } finally {
-      setManagedModeLoading(false)
-    }
-  }
-
-  /**
-   * 处理托管模式开关切换
-   */
-  const handleManagedModeToggle = async (enabled: boolean) => {
-    if (enabled) {
-      // 启用前确认
-      Modal.confirm({
-        title: t('configPanel.managedMode.enableTitle'),
-        icon: <WarningOutlined />,
-        content: (
-          <div>
-            <p>{t('configPanel.managedMode.enableIntro')}</p>
-            <ul>
-              <li>{t('configPanel.managedMode.enableItemBackup')}</li>
-              <li>{t('configPanel.managedMode.enableItemProxy')}</li>
-              <li>{t('configPanel.managedMode.enableItemDisableSwitch')}</li>
-              <li>{t('configPanel.managedMode.enableItemLockSettings')}</li>
-            </ul>
-            <p>{t('configPanel.managedMode.enableConfirm')}</p>
-          </div>
-        ),
-        okText: t('configPanel.managedMode.enableOk'),
-        cancelText: t('common.cancel'),
-        onOk: handleEnableManagedMode
-      })
-    } else {
-      // 禁用前确认
-      Modal.confirm({
-        title: t('configPanel.managedMode.disableTitle'),
-        icon: <WarningOutlined />,
-        content: (
-          <div>
-            <p>{t('configPanel.managedMode.disableIntro')}</p>
-            <ul>
-              <li>{t('configPanel.managedMode.disableItemStop')}</li>
-              <li>{t('configPanel.managedMode.disableItemRestore')}</li>
-              <li>{t('configPanel.managedMode.disableItemEnableSwitch')}</li>
-            </ul>
-            <p>{t('configPanel.managedMode.disableConfirm')}</p>
-          </div>
-        ),
-        okText: t('configPanel.managedMode.disableOk'),
-        cancelText: t('common.cancel'),
-        onOk: handleDisableManagedMode
-      })
-    }
-  }
-
-  /**
    * 显示配置预览模态框
    */
   const showConfigPreviewModal = async (config: ConfigFile) => {
@@ -263,12 +173,14 @@ const ModernConfigPanel: React.FC = () => {
       // 使用正确的API加载配置内容
       const configData = await window.electronAPI.config.get(config.path)
       if (configData.success && Object.prototype.hasOwnProperty.call(configData, 'data')) {
-        const content = configData.data?.content ?? configData.data
+        const content: unknown = (configData.data as { content?: unknown } | undefined)?.content ?? configData.data
         // 格式化JSON内容以便显示
-        if (typeof content === 'object') {
+        if (typeof content === 'object' && content !== null) {
           setPreviewContent(JSON.stringify(content, null, 2))
-        } else {
+        } else if (typeof content === 'string') {
           setPreviewContent(content)
+        } else {
+          setPreviewContent(String(content ?? ''))
         }
       } else {
         setPreviewContent(t('configPanel.preview.loadFailed'))
@@ -310,7 +222,7 @@ const ModernConfigPanel: React.FC = () => {
 
     if (isSystemSettingsConfig && managedModeEnabled) {
       // 如果是系统settings配置且托管模式已启用，显示提示信息
-      Modal.info({
+      modal.info({
         title: t('configPanel.locked.title'),
         icon: React.createElement(LockOutlined, { style: { color: '#1890ff' } }),
         width: 480,
@@ -441,7 +353,7 @@ const ModernConfigPanel: React.FC = () => {
   }
 
   // 处理配置保存（统一架构）
-  const handleConfigSave = async (configData: any) => {
+  const handleConfigSave = async (configData: ConfigSavePayload) => {
     try {
       if (editorMode === 'edit' && editingConfig) {
         // 更新现有配置 - 直接保存纯内容和元数据
@@ -455,15 +367,35 @@ const ModernConfigPanel: React.FC = () => {
       setEditingConfig(null)
       setEditorInitialDraft(null)
       await refreshConfigs()
+
+      // 托管模式拦截：当用户开启了「创建后自动切换到此配置」(isActive=true) 且托管模式已开启时，
+      // 仅保存配置但不允许自动切换/激活。配置页本身只负责保存，激活动作实际由 ConfigEditor 内部触发，
+      // 这里给出明确的用户提示以覆盖托管模式下的切换限制（任务 4c/4d）。
+      const isActiveRequested = Boolean(configData?.metadata?.isActive)
+      if (isActiveRequested && managedModeEnabled) {
+        if (editorMode === 'edit' && editingConfig) {
+          // 编辑场景：托管开启时不允许通过保存切换激活（任务 4c）
+          message.warning(t('configPanel.managedMode.switchBlockedEdit'))
+        } else {
+          // 新建场景：已保存但未自动切换（任务 4d）
+          message.info(t('configPanel.managedMode.switchBlockedCreate'))
+        }
+      }
     } catch (error) {
       console.error('保存配置失败:', error)
     }
   }
 
   // 处理配置导入
-  const handleConfigImport = async (configData: any) => {
+  const handleConfigImport = async (configData: Partial<ConfigFile>) => {
     try {
-      await importConfig(configData)
+      await importConfig({
+        name: configData.name,
+        description: configData.description,
+        type: configData.type,
+        isActive: configData.isActive,
+        content: configData.content
+      })
       setImportVisible(false)
       await refreshConfigs()
     } catch (error) {
@@ -481,8 +413,8 @@ const ModernConfigPanel: React.FC = () => {
   /**
    * 处理筛选条件变化
    */
-  const handleFilterChange = (key: keyof typeof filters, value: any) => {
-    setFilters({ [key]: value })
+  const handleFilterChange = (key: keyof typeof filters, value: unknown) => {
+    setFilters({ [key]: value } as Partial<typeof filters>)
   }
 
   /**
@@ -557,11 +489,11 @@ const ModernConfigPanel: React.FC = () => {
   }
 
   // 配置操作菜单
-  const getConfigMenuItems = (config: ConfigFile): any[] => {
+  const getConfigMenuItems = (config: ConfigFile): MenuProps['items'] => {
     const isSystemSettingsConfig = config.path.endsWith('settings.json') &&
       (config.path.includes('.claude') || config.path.includes('~/.claude'))
 
-    const menuItems: any[] = [
+    const menuItems: MenuProps['items'] = [
       {
         key: 'view',
         icon: <EyeOutlined />,
@@ -826,58 +758,6 @@ const ModernConfigPanel: React.FC = () => {
 
       {/* 配置列表 */}
       <div className="config-panel-content">
-        {/* 托管模式启用卡片 */}
-        <Card
-          className="managed-mode-card"
-          style={{
-            background: managedModeEnabled ? '#f6ffed' : '#fafafa',
-            border: managedModeEnabled ? '1px solid #b7eb8f' : '1px solid #f0f0f0'
-          }}
-        >
-          <div className="managed-mode-card-content">
-            <div className="managed-mode-card-left">
-              <div className="managed-mode-card-header">
-                <CloudOutlined
-                  style={{
-                    fontSize: 18,
-                    color: managedModeEnabled ? '#52c41a' : '#1890ff',
-                    marginRight: 8
-                  }}
-                />
-                <div>
-                  <Title level={5} style={{ margin: 0, fontSize: 14 }}>
-                    {t('configPanel.managedMode.cardTitle')}
-                  </Title>
-                  <Text type="secondary" style={{ fontSize: 11 }}>
-                    {managedModeEnabled
-                      ? t('configPanel.managedMode.cardEnabled')
-                      : t('configPanel.managedMode.cardDisabled')
-                    }
-                  </Text>
-                </div>
-              </div>
-            </div>
-
-            <div className="managed-mode-card-right">
-              <Space size="small" align="center">
-                {managedModeEnabled && (
-                  <Tag color="success" style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>
-                    {t('configPanel.managedMode.proxyRunning')}
-                  </Tag>
-                )}
-                <Switch
-                  size="small"
-                  checked={managedModeEnabled}
-                  onChange={handleManagedModeToggle}
-                  loading={managedModeLoading}
-                  checkedChildren={t('managedMode.config.switch.enable')}
-                  unCheckedChildren={t('managedMode.config.switch.disable')}
-                />
-              </Space>
-            </div>
-          </div>
-        </Card>
-
         {isLoading ? (
           <div className="config-panel-loading">
             <Spin size="large" />

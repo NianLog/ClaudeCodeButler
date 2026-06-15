@@ -18,7 +18,7 @@ export const useConfigListWithNotification = () => {
   const enhancedStore = {
     ...configListStore,
     // 添加通知功能
-    addNotification: addNotification
+    addNotification
   }
 
   return enhancedStore

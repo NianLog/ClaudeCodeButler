@@ -5,7 +5,7 @@
 
 import * as cron from 'node-cron'
 import { EventEmitter } from 'events'
-import { Rule, RuleExecution, RuleCondition } from '@shared/types/rule'
+import { Rule, RuleExecution, RuleCondition, RuleAction } from '@shared/types/rule'
 import { logger } from './utils/logger'
 
 export class TaskScheduler extends EventEmitter {
@@ -139,7 +139,7 @@ export class TaskScheduler extends EventEmitter {
    */
   private async executeRule(rule: Rule): Promise<RuleExecution> {
     const startTime = Date.now()
-    let execution: RuleExecution = {
+    const execution: RuleExecution = {
       ruleId: rule.id,
       timestamp: new Date(),
       success: false,
@@ -260,10 +260,12 @@ export class TaskScheduler extends EventEmitter {
   /**
    * 执行规则动作
    */
-  private async executeAction(action: any): Promise<any> {
+  private async executeAction(action: RuleAction): Promise<unknown> {
     switch (action.type) {
-      case 'switchConfig':
-        return this.switchConfig(action.params.targetConfig)
+      case 'switchConfig': {
+        const targetConfig = action.params.targetConfig
+        return this.switchConfig(typeof targetConfig === 'string' ? targetConfig : String(targetConfig))
+      }
       case 'notification':
         return this.showNotification(action.params)
       default:
@@ -274,7 +276,7 @@ export class TaskScheduler extends EventEmitter {
   /**
    * 切换配置
    */
-  private async switchConfig(targetConfig: string): Promise<any> {
+  private async switchConfig(targetConfig: string): Promise<{ switched: boolean; targetConfig: string }> {
     // 发送配置切换事件
     this.emit('config-switch-requested', { targetConfig })
 
@@ -286,7 +288,7 @@ export class TaskScheduler extends EventEmitter {
   /**
    * 显示通知
    */
-  private async showNotification(params: any): Promise<any> {
+  private async showNotification(params: Record<string, unknown>): Promise<{ notified: boolean; title: unknown; message: unknown }> {
     const { title, message } = params
 
     // 发送通知事件
@@ -388,7 +390,7 @@ export class TaskScheduler extends EventEmitter {
   /**
    * 获取规则统计信息
    */
-  getRuleStats(ruleId: string): any {
+  getRuleStats(ruleId: string): Record<string, unknown> {
     const ruleLogs = this.executionLog.filter(log => log.ruleId === ruleId)
     const total = ruleLogs.length
     const successful = ruleLogs.filter(log => log.success).length
@@ -398,10 +400,10 @@ export class TaskScheduler extends EventEmitter {
       total,
       successful,
       failed,
-      successRate: total > 0 ? (successful / total * 100).toFixed(2) + '%' : '0%',
+      successRate: total > 0 ? `${(successful / total * 100).toFixed(2)  }%` : '0%',
       lastExecution: ruleLogs[0]?.timestamp || null,
       averageDuration: total > 0
-        ? (ruleLogs.reduce((sum, log) => sum + log.duration, 0) / total).toFixed(2) + 'ms'
+        ? `${(ruleLogs.reduce((sum, log) => sum + log.duration, 0) / total).toFixed(2)  }ms`
         : '0ms'
     }
   }
@@ -409,8 +411,8 @@ export class TaskScheduler extends EventEmitter {
   /**
    * 获取所有规则统计
    */
-  getAllStats(): Record<string, any> {
-    const stats: Record<string, any> = {}
+  getAllStats(): Record<string, Record<string, unknown>> {
+    const stats: Record<string, Record<string, unknown>> = {}
     const ruleIds = [...new Set(this.executionLog.map(log => log.ruleId))]
 
     ruleIds.forEach(ruleId => {
@@ -431,7 +433,7 @@ export class TaskScheduler extends EventEmitter {
   /**
    * 获取调度器状态
    */
-  getStatus(): any {
+  getStatus(): Record<string, unknown> {
     return {
       isRunning: this.isRunning,
       activeTasks: this.tasks.size,

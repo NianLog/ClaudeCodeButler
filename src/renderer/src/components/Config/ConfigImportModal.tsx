@@ -25,7 +25,7 @@ import {
   EyeOutlined
 } from '@ant-design/icons'
 import type { UploadFile, UploadProps } from 'antd'
-import type { ConfigFile } from '@shared/types'
+import type { ConfigFile, ConfigType } from '@shared/types'
 import { useTranslation } from '../../locales/useTranslation'
 
 const { TextArea } = Input
@@ -50,7 +50,7 @@ interface ImportData {
   name: string
   description: string
   type: string
-  content: any
+  content: unknown
   isValid: boolean
   error?: string
 }
@@ -89,10 +89,10 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
     try {
       setIsLoading(true)
       const text = await file.text()
-      const parsedContent = JSON.parse(text)
+      const parsedContent = JSON.parse(text) as Record<string, unknown>
 
       // 检查是否为多层JSON格式
-      let actualContent = parsedContent
+      let actualContent: unknown = parsedContent
       let configName = file.name.replace(/\.json$/i, '')
       let configDescription = t('configImport.defaults.fromFile', { file: file.name })
       let configType = 'claude-code'
@@ -101,9 +101,9 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         // 如果是多层JSON格式（包含name, type, content字段）
         if (parsedContent.name && parsedContent.type && parsedContent.content !== undefined) {
           actualContent = parsedContent.content
-          configName = parsedContent.name
-          configDescription = parsedContent.description || configDescription
-          configType = parsedContent.type
+          configName = String(parsedContent.name)
+          configDescription = (parsedContent.description as string | undefined) || configDescription
+          configType = String(parsedContent.type)
         } else {
           // 普通JSON格式，自动检测类型
           configType = detectConfigType(parsedContent)
@@ -144,7 +144,7 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
   }
 
   // 自动检测配置类型
-  const detectConfigType = (content: any): string => {
+  const detectConfigType = (content: Record<string, unknown>): string => {
     if (typeof content !== 'object' || content === null) {
       return 'claude-code'
     }
@@ -176,17 +176,17 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
   // 处理JSON内容变化
   const handleJsonContentChange = (value: string) => {
     try {
-      const parsedContent = JSON.parse(value)
-      
+      const parsedContent = JSON.parse(value) as Record<string, unknown>
+
       // 检查是否为多层JSON格式
-      let actualContent = parsedContent
+      let actualContent: unknown = parsedContent
       let configType = 'claude-code'
 
       if (parsedContent && typeof parsedContent === 'object') {
         // 如果是多层JSON格式（包含name, type, content字段）
         if (parsedContent.name && parsedContent.type && parsedContent.content !== undefined) {
           actualContent = parsedContent.content
-          configType = parsedContent.type
+          configType = String(parsedContent.type)
         } else {
           // 普通JSON格式，自动检测类型
           configType = detectConfigType(parsedContent)
@@ -225,7 +225,7 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
   // 确认导入
   const handleImport = async () => {
     try {
-      const values = await form.validateFields()
+      const values = await form.validateFields() as { name: string; description?: string; type: string }
 
       if (!importData || !importData.isValid) {
         return
@@ -234,8 +234,8 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
       const configData: Partial<ConfigFile> = {
         name: values.name,
         description: values.description,
-        type: values.type,
-        content: importData.content,
+        type: values.type as ConfigType | undefined,
+        content: importData.content as Record<string, unknown> | undefined,
         isActive: false
       }
 

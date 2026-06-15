@@ -3,14 +3,14 @@
  * @description 负责管理代理服务的生命周期，包括启动、停止、配置管理等
  */
 
-import { app, BrowserWindow } from 'electron'
-import { ChildProcess, spawn } from 'child_process'
+import { app } from 'electron'
+import { ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs/promises'
 import os from 'os'
-import axios from 'axios'
-import { randomBytes } from 'crypto'
+import axios, { type AxiosRequestConfig } from 'axios'
 import { EventEmitter } from 'events'
+import type { Request, Response, NextFunction } from 'express'
 import type {
   ManagedModeConfig,
   ManagedModeStatus,
@@ -18,10 +18,39 @@ import type {
   EnvCommand
 } from '@shared/types/managed-mode'
 import { managedModeLogRotationService } from './managed-mode-log-rotation.service'
+import { ManagedModeConfigStore } from './managed-mode-config-store'
 import { logger } from '../utils/logger'
-import { Utf8LineDecoder } from '../utils/utf8-line-decoder'
 
 const managedModeLogger = logger.child('ManagedModeService')
+
+/**
+ * 集成模式下代理进程的实际形态
+ * @description 传统模式下为子进程，集成模式下为 Express http.Server，二者对外暴露不同的关闭接口
+ */
+type ProxyProcessLike = ChildProcess | { close: (callback?: (err?: Error) => void) => void; once: (event: string, listener: (...args: unknown[]) => void) => void }
+
+/**
+ * Anthropic Messages API 请求体结构
+ * @description 仅声明托管代理需要读取的字段，其它字段按原样透传到上游
+ */
+interface MessagesRequestBody {
+  model?: string
+  max_tokens?: number
+  stream?: boolean
+  messages?: unknown[]
+}
+
+/**
+ * 上游响应中的 usage / content 片段结构（仅用于日志记录的字段子集）
+ */
+interface UpstreamResponseData {
+  id?: string
+  type?: string
+  role?: string
+  model?: string
+  usage?: Record<string, unknown>
+  content?: unknown
+}
 
 /**
  * 托管模式管理服务类
@@ -33,15 +62,17 @@ export class ManagedModeService extends EventEmitter {
    */
   private static readonly DEFAULT_PORT = 8487
 
-  private proxyProcess: ChildProcess | null = null
+  private proxyProcess: ProxyProcessLike | null = null
   private configPath: string
   private config: ManagedModeConfig | null = null
+  // v2.0 架构解耦：配置读写委托给 ConfigStore（第一步拆分）
+  private configStore: ManagedModeConfigStore
   private healthCheckInterval: NodeJS.Timeout | null = null
   private isIntegrated: boolean = false // 标记是否使用集成模式
   private startTime: number | null = null // 记录服务启动时间
   private isRestarting: boolean = false // 标记是否正在执行重启操作
-  private proxyStdoutDecoder: Utf8LineDecoder = new Utf8LineDecoder()
-  private proxyStderrDecoder: Utf8LineDecoder = new Utf8LineDecoder()
+  // v2.0 重启互斥链：串行化所有 restart，避免并发 stop/start 导致 settings 错误还原
+  private restartChain: Promise<void> = Promise.resolve()
 
   // 智能健康检查相关状态
   private consecutiveSuccessCount: number = 0 // 连续成功检查次数
@@ -66,65 +97,8 @@ export class ManagedModeService extends EventEmitter {
     super()
     // 配置文件路径
     this.configPath = path.join(os.homedir(), '.ccb', 'managed-mode-config.json')
-  }
-
-  /**
-   * 重置代理进程日志解码状态
-   * @description 在每次启动新的代理子进程前清空上一次会话残留的 UTF-8 解码缓冲
-   */
-  private resetProxyLogDecoders(): void {
-    this.proxyStdoutDecoder.reset()
-    this.proxyStderrDecoder.reset()
-  }
-
-  /**
-   * 处理代理进程输出分片
-   * @param chunk 子进程输出的 Buffer 分片
-   * @param stream 输出流来源
-   */
-  private handleProxyOutputChunk(chunk: Buffer, stream: 'stdout' | 'stderr'): void {
-    const decoder = stream === 'stdout' ? this.proxyStdoutDecoder : this.proxyStderrDecoder
-    const level = stream === 'stdout' ? 'info' : 'error'
-    const completedLines = decoder.write(chunk)
-
-    completedLines.forEach((line) => {
-      this.handleProxyOutputLine(line, level)
-    })
-  }
-
-  /**
-   * 刷新代理进程输出缓冲
-   * @description 在进程退出或报错时输出剩余半行，避免尾部日志因为没有换行而丢失
-   */
-  private flushProxyOutputChunks(): void {
-    this.proxyStdoutDecoder.end().forEach((line) => {
-      this.handleProxyOutputLine(line, 'info')
-    })
-    this.proxyStderrDecoder.end().forEach((line) => {
-      this.handleProxyOutputLine(line, 'error')
-    })
-    this.resetProxyLogDecoders()
-  }
-
-  /**
-   * 处理代理进程的完整日志行
-   * @param rawLine 已经按 UTF-8 和换行边界拼接完成的日志行
-   * @param level 日志级别
-   */
-  private handleProxyOutputLine(rawLine: string, level: 'info' | 'error'): void {
-    const line = rawLine.trim()
-
-    if (!line) {
-      return
-    }
-
-    if (level === 'info') {
-      managedModeLogger.info(`[ProxyProcess] ${line}`)
-    } else {
-      managedModeLogger.error(`[ProxyProcess] ${line}`)
-    }
-
-    this.parseAndEmitLog(line, level)
+    // v2.0 架构解耦：委托 ConfigStore 处理配置持久化与 accessToken 生成
+    this.configStore = new ManagedModeConfigStore(this.configPath)
   }
 
   /**
@@ -163,7 +137,7 @@ export class ManagedModeService extends EventEmitter {
       }
 
       managedModeLogger.info('托管模式服务初始化完成')
-    } catch (error: any) {
+    } catch (error: unknown) {
       managedModeLogger.error('托管模式服务初始化失败', error)
       // 重新抛出错误，确保上层能够捕获到初始化失败
       throw error
@@ -182,10 +156,10 @@ export class ManagedModeService extends EventEmitter {
       const userSettingsPath = path.join(os.homedir(), '.claude', 'settings.json')
 
       // 读取当前 settings.json
-      let currentSettings: any = {}
+      let currentSettings: Record<string, unknown> = {}
       try {
         const settingsContent = await fs.readFile(userSettingsPath, 'utf8')
-        currentSettings = JSON.parse(settingsContent)
+        currentSettings = JSON.parse(settingsContent) as Record<string, unknown>
       } catch (error) {
         // 文件不存在或读取失败，无需校准
         managedModeLogger.info('settings.json 不存在或读取失败，跳过校准')
@@ -209,22 +183,32 @@ export class ManagedModeService extends EventEmitter {
         }
       }
 
+      // 安全读取嵌套字段，避免对未校验结构直接断言
+      const currentEnv = (currentSettings.env ?? {}) as Record<string, unknown>
+      const currentPermissions = (currentSettings.permissions ?? {}) as Record<string, unknown>
+      const currentStatusLine = (currentSettings.statusLine ?? {}) as Record<string, unknown>
+
       // 比对关键字段是否匹配
       const envMatches =
-        currentSettings.env?.ANTHROPIC_BASE_URL === expectedManagedConfig.env.ANTHROPIC_BASE_URL &&
-        currentSettings.env?.ANTHROPIC_AUTH_TOKEN === expectedManagedConfig.env.ANTHROPIC_AUTH_TOKEN &&
-        currentSettings.env?.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC === expectedManagedConfig.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+        currentEnv.ANTHROPIC_BASE_URL === expectedManagedConfig.env.ANTHROPIC_BASE_URL &&
+        currentEnv.ANTHROPIC_AUTH_TOKEN === expectedManagedConfig.env.ANTHROPIC_AUTH_TOKEN &&
+        currentEnv.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC === expectedManagedConfig.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
 
       const permissionsMatch =
-        currentSettings.permissions?.defaultMode === expectedManagedConfig.permissions.defaultMode
+        currentPermissions.defaultMode === expectedManagedConfig.permissions.defaultMode
 
       const statusLineMatch =
-        currentSettings.statusLine?.type === expectedManagedConfig.statusLine.type &&
-        currentSettings.statusLine?.command === expectedManagedConfig.statusLine.command
+        currentStatusLine.type === expectedManagedConfig.statusLine.type &&
+        currentStatusLine.command === expectedManagedConfig.statusLine.command
 
       // 如果配置匹配且托管模式未启用，自动启用（但不改变 enabled 状态，仅校准认知）
       if (envMatches && permissionsMatch && statusLineMatch) {
         if (!this.config.enabled) {
+          // v2.0 防御：校准启用时若不存在系统设置备份，原始配置可能已丢失，禁用时将无法还原原始配置
+          const hasBackup = await this.hasSystemSettingsBackup()
+          if (!hasBackup) {
+            managedModeLogger.warn('校准启用托管模式：未找到系统设置备份，后续禁用时可能无法还原原始配置')
+          }
           managedModeLogger.info('检测到 settings.json 内容与托管配置一致，自动校准托管模式状态')
           this.config.enabled = true
           await this.saveConfig(this.config)
@@ -235,7 +219,7 @@ export class ManagedModeService extends EventEmitter {
         // 如果托管模式已启用但配置不匹配，说明用户可能手动修改了 settings.json
         managedModeLogger.warn('托管模式已启用但 settings.json 内容不匹配，可能需要重新应用配置')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       managedModeLogger.error('校准托管模式状态失败', error)
     }
   }
@@ -282,7 +266,8 @@ export class ManagedModeService extends EventEmitter {
       managedModeLogger.info('托管模式启动：检测到已有备份，跳过备份步骤（避免覆盖原始配置）')
     }
 
-    // 尝试集成模式启动代理服务
+    // 集成模式启动代理服务（v2.0：移除传统代理 fallback —— 其无鉴权 + CORS 全开是 P0 安全漏洞，
+    // 且 4 种子进程启动方式不可靠。集成模式失败直接抛错，不再降级到不安全的传统代理）
     try {
       await this.startIntegratedProxy()
       this.isIntegrated = true
@@ -309,146 +294,10 @@ export class ManagedModeService extends EventEmitter {
 
       // 重启时覆写settings配置
       await this.applySettingsOnRestart()
-
-      return
     } catch (error) {
-      managedModeLogger.error('集成模式启动失败，尝试传统模式', error)
-      // 如果集成模式失败，尝试传统模式
+      managedModeLogger.error('集成代理启动失败', error)
+      throw error
     }
-
-    const proxyServerDir = path.join(__dirname, '../../proxy-server')
-
-    // 尝试多种启动方式
-    const startMethods = [
-      // 方法1: 使用shell执行，允许shell查找命令
-      {
-        command: 'npm',
-        args: ['run', 'start'],
-        cwd: proxyServerDir,
-        env: { ...process.env },
-        shell: true,
-        windowsHide: false
-      },
-      // 方法2: 使用npx直接运行TypeScript
-      {
-        command: 'npx',
-        args: ['tsx', 'src/index.ts'],
-        cwd: proxyServerDir,
-        env: { ...process.env },
-        shell: true,
-        windowsHide: false
-      },
-      // 方法3: 使用node运行编译后的JS
-      {
-        command: 'node',
-        args: ['dist/index.js'],
-        cwd: proxyServerDir,
-        env: { ...process.env },
-        shell: true,
-        windowsHide: false
-      },
-      // 方法4: 使用PowerShell
-      {
-        command: 'powershell',
-        args: ['-Command', `cd "${proxyServerDir}"; npm run start`],
-        cwd: proxyServerDir,
-        env: { ...process.env },
-        shell: false,
-        windowsHide: false
-      }
-    ]
-
-    let lastError: Error | null = null
-
-    for (const method of startMethods) {
-      try {
-        managedModeLogger.info(`尝试启动代理服务: ${method.command} ${method.args.join(' ')}`)
-        this.resetProxyLogDecoders()
-
-        this.proxyProcess = spawn(method.command, method.args, {
-          cwd: method.cwd,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          detached: false,
-          env: {
-            ...process.env,
-            NODE_ENV: 'production',
-            LANG: 'zh_CN.UTF-8',
-            LC_ALL: 'zh_CN.UTF-8',
-            PYTHONIOENCODING: 'utf-8'
-          }
-        })
-
-        // 监听标准输出
-        this.proxyProcess.stdout?.on('data', (data: Buffer) => {
-          this.handleProxyOutputChunk(data, 'stdout')
-        })
-
-        // 监听标准错误
-        this.proxyProcess.stderr?.on('data', (data: Buffer) => {
-          this.handleProxyOutputChunk(data, 'stderr')
-        })
-
-        // 监听进程退出
-        this.proxyProcess.on('exit', (code, signal) => {
-          this.flushProxyOutputChunks()
-          managedModeLogger.warn(`代理服务进程退出, code: ${code}, signal: ${signal}`)
-          this.proxyProcess = null
-          this.stopHealthCheck()
-        })
-
-        // 监听进程错误
-        this.proxyProcess.on('error', (error) => {
-          this.flushProxyOutputChunks()
-          managedModeLogger.error(`代理服务进程错误 (${method.command})`, error)
-          lastError = error
-          this.proxyProcess = null
-          this.stopHealthCheck()
-        })
-
-        // 等待一小段时间检查进程是否正常启动
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            if (this.proxyProcess && !this.proxyProcess.killed) {
-              managedModeLogger.info(`代理服务启动成功 (使用: ${method.command})`)
-              resolve()
-            } else {
-              reject(new Error(`代理服务启动失败: ${method.command}`))
-            }
-          }, 2000)
-
-          // 如果进程立即出错，快速失败
-          this.proxyProcess?.once('error', (error) => {
-            clearTimeout(timeout)
-            reject(error)
-          })
-        })
-
-        // 如果成功启动，跳出循环
-        break
-
-      } catch (error) {
-        managedModeLogger.warn(`启动方法 ${method.command} 失败，尝试下一个方法`, error)
-        lastError = error as Error
-        if (this.proxyProcess) {
-          this.proxyProcess.kill()
-          this.proxyProcess = null
-        }
-      }
-    }
-
-    // 如果所有方法都失败了
-    if (!this.proxyProcess) {
-      throw lastError || new Error('无法启动代理服务，所有启动方法都失败了')
-    }
-
-    // 等待服务启动
-    await this.waitForServiceReady()
-
-    // 启动健康检查
-    this.startHealthCheck()
-
-    // 重启时覆写settings配置
-    await this.applySettingsOnRestart()
   }
 
   /**
@@ -464,19 +313,29 @@ export class ManagedModeService extends EventEmitter {
 
     // 根据模式选择不同的关闭方式
     if (this.isIntegrated) {
-      // 集成模式：关闭 Express 服务器
-      if (typeof (this.proxyProcess as any).close === 'function') {
-        (this.proxyProcess as any).close()
+      // 集成模式：关闭 Express 服务器（异步操作，需 await 确保 port 释放后再 restart）
+      const proxy = this.proxyProcess
+      if (proxy && 'close' in proxy) {
+        await new Promise<void>((resolve) => {
+          // Express http.Server.close(callback) 在所有连接断开后回调
+          let resolved = false
+          const done = () => { if (!resolved) { resolved = true; resolve() } }
+          proxy.close(done)
+          // 3s 超时兜底：即使连接未完全断开也放行（防止 restart 卡死）
+          setTimeout(done, 3000)
+        })
       }
       this.isIntegrated = false
     } else {
       // 传统模式：关闭子进程
-      this.proxyProcess.kill('SIGTERM')
+      if (this.proxyProcess && 'kill' in this.proxyProcess) {
+        this.proxyProcess.kill('SIGTERM')
+      }
 
       // 等待进程退出,最多等待5秒
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
-          if (this.proxyProcess) {
+          if (this.proxyProcess && 'kill' in this.proxyProcess) {
             this.proxyProcess.kill('SIGKILL')
           }
           resolve()
@@ -562,7 +421,7 @@ export class ManagedModeService extends EventEmitter {
       } else {
         managedModeLogger.error('重启操作：覆写settings配置失败', writeResult.error)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       managedModeLogger.error('重启操作：应用settings配置失败', error)
     }
   }
@@ -572,13 +431,23 @@ export class ManagedModeService extends EventEmitter {
    * @description 重启时保持托管配置，不触发settings还原和备份
    */
   async restart(): Promise<void> {
-    this.isRestarting = true
-    try {
-      await this.stop()
-      await this.start()
-    } finally {
-      this.isRestarting = false
-    }
+    // v2.0 互斥：所有 restart 串行化执行。原实现仅用 boolean 标志，连续 UI 操作（保存配置→切换 provider）
+    // 会并发触发 stop/start，导致第二次 stop() 错误地把 settings.json 还原成非托管状态。
+    const previousChain = this.restartChain
+    const currentRestart = previousChain.then(async () => {
+      this.isRestarting = true
+      try {
+        await this.stop()
+        await this.start()
+      } finally {
+        this.isRestarting = false
+      }
+    })
+    // 链本身 catch 吞错，防止单次失败阻断后续 restart；本次 restart 的真实结果通过 currentRestart 返回给调用方
+    this.restartChain = currentRestart.catch((error) => {
+      managedModeLogger.error('重启链执行失败', error)
+    })
+    return currentRestart
   }
 
   /**
@@ -591,7 +460,7 @@ export class ManagedModeService extends EventEmitter {
       if (this.isIntegrated) {
         // 集成模式：使用当前Electron主进程的PID
         pid = process.pid
-      } else {
+      } else if ('pid' in this.proxyProcess) {
         // 传统模式：使用子进程的PID
         pid = this.proxyProcess.pid
       }
@@ -679,9 +548,9 @@ export class ManagedModeService extends EventEmitter {
       managedModeLogger.info('托管模式已启用，配置已写入 settings.json')
 
       return { success: true, message: '托管模式已启用' }
-    } catch (error: any) {
+    } catch (error: unknown) {
       managedModeLogger.error('启用托管模式失败', error)
-      return { success: false, error: error.message }
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -691,18 +560,22 @@ export class ManagedModeService extends EventEmitter {
    */
   async disableManagedMode(): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
-      // 停止代理服务
+      // 停止代理服务（运行时 stop 内部会还原系统设置并删除最新备份）
+      const wasRunning = !!this.proxyProcess
       if (this.proxyProcess) {
         await this.stop()
       }
 
-      // 无论服务是否运行，都尝试还原系统设置
-      try {
-        await this.restoreSystemSettings()
-        managedModeLogger.info('托管模式禁用：系统设置已还原')
-      } catch (restoreError) {
-        managedModeLogger.warn('托管模式禁用：还原系统设置失败', restoreError)
-        // 还原失败不应该阻止禁用操作
+      // 仅在服务未运行（stop 未触发还原）时才还原，避免二次还原到更旧备份
+      // （v2.0 修复：原实现无论是否运行都 restore，导致运行时禁用会还原到倒数第二个备份）
+      if (!wasRunning) {
+        try {
+          await this.restoreSystemSettings()
+          managedModeLogger.info('托管模式禁用：系统设置已还原')
+        } catch (restoreError) {
+          managedModeLogger.warn('托管模式禁用：还原系统设置失败', restoreError)
+          // 还原失败不应该阻止禁用操作
+        }
       }
 
       await this.loadConfig()
@@ -716,8 +589,8 @@ export class ManagedModeService extends EventEmitter {
       await this.saveConfig(this.config)
 
       return { success: true, message: '托管模式已禁用' }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -879,9 +752,9 @@ export class ManagedModeService extends EventEmitter {
         managedModeLogger.warn(`原始系统设置文件不存在: ${userSettingsPath}`)
         throw new Error('系统设置文件不存在，无法备份')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       managedModeLogger.error('备份系统设置失败', error)
-      throw new Error(`备份系统设置失败: ${error.message}`)
+      throw new Error(`备份系统设置失败: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -922,9 +795,9 @@ export class ManagedModeService extends EventEmitter {
 
       managedModeLogger.info(`系统设置已从备份还原: ${userSettingsPath}`)
       managedModeLogger.info(`已删除备份文件: ${backupPath}`)
-    } catch (error: any) {
+    } catch (error: unknown) {
       managedModeLogger.error('还原系统设置失败', error)
-      throw new Error(`还原系统设置失败: ${error.message}`)
+      throw new Error(`还原系统设置失败: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -950,8 +823,8 @@ export class ManagedModeService extends EventEmitter {
    * @description 生成格式为 ccb-sk-xxx + 32位高强度随机字符串的访问令牌
    */
   private generateAccessToken(): string {
-    const randomPart = randomBytes(16).toString('hex') // 32位十六进制字符串
-    return `ccb-sk-${randomPart}`
+    // v2.0 架构解耦：委托 ConfigStore
+    return this.configStore.generateAccessToken()
   }
 
   /**
@@ -1067,7 +940,7 @@ export class ManagedModeService extends EventEmitter {
         try {
           const configPath = path.join(configDir, file)
           const content = await fs.readFile(configPath, 'utf-8')
-          const config = JSON.parse(content)
+          const rawConfig = JSON.parse(content) as Record<string, unknown>
 
           // 支持两种配置格式：
           // 1. 标准格式：config.env.ANTHROPIC_BASE_URL
@@ -1075,14 +948,22 @@ export class ManagedModeService extends EventEmitter {
           let baseUrl: string | undefined
           let authToken: string | undefined
 
-          if (config.env?.ANTHROPIC_BASE_URL && config.env?.ANTHROPIC_AUTH_TOKEN) {
+          const envBlock = rawConfig.env as Record<string, unknown> | undefined
+          if (
+            envBlock &&
+            typeof envBlock.ANTHROPIC_BASE_URL === 'string' &&
+            typeof envBlock.ANTHROPIC_AUTH_TOKEN === 'string'
+          ) {
             // 标准格式
-            baseUrl = config.env.ANTHROPIC_BASE_URL
-            authToken = config.env.ANTHROPIC_AUTH_TOKEN
-          } else if (config.ANTHROPIC_BASE_URL && config.ANTHROPIC_AUTH_TOKEN) {
+            baseUrl = envBlock.ANTHROPIC_BASE_URL
+            authToken = envBlock.ANTHROPIC_AUTH_TOKEN
+          } else if (
+            typeof rawConfig.ANTHROPIC_BASE_URL === 'string' &&
+            typeof rawConfig.ANTHROPIC_AUTH_TOKEN === 'string'
+          ) {
             // 扁平格式
-            baseUrl = config.ANTHROPIC_BASE_URL
-            authToken = config.ANTHROPIC_AUTH_TOKEN
+            baseUrl = rawConfig.ANTHROPIC_BASE_URL
+            authToken = rawConfig.ANTHROPIC_AUTH_TOKEN
           }
 
           // 只处理有效的 claude-code 配置
@@ -1094,8 +975,8 @@ export class ManagedModeService extends EventEmitter {
             try {
               const metaPath = path.join(configDir, `${file}.meta`)
               const metaContent = await fs.readFile(metaPath, 'utf-8')
-              const metaData = JSON.parse(metaContent)
-              if (metaData.name && typeof metaData.name === 'string') {
+              const metaData = JSON.parse(metaContent) as Record<string, unknown>
+              if (typeof metaData.name === 'string') {
                 displayName = metaData.name
                 managedModeLogger.debug(`从元数据文件读取到配置显示名称: ${displayName} (文件名: ${configName})`)
               }
@@ -1153,7 +1034,7 @@ export class ManagedModeService extends EventEmitter {
       await this.saveConfig(managedConfig)
 
       managedModeLogger.info(`已从配置列表同步 ${newProviders.length} 个 providers`)
-    } catch (error: any) {
+    } catch (error: unknown) {
       managedModeLogger.error('同步 providers 失败', error)
     }
   }
@@ -1172,48 +1053,16 @@ export class ManagedModeService extends EventEmitter {
    * 加载配置
    */
   private async loadConfig(): Promise<void> {
-    try {
-      const data = await fs.readFile(this.configPath, 'utf-8')
-      const parsed = JSON.parse(data) as ManagedModeConfig
-      this.config = parsed
-
-      // 兼容旧配置：如果accessToken不存在，生成一个
-      if (!parsed.accessToken) {
-        parsed.accessToken = this.generateAccessToken()
-        await this.saveConfig(parsed)
-        this.config = parsed
-      }
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        // 配置文件不存在,创建默认配置
-        this.config = {
-          enabled: false,
-          port: ManagedModeService.DEFAULT_PORT,
-          currentProvider: '',
-          providers: [],
-          accessToken: this.generateAccessToken(), // 自动生成访问令牌
-          logging: {
-            enabled: true,
-            level: 'info'
-          }
-        }
-        await this.saveConfig(this.config)
-      } else {
-        throw error
-      }
-    }
+    // v2.0 架构解耦：委托 ConfigStore 处理读取 / 默认值创建 / accessToken 补全
+    this.config = await this.configStore.load()
   }
 
   /**
    * 保存配置
    */
   private async saveConfig(config: ManagedModeConfig): Promise<void> {
-    // 确保目录存在
-    const dir = path.dirname(this.configPath)
-    await fs.mkdir(dir, { recursive: true })
-
-    // 写入配置
-    await fs.writeFile(this.configPath, JSON.stringify(config, null, 2), 'utf-8')
+    // v2.0 架构解耦：委托 ConfigStore 原子写入（temp + rename，避免写入中断损坏）
+    await this.configStore.save(config)
 
     // 更新内存中的配置
     this.config = config
@@ -1224,7 +1073,7 @@ export class ManagedModeService extends EventEmitter {
    * @description 将托管模式配置写入到~/.claude/settings.json文件
    * @note 完全替换托管控制的字段，不做合并，避免残留旧配置
    */
-  async updateSettingsConfig(configData: any): Promise<{ success: boolean; error?: string }> {
+  async updateSettingsConfig(configData: Record<string, unknown>): Promise<{ success: boolean; error?: string }> {
     try {
       const userSettingsPath = path.join(os.homedir(), '.claude', 'settings.json')
 
@@ -1233,10 +1082,10 @@ export class ManagedModeService extends EventEmitter {
       await fs.mkdir(claudeDir, { recursive: true })
 
       // 读取现有配置（如果存在）
-      let existingConfig: any = {}
+      let existingConfig: Record<string, unknown> = {}
       try {
         const existingContent = await fs.readFile(userSettingsPath, 'utf8')
-        existingConfig = JSON.parse(existingContent)
+        existingConfig = JSON.parse(existingContent) as Record<string, unknown>
       } catch (error) {
         // 文件不存在或读取失败，使用空配置
         managedModeLogger.info('系统settings文件不存在，将创建新文件')
@@ -1247,7 +1096,7 @@ export class ManagedModeService extends EventEmitter {
       const managedKeys = new Set(['env', 'permissions', 'statusLine', ...Object.keys(configData)])
 
       // 保留非托管控制的字段
-      const preservedConfig: any = {}
+      const preservedConfig: Record<string, unknown> = {}
       for (const key in existingConfig) {
         if (!managedKeys.has(key)) {
           preservedConfig[key] = existingConfig[key]
@@ -1273,9 +1122,9 @@ export class ManagedModeService extends EventEmitter {
       })
 
       return { success: true }
-    } catch (error: any) {
+    } catch (error: unknown) {
       managedModeLogger.error('写入系统settings配置失败', error)
-      return { success: false, error: error.message }
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -1314,7 +1163,7 @@ export class ManagedModeService extends EventEmitter {
       ? {
           ...this.config.configData,
           env: {
-            ...(this.config.configData.env || {}),
+            ...((this.config.configData as Record<string, unknown>).env || {}) as Record<string, unknown>,
             ANTHROPIC_AUTH_TOKEN: accessToken
           }
         }
@@ -1345,34 +1194,6 @@ export class ManagedModeService extends EventEmitter {
     }
 
     return `${secret.slice(0, 3)}***${secret.slice(-3)}`
-  }
-
-  /**
-   * 等待服务就绪
-   */
-  private async waitForServiceReady(): Promise<void> {
-    const maxAttempts = 30
-    const interval = 1000
-
-    for (let i = 0; i < maxAttempts; i++) {
-      try {
-        const port = this.config?.port || ManagedModeService.DEFAULT_PORT
-      const response = await axios.get(`http://127.0.0.1:${port}/health`, {
-        timeout: 1000
-      })
-
-      if (response.status === 200) {
-          managedModeLogger.info('代理服务已就绪')
-          return
-        }
-      } catch {
-        // 继续等待
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, interval))
-    }
-
-    throw new Error('代理服务启动超时')
   }
 
   /**
@@ -1485,9 +1306,15 @@ export class ManagedModeService extends EventEmitter {
       // 重置到初始级别
       this.resetHealthCheckLevel()
 
-      // 服务异常,清理进程引用
+      // 服务异常，清理进程引用（集成模式用 close，传统模式用 kill）
       if (this.proxyProcess) {
-        this.proxyProcess.kill('SIGKILL')
+        if ('close' in this.proxyProcess) {
+          // 集成模式：关闭 Express 服务器
+          this.proxyProcess.close()
+        } else if ('kill' in this.proxyProcess) {
+          // 传统模式（已移除但保留兼容）：强制终止子进程
+          this.proxyProcess.kill('SIGKILL')
+        }
         this.proxyProcess = null
       }
       this.stopHealthCheck()
@@ -1562,131 +1389,46 @@ export class ManagedModeService extends EventEmitter {
   }
 
   /**
-   * 解析并发送日志到渲染进程
-   * @description 解析代理服务器的JSON日志并通过IPC发送到前端
+   * 截断日志中的上游响应 content，避免完整响应内容广播到所有渲染窗口
+   * @description 安全加固：日志事件会被多个窗口接收，完整上游响应（含生成内容）
+   *              不应原样广播，仅保留前若干项并截断文本长度。
    */
-  private parseAndEmitLog(output: string, defaultLevel: 'info' | 'error'): void {
-    try {
-      const lines = output.split('\n').filter(line => line.trim())
-
-      for (const line of lines) {
-        try {
-          // 尝试解析JSON格式的日志
-          const jsonMatch = line.match(/({.+})/)
-          if (jsonMatch) {
-            const logData = JSON.parse(jsonMatch[1])
-
-            // 构造日志事件
-            const logEvent = {
-              timestamp: Date.now(),
-              level: logData.level || defaultLevel,
-              type: this.determineLogType(logData),
-              source: 'managed-mode-proxy',
-              message: logData.message || line,
-              data: this.extractLogData(logData)
-            }
-
-            // 发送到渲染进程
-            this.emitLog(logEvent)
-          } else {
-            // 非JSON格式的日志，直接发送
-            this.emitLog({
-              timestamp: Date.now(),
-              level: defaultLevel,
-              type: 'system',
-              source: 'managed-mode-proxy',
-              message: line.trim(),
-              data: null
-            })
-          }
-        } catch (parseError) {
-          // 解析单行失败时，发送原始日志
-          this.emitLog({
-            timestamp: Date.now(),
-            level: defaultLevel,
-            type: 'system',
-            source: 'managed-mode-proxy',
-            message: line.trim(),
-            data: null
-          })
+  private truncateContentForLog(content: unknown): unknown {
+    if (!Array.isArray(content)) {
+      return content
+    }
+    const MAX_ITEMS = 2
+    const MAX_TEXT_LENGTH = 200
+    return content.slice(0, MAX_ITEMS).map((item: unknown) => {
+      if (item && typeof item === 'object' && typeof (item as { text?: unknown }).text === 'string') {
+        const text = (item as { text: string }).text
+        return {
+          ...item as Record<string, unknown>,
+          text: text.length > MAX_TEXT_LENGTH ? `${text.slice(0, MAX_TEXT_LENGTH)}...[已截断]` : text
         }
       }
-    } catch (error) {
-      managedModeLogger.error('解析代理服务日志失败', error)
-    }
-  }
-
-  /**
-   * 确定日志类型
-   */
-  private determineLogType(logData: any): 'request' | 'response' | 'system' | 'error' {
-    // 根据日志消息判断类型
-    const message = (logData.message || '').toLowerCase()
-
-    if (message.includes('请求') || message.includes('request')) {
-      return 'request'
-    }
-    if (message.includes('响应') || message.includes('response')) {
-      return 'response'
-    }
-    if (logData.level === 'error') {
-      return 'error'
-    }
-    return 'system'
-  }
-
-  /**
-   * 提取日志数据
-   */
-  private extractLogData(logData: any): any {
-    const data: any = {}
-
-    // 提取HTTP相关信息
-    if (logData.method) data.method = logData.method
-    if (logData.url) data.url = logData.url
-    if (logData.statusCode) data.statusCode = logData.statusCode
-    if (logData.duration) data.duration = logData.duration
-    if (logData.headers) data.headers = logData.headers
-    if (logData.body) data.body = logData.body
-    if (logData.error) data.error = logData.error
-    if (logData.stack) data.stack = logData.stack
-    if (logData.provider) data.provider = logData.provider
-
-    return Object.keys(data).length > 0 ? data : null
-  }
-
-  /**
-   * 发送日志事件到渲染进程
-   */
-  private emitLog(logEvent: any): void {
-    try {
-      const allWindows = BrowserWindow.getAllWindows()
-      allWindows.forEach(window => {
-        window.webContents.send('managed-mode:log', logEvent)
-      })
-    } catch (error) {
-      managedModeLogger.error('发送日志事件失败', error)
-    }
+      return item
+    })
   }
 
   /**
    * 集成模式启动代理服务（在主进程中运行）
    */
   private async startIntegratedProxy(): Promise<void> {
-    // 动态导入 express、cors 和 https-proxy-agent
+    // 动态导入 express 和 https-proxy-agent
+    // 注：不启用 CORS —— 托管代理仅服务本机 Claude CLI，CLI 不走浏览器 CORS；
+    // 全开 CORS 反而会让本机恶意网页在 token 泄露后能直接调用上游 API（安全收紧）。
     const express = await import('express')
-    const cors = await import('cors')
     const { HttpsProxyAgent } = await import('https-proxy-agent')
 
     const expressApp = express.default()
-    expressApp.use(cors.default())
     expressApp.use(express.default.json({ limit: '50mb' }))
 
     const port = this.config?.port || ManagedModeService.DEFAULT_PORT
 
     // 中间件：验证访问令牌
-    const authMiddleware = (req: any, res: any, next: any) => {
-      const authHeader = req.headers.authorization || req.headers['x-api-key']
+    const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
+      const authHeader = req.headers.authorization || (req.headers['x-api-key'] as string | undefined)
       const token = authHeader?.replace('Bearer ', '')
 
       if (!token) {
@@ -1713,7 +1455,7 @@ export class ManagedModeService extends EventEmitter {
     }
 
     // 健康检查端点（不需要认证）
-    expressApp.get('/health', (_req: any, res: any) => {
+    expressApp.get('/health', (_req: Request, res: Response) => {
       const currentProvider = this.config?.providers.find(
         (p: ApiProvider) => p.id === this.config?.currentProvider
       )
@@ -1732,11 +1474,12 @@ export class ManagedModeService extends EventEmitter {
     })
 
     // 代理端点 - Anthropic Messages API
-    expressApp.post('/v1/messages', authMiddleware, async (req: any, res: any) => {
+    expressApp.post('/v1/messages', authMiddleware, async (req: Request, res: Response) => {
       const requestTime = new Date().toISOString()
       const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`
-      const isStreamRequest = req.body.stream === true
-      let axiosConfig: any // 在外部声明，以便在catch块中使用
+      const requestBody = (req.body ?? {}) as MessagesRequestBody
+      const isStreamRequest = requestBody.stream === true
+      let axiosConfig: AxiosRequestConfig | undefined // 在外部声明，以便在catch块中使用
 
       try {
         // 获取当前服务提供商配置
@@ -1793,7 +1536,7 @@ export class ManagedModeService extends EventEmitter {
 
         // 4. 设置/覆盖必要的头
         forwardedHeaders['content-type'] = 'application/json'
-        forwardedHeaders['anthropic-version'] = req.headers['anthropic-version'] || '2023-06-01'
+        forwardedHeaders['anthropic-version'] = (Array.isArray(req.headers['anthropic-version']) ? req.headers['anthropic-version'][0] : req.headers['anthropic-version']) || '2023-06-01'
         forwardedHeaders['x-api-key'] = currentProvider.apiKey  // 替换为上游API密钥
 
         // 构建axios配置
@@ -1803,7 +1546,7 @@ export class ManagedModeService extends EventEmitter {
           headers: forwardedHeaders,
           data: req.body,
           timeout: 120000 // 2分钟超时
-        }
+        } as AxiosRequestConfig
 
         // 如果是流式请求，设置responseType为stream
         if (isStreamRequest) {
@@ -1832,7 +1575,7 @@ export class ManagedModeService extends EventEmitter {
             type: 'request' as const,
             message: `请求 ${currentProvider.name}${isStreamRequest ? ' (流式)' : ''}`,
             provider: currentProvider.name,
-            model: req.body.model,
+            model: requestBody.model,
             url: axiosConfig.url,
             method: 'POST',
             statusCode: 0,
@@ -1843,11 +1586,11 @@ export class ManagedModeService extends EventEmitter {
               stream: isStreamRequest,
               headers: sanitizedHeaders,  // 包含完整的转发请求头（已脱敏）
               body: {
-                model: req.body.model,
-                max_tokens: req.body.max_tokens,
-                stream: req.body.stream,
-                messages: req.body.messages?.length
-                  ? `${req.body.messages.length} message(s)`
+                model: requestBody.model,
+                max_tokens: requestBody.max_tokens,
+                stream: requestBody.stream,
+                messages: requestBody.messages?.length
+                  ? `${requestBody.messages.length} message(s)`
                   : undefined
               }
             }
@@ -1856,13 +1599,16 @@ export class ManagedModeService extends EventEmitter {
           managedModeLogger.debug('[托管代理] 转发请求到上游', {
             provider: currentProvider.name,
             url: axiosConfig.url,
-            model: req.body.model,
+            model: requestBody.model,
             stream: isStreamRequest,
             forwardedHeadersCount: Object.keys(forwardedHeaders).length
           })
         }
 
         // 转发请求到上游 API
+        if (!axiosConfig) {
+          throw new Error('请求配置未初始化，无法转发到上游 API')
+        }
         const response = await axios(axiosConfig)
 
         // 处理流式响应
@@ -1877,7 +1623,7 @@ export class ManagedModeService extends EventEmitter {
           response.data.pipe(res)
 
           // 处理流错误
-          response.data.on('error', (error: any) => {
+          response.data.on('error', (error: unknown) => {
             managedModeLogger.error('[托管代理] 上游流错误', error)
             if (!res.headersSent) {
               res.status(500).end()
@@ -1900,7 +1646,7 @@ export class ManagedModeService extends EventEmitter {
                 statusCode: response.status,
                 data: {
                   method: 'POST',
-                  url: axiosConfig.url,
+                  url: axiosConfig?.url,
                   statusCode: response.status,
                   duration,
                   stream: true,
@@ -1922,6 +1668,7 @@ export class ManagedModeService extends EventEmitter {
         if (this.config?.logging?.enabled) {
           const endTime = Date.now()
           const duration = endTime - new Date(requestTime).getTime()
+          const responseData = response.data as UpstreamResponseData
           const responseLog = {
             id: requestId,
             timestamp: new Date().toISOString(),
@@ -1941,12 +1688,12 @@ export class ManagedModeService extends EventEmitter {
                 'x-request-id': response.headers['x-request-id']
               },
               body: response.data ? {
-                id: response.data.id,
-                type: response.data.type,
-                role: response.data.role,
-                model: response.data.model,
-                usage: response.data.usage,
-                content: response.data.content  // 显示完整的content数组，包含所有子级JSON数据
+                id: responseData.id,
+                type: responseData.type,
+                role: responseData.role,
+                model: responseData.model,
+                usage: responseData.usage,
+                content: this.truncateContentForLog(responseData.content)  // 截断后广播，避免完整上游响应扩散
               } : undefined
             }
           }
@@ -1960,8 +1707,17 @@ export class ManagedModeService extends EventEmitter {
         // 返回上游响应
         res.status(response.status).json(response.data)
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         managedModeLogger.error('[托管代理] 请求失败', error)
+
+        // 统一提取错误信息，避免在 catch 中直接访问 any 字段
+        const errorMessage = error instanceof Error ? error.message : '请求失败'
+        const axiosError = error as { response?: { status?: number; data?: { error?: { type?: string } }; headers?: Record<string, string> }; code?: string; isAxiosError?: boolean }
+        const statusCode = axiosError?.response?.status || 500
+        const errorCode = axiosError?.code || 'unknown'
+        const errorResponseType = axiosError?.response?.data?.error?.type || 'unknown_error'
+        const errorResponseHeaders = axiosError?.response?.headers
+        const errorResponseData = axiosError?.response?.data
 
         // 记录错误日志
         const endTime = Date.now()
@@ -1970,36 +1726,37 @@ export class ManagedModeService extends EventEmitter {
           id: requestId,
           timestamp: new Date().toISOString(),
           type: 'error' as const,
-          message: error.message || '请求失败',
-          statusCode: error.response?.status || 500,
-          errorType: error.code || 'unknown',
+          message: errorMessage,
+          statusCode,
+          errorType: errorCode,
           data: {
             method: 'POST',
             url: axiosConfig?.url || '/v1/messages',
-            statusCode: error.response?.status || 500,
+            statusCode,
             duration,
-            error: error.message,
-            errorCode: error.code,
-            errorType: error.response?.data?.error?.type || 'unknown_error',
-            headers: error.response?.headers ? {
-              'content-type': error.response.headers['content-type']
+            error: errorMessage,
+            errorCode,
+            errorType: errorResponseType,
+            headers: errorResponseHeaders ? {
+              'content-type': errorResponseHeaders['content-type']
             } : undefined,
             // 包含上游API返回的完整错误响应体
-            body: error.response?.data || null
+            body: errorResponseData ?? null
           }
         }
         this.emit('log', errorLog)
 
         // 处理axios错误
-        if (error.response) {
+        if (axiosError?.response) {
           // 上游API返回错误
-          if (error.response.data && typeof error.response.data === 'object' && !Buffer.isBuffer(error.response.data)) {
-            return res.status(error.response.status).json(error.response.data)
+          const errorStatus = axiosError.response.status ?? 500
+          if (axiosError.response.data && typeof axiosError.response.data === 'object' && !Buffer.isBuffer(axiosError.response.data)) {
+            return res.status(errorStatus).json(axiosError.response.data)
           } else {
             // 流式错误响应
-            return res.status(error.response.status).send(error.response.data)
+            return res.status(errorStatus).send(axiosError.response.data)
           }
-        } else if (error.code === 'ECONNABORTED') {
+        } else if (errorCode === 'ECONNABORTED') {
           // 超时错误
           return res.status(504).json({
             type: 'error',
@@ -2014,7 +1771,7 @@ export class ManagedModeService extends EventEmitter {
             type: 'error',
             error: {
               type: 'api_error',
-              message: `代理服务内部错误: ${error.message}`
+              message: `代理服务内部错误: ${errorMessage}`
             }
           })
         }
@@ -2027,11 +1784,12 @@ export class ManagedModeService extends EventEmitter {
         managedModeLogger.info(`集成代理服务已启动: http://127.0.0.1:${port}`)
         managedModeLogger.info(`当前服务提供商: ${this.config?.currentProvider || 'None'}`)
         // 将 server 引用存储到 proxyProcess 中，以便后续管理
-        this.proxyProcess = server as any
+        // Express http.Server 的 close 接口签名与 ProxyProcessLike 集成形态相符
+        this.proxyProcess = server as unknown as ProxyProcessLike
         resolve()
       })
 
-      server.on('error', (error: any) => {
+      server.on('error', (error: NodeJS.ErrnoException) => {
         if (error.code === 'EADDRINUSE') {
           reject(new Error(`端口 ${port} 已被占用`))
         } else {

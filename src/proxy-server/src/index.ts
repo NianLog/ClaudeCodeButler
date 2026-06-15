@@ -78,8 +78,9 @@ async function main(): Promise<void> {
       logger.info('收到 SIGTERM 信号,正在关闭服务器...')
       process.exit(0)
     })
-  } catch (error: any) {
-    console.error('服务启动失败:', error.message)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('服务启动失败:', message)
     process.exit(1)
   }
 }

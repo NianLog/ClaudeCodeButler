@@ -6,7 +6,9 @@
 import { app, dialog } from 'electron'
 import { exec } from 'child_process'
 import { promises as fs } from 'fs'
+import * as fsSync from 'fs'
 import { join } from 'path'
+import path from 'path'
 import { logger } from './logger'
 
 /**
@@ -158,9 +160,6 @@ export class PrivilegeManager {
    */
   private async validateSystemFileAccess(): Promise<boolean> {
     return new Promise((resolve) => {
-      const fs = require('fs')
-      const path = require('path')
-
       // 尝试访问多个系统关键位置来验证权限
       const testPaths = [
         path.join(process.env.WINDIR || 'C:\\Windows', 'System32'),
@@ -172,7 +171,7 @@ export class PrivilegeManager {
       let successCount = 0
       for (const testPath of testPaths) {
         try {
-          fs.accessSync(testPath, fs.constants.R_OK)
+          fsSync.accessSync(testPath, fsSync.constants.R_OK)
           successCount++
         } catch (error) {
           logger.debug(`无法访问: ${testPath}`)
@@ -383,13 +382,11 @@ export class PrivilegeManager {
       }
 
       // 方法1: 使用 fs 模块尝试访问受保护的系统目录
-      const fs = require('fs')
-      const path = require('path')
       const systemConfigDir = path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'config')
 
       try {
         // 尝试读取系统配置目录
-        fs.accessSync(systemConfigDir, fs.constants.R_OK)
+        fsSync.accessSync(systemConfigDir, fsSync.constants.R_OK)
         logger.debug('方法1成功: 可以访问系统配置目录')
         resolve(true)
         return
@@ -398,7 +395,7 @@ export class PrivilegeManager {
       }
 
       // 方法2: 使用 whoami /priv 检查权限
-      exec('whoami /priv', (error: any, stdout: string, _stderr: string) => {
+      exec('whoami /priv', (error: unknown, stdout: string, _stderr: string) => {
         if (!error) {
           // 检查是否包含 SeShutdownPrivilege 等管理员权限
           const adminPrivileges = [
@@ -418,7 +415,7 @@ export class PrivilegeManager {
         }
 
         // 方法3: 检查管理员组SID
-        exec('whoami /groups', (error: any, stdout: string, _stderr: string) => {
+        exec('whoami /groups', (error: unknown, stdout: string, _stderr: string) => {
           if (!error) {
             const adminIndicators = [
               'S-1-5-32-544', // Administrators group SID
@@ -439,7 +436,7 @@ export class PrivilegeManager {
           }
 
           // 方法4: 尝试 net session 命令
-          exec('net session', (netError: any, _netStdout: string, _netStderr: string) => {
+          exec('net session', (netError: unknown, _netStdout: string, _netStderr: string) => {
             if (!netError) {
               logger.debug('方法4成功: net session 命令执行成功')
               resolve(true)
@@ -447,7 +444,7 @@ export class PrivilegeManager {
             }
 
             // 方法5: 检查进程完整性级别
-            exec('powershell -Command "([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)"', (psError: any, psStdout: string) => {
+            exec('powershell -Command "([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)"', (psError: unknown, psStdout: string) => {
               if (!psError && psStdout.includes('True')) {
                 logger.debug('方法5成功: PowerShell 管理员角色检查')
                 resolve(true)
@@ -468,8 +465,7 @@ export class PrivilegeManager {
    */
   private async checkMacOSAdminPrivileges(): Promise<boolean> {
     return new Promise((resolve) => {
-      const { exec } = require('child_process')
-      exec('id -un', (error: any, stdout: string) => {
+      exec('id -un', (error: unknown, stdout: string) => {
         // 检查是否是 root 用户
         resolve(!error && stdout.trim() === 'root')
       })
@@ -481,8 +477,7 @@ export class PrivilegeManager {
    */
   private async checkLinuxAdminPrivileges(): Promise<boolean> {
     return new Promise((resolve) => {
-      const { exec } = require('child_process')
-      exec('id -u', (error: any, stdout: string) => {
+      exec('id -u', (error: unknown, stdout: string) => {
         // 检查用户 ID 是否为 0 (root)
         resolve(!error && stdout.trim() === '0')
       })
@@ -562,7 +557,7 @@ export class PrivilegeManager {
    */
   private async checkCommandExists(command: string): Promise<boolean> {
     return new Promise((resolve) => {
-      exec(`which ${command}`, (error: any) => {
+      exec(`which ${command}`, (error: unknown) => {
         resolve(!error)
       })
     })
@@ -573,8 +568,8 @@ export class PrivilegeManager {
    */
   private async executeElevatedCommand(command: string, args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      exec(`${command} ${args.join(' ')}`, (error: any, _stdout: string, stderr: string) => {
-        if (error) {
+      exec(`${command} ${args.join(' ')}`, (_error: unknown, _stdout: string, stderr: string) => {
+        if (_error) {
           reject(new Error(`执行命令失败: ${stderr}`))
         } else {
           resolve()

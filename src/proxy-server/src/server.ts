@@ -5,7 +5,7 @@
 
 import express from 'express'
 import cors from 'cors'
-import axios from 'axios'
+import axios, { type AxiosRequestConfig } from 'axios'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -93,7 +93,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
 
       // 构建上游API请求
       const upstreamUrl = `${provider.apiBaseUrl}/v1/messages`
-      const axiosConfig = {
+      const axiosConfig: AxiosRequestConfig = {
         method: 'POST',
         url: upstreamUrl,
         headers: {
@@ -104,7 +104,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
         data: transformedRequest,
         responseType: claudeRequest.stream ? 'stream' : 'json',
         timeout: 300000 // 5分钟超时
-      } as any
+      }
 
       // 发送请求到上游API
       const upstreamResponse = await axios(axiosConfig)
@@ -131,8 +131,9 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
           logger.info('流式响应完成', { provider: provider.name })
         })
 
-        upstreamResponse.data.on('error', (error: any) => {
-          logger.error('流式响应错误', { error: error.message })
+        upstreamResponse.data.on('error', (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error)
+          logger.error('流式响应错误', { error: message })
           res.end()
         })
       } else {
@@ -144,10 +145,12 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
         res.json(transformedResponse)
         logger.info('请求完成', { provider: provider.name })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      const stack = error instanceof Error ? error.stack : undefined
       logger.error('请求处理失败', {
-        error: error.message,
-        stack: error.stack
+        error: message,
+        stack
       })
 
       // 返回错误响应
@@ -157,7 +160,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
         res.status(500).json({
           error: {
             type: 'server_error',
-            message: error.message || '内部服务器错误'
+            message: message || '内部服务器错误'
           }
         })
       }
@@ -211,12 +214,14 @@ export async function startProxyServer(config: ProxyServerConfig): Promise<void>
         resolve()
       })
 
-      server.on('error', (error: any) => {
-        if (error.code === 'EADDRINUSE') {
+      server.on('error', (error: unknown) => {
+        const err = error as NodeJS.ErrnoException
+        if (err.code === 'EADDRINUSE') {
           logger.error(`端口 ${config.port} 已被占用`)
           reject(new Error(`端口 ${config.port} 已被占用`))
         } else {
-          logger.error('服务器启动失败', { error: error.message })
+          const message = error instanceof Error ? error.message : String(error)
+          logger.error('服务器启动失败', { error: message })
           reject(error)
         }
       })

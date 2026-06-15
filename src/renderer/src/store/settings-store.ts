@@ -56,8 +56,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 interface SettingsStore extends SettingsModuleState {
   // 基础操作
   setSettings: (settings: Partial<AppSettings>) => void
-  setTabSettings: (tab: SettingsTab, data: any) => void
-  updateSetting: (tab: SettingsTab, key: string, value: any) => void
+  setTabSettings: (tab: SettingsTab, data: Record<string, unknown>) => void
+  updateSetting: (tab: SettingsTab, key: string, value: unknown) => void
 
   // 异步操作
   loadSettings: () => Promise<void>

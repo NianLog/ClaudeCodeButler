@@ -151,12 +151,18 @@ class AgentsManagementService {
       const match = content.match(frontmatterRegex)
 
       if (!match) {
-        logger.warn('未找到YAML frontmatter，尝试手动提取')
+        logger.debug('未找到YAML frontmatter，尝试手动提取')
         return this.extractMetadataManually(content)
       }
 
       const yamlContent = match[1]
-      const metadata = yaml.load(yamlContent) as any
+      const metadata = yaml.load(yamlContent) as {
+        name?: string
+        description?: string
+        tools?: string | string[]
+        model?: string
+        color?: string
+      } | null ?? {}
 
       // 处理tools字段：可能是字符串或数组
       let tools: string[] = []
@@ -179,7 +185,9 @@ class AgentsManagementService {
         color: metadata.color || undefined
       }
     } catch (error) {
-      logger.warn('YAML解析失败，尝试手动提取元数据:', error)
+      // YAML 解析失败是预期行为（部分 Agent 文件 frontmatter 含 markdown/特殊字符），
+      // fallback 手动提取正常工作，降级为 debug 避免每次扫描都刷 WARNING 日志
+      logger.debug('YAML解析失败，尝试手动提取元数据:', error)
       return this.extractMetadataManually(content)
     }
   }
@@ -240,15 +248,19 @@ class AgentsManagementService {
     await this.initializeAgentsDir()
 
     // 生成文件名（使用name的slug形式）
-    const fileName = this.slugify(formData.name) + '.md'
+    const fileName = `${this.slugify(formData.name)  }.md`
     const filePath = path.join(this.agentsDir, fileName)
 
     // 检查文件是否已存在
+    // 注意：独立捕获 fs.access 的 ENOENT，避免与“已存在”判断共用 catch 导致同名 Agent 被静默覆盖。
+    let agentExists = true
     try {
       await fs.access(filePath)
-      throw new Error(`Agent "${formData.name}" 已存在`)
     } catch {
-      // 文件不存在，可以继续
+      agentExists = false
+    }
+    if (agentExists) {
+      throw new Error(`Agent "${formData.name}" 已存在`)
     }
 
     // 构建文件内容（frontmatter + 正文）
@@ -309,7 +321,7 @@ class AgentsManagementService {
     }
 
     // 生成目标文件名
-    const fileName = this.slugify(metadata.name) + '.md'
+    const fileName = `${this.slugify(metadata.name)  }.md`
     const targetPath = path.join(this.agentsDir, fileName)
 
     // 检查目标文件是否已存在
@@ -352,7 +364,7 @@ class AgentsManagementService {
       throw new Error('Agent文件缺少必填的description字段')
     }
 
-    const fileName = this.slugify(metadata.name) + '.md'
+    const fileName = `${this.slugify(metadata.name)  }.md`
     const targetPath = path.join(this.agentsDir, fileName)
 
     try {
@@ -455,7 +467,7 @@ class AgentsManagementService {
       let color = formData.color.trim()
       // 如果没有#前缀且是6位hex，添加#
       if (!color.startsWith('#') && /^[0-9A-Fa-f]{6}$/.test(color)) {
-        color = '#' + color
+        color = `#${  color}`
       }
       yamlContent += `color: ${color}\n`
     }
@@ -475,8 +487,8 @@ class AgentsManagementService {
       .toLowerCase()
       .trim()
       .replace(/\s+/g, '-') // 空格替换为连字符
-      .replace(/[^\w\-]+/g, '') // 移除非单词字符
-      .replace(/\-\-+/g, '-') // 移除多个连字符
+      .replace(/[^\w-]+/g, '') // 移除非单词字符
+      .replace(/--+/g, '-') // 移除多个连字符
       .replace(/^-+/, '') // 移除前导连字符
       .replace(/-+$/, '') // 移除尾部连字符
   }

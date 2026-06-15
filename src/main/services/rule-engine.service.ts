@@ -12,8 +12,8 @@ import { logger } from '../utils/logger';
 import { pathManager } from '../utils/path-manager';
 import { logStorageService } from './log-storage.service';
 import { CONFIG_FILES } from '@shared/constants';
-import { BrowserWindow } from 'electron';
-import { terminalManagementService } from './terminal-management-service';
+import { BrowserWindow, Notification } from 'electron';
+import { executeCommand } from '../utils/command-executor';
 
 class RuleEngineService {
   private cronJobs = new Map<RuleId, cron.ScheduledTask>();
@@ -52,6 +52,22 @@ class RuleEngineService {
    * 调度一条规则
    * @param rule 要调度的规则
    */
+  /**
+   * 校验定时触发器参数（时间格式 + 日期非空）
+   * @throws 若 time 格式或 days 非法，供 createRule/updateRule 在保存前拒绝非法输入
+   */
+  private assertValidTimeTrigger(time: string, days: unknown): void {
+    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(time)) {
+      throw new Error(`无效的触发时间格式 "${time}"，应为 HH:MM（24小时制，如 09:30）`);
+    }
+    if (!Array.isArray(days) || days.length === 0) {
+      throw new Error('触发日期不能为空');
+    }
+    if (!days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) {
+      throw new Error('无效的触发日期，应为 0-6 的数字数组（0=周日）');
+    }
+  }
+
   private scheduleRule(rule: AutomationRule): void {
     if (this.cronJobs.has(rule.id)) {
       this.unscheduleRule(rule.id);
@@ -59,6 +75,14 @@ class RuleEngineService {
 
     if (rule.trigger.type === 'time') {
       const { time, days } = rule.trigger;
+      // v2.0 边界校验：先验证 time/days，避免构造出无效或恒不触发的 cron 表达式
+      try {
+        this.assertValidTimeTrigger(time, days);
+      } catch (error) {
+        logger.error(`规则 "${rule.name}" 触发器无效，未调度: ${error instanceof Error ? error.message : error}`);
+        return;
+      }
+
       const [hour, minute] = time.split(':');
       const cronExpression = `${minute} ${hour} * * ${days.join(',')}`;
 
@@ -94,12 +118,12 @@ class RuleEngineService {
    * 执行规则定义的动作
    * @param rule 规则对象
    */
-  private async executeRuleAction(rule: AutomationRule, trigger: 'auto' | 'manual' = 'auto'): Promise<{ success: boolean; message: string; result?: any }> {
+  private async executeRuleAction(rule: AutomationRule, trigger: 'auto' | 'manual' = 'auto'): Promise<{ success: boolean; message: string; result?: unknown }> {
     const actionType = rule.action.type
 
     try {
       let message = ''
-      let result: any = undefined
+      let result: unknown = undefined
 
       if (actionType === 'switch-config') {
         const action = rule.action as SwitchConfigAction
@@ -110,6 +134,8 @@ class RuleEngineService {
         const action = rule.action as CustomCommandAction
         result = await this.executeCustomCommandAction(rule, action)
         message = `规则 "${rule.name}" 命令执行完成。`
+        // v2.0 UX：自定义命令执行成功也推送通知（自动触发/手动触发均通知，让用户感知规则已执行）
+        this.sendNotification(`规则执行${trigger === 'manual' ? '（手动）' : '（自动）'}`, message)
       } else {
         throw new Error(`未支持的动作类型: ${(rule.action as Action).type}`)
       }
@@ -160,13 +186,15 @@ class RuleEngineService {
   private async executeCustomCommandAction(rule: AutomationRule, action: CustomCommandAction): Promise<{ stdout: string; stderr: string }> {
     logger.info(`执行自定义命令动作: ${rule.name} -> ${action.command}`)
 
-    const result = await terminalManagementService.executeCommand(action.command, {
-      workingDirectory: action.workingDirectory,
+    // v2.0 安全重做：改用参数化 command-executor（spawn shell:false + 元字符黑名单），
+    // 消除原 terminalManagementService.executeCommand 的 shell 拼接导致的任意命令执行（RCE）风险。
+    const result = await executeCommand(action.command, {
+      cwd: action.workingDirectory,
       timeout: action.timeout || 10000
     })
 
-    if (result.error) {
-      throw result.error
+    if (!result.success) {
+      throw result.error || new Error(`自定义命令执行失败 (exit ${result.exitCode})`)
     }
 
     return {
@@ -181,9 +209,19 @@ class RuleEngineService {
    * @param body 内容
    */
   private sendNotification(title: string, body: string): void {
-    const mainWindow = BrowserWindow.getAllWindows()[0];
-    if (mainWindow) {
-      mainWindow.webContents.send('notification:show', { title, body });
+    try {
+      // v2.0：主进程直接显示系统通知（Electron Notification API），不依赖 renderer 监听链路
+      // 原实现仅 webContents.send('notification:show')，但 renderer 无对应 ipcRenderer.on 监听，链路断裂
+      if (Notification.isSupported()) {
+        new Notification({ title, body }).show()
+      }
+      // 同时通过 IPC 通知 renderer（兼容可能存在的应用内通知监听）
+      const mainWindow = BrowserWindow.getAllWindows()[0]
+      if (mainWindow) {
+        mainWindow.webContents.send('notification:show', { title, body })
+      }
+    } catch (error) {
+      logger.error('发送系统通知失败', error)
     }
   }
 
@@ -196,7 +234,7 @@ class RuleEngineService {
   /**
    * 手动执行规则
    */
-  public async executeRuleManually(ruleId: RuleId): Promise<{ success: boolean; message: string; result?: any }> {
+  public async executeRuleManually(ruleId: RuleId): Promise<{ success: boolean; message: string; result?: unknown }> {
     const rules = await this.getAllRules()
     const rule = rules.find(r => r.id === ruleId)
     if (!rule) {
@@ -211,6 +249,10 @@ class RuleEngineService {
   }
 
   public async createRule(newRuleData: Omit<AutomationRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<AutomationRule> {
+    // v2.0 边界校验：保存前拒绝非法的定时触发器，避免静默创建不可用的规则
+    if (newRuleData.trigger?.type === 'time') {
+      this.assertValidTimeTrigger(newRuleData.trigger.time, newRuleData.trigger.days);
+    }
     const now = new Date().toISOString();
     const rule: AutomationRule = {
       ...newRuleData,
@@ -231,6 +273,10 @@ class RuleEngineService {
   }
 
   public async updateRule(ruleId: RuleId, updates: Partial<AutomationRule>): Promise<AutomationRule | null> {
+    // v2.0 边界校验：更新前拒绝非法的定时触发器
+    if (updates.trigger?.type === 'time') {
+      this.assertValidTimeTrigger(updates.trigger.time, updates.trigger.days);
+    }
     const rules = await this.getAllRules();
     const ruleIndex = rules.findIndex(r => r.id === ruleId);
 

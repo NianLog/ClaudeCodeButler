@@ -21,7 +21,7 @@ export abstract class BaseTransformer implements Transformer {
    * @param provider API服务商配置
    * @returns 转换后的请求
    */
-  abstract transformRequest(request: ClaudeRequest, provider: ApiProvider): Promise<any>
+  abstract transformRequest(request: ClaudeRequest, provider: ApiProvider): Promise<unknown>
 
   /**
    * 转换响应
@@ -29,7 +29,7 @@ export abstract class BaseTransformer implements Transformer {
    * @param provider API服务商配置
    * @returns 转换后的Claude API响应
    */
-  abstract transformResponse(response: any, provider: ApiProvider): Promise<ClaudeResponse>
+  abstract transformResponse(response: unknown, provider: ApiProvider): Promise<ClaudeResponse>
 
   /**
    * 转换流式响应块
@@ -54,7 +54,7 @@ export abstract class BaseTransformer implements Transformer {
    * @param message 日志消息
    * @param meta 附加元数据
    */
-  protected log(level: 'debug' | 'info' | 'warn' | 'error', message: string, meta?: any): void {
+  protected log(level: 'debug' | 'info' | 'warn' | 'error', message: string, meta?: unknown): void {
     this.logger.log(level, `[${this.name}] ${message}`, meta)
   }
 }

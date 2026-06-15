@@ -11,7 +11,7 @@ export type TerminalType =
   | 'cmd'
   | 'wsl'
   | 'auto'
-  | (string & {})
+  | (string & Record<string, never>)
 
 /**
  * 终端配置

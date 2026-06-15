@@ -4,7 +4,7 @@
  */
 
 import { promises as fs } from 'fs'
-import { join, basename, extname } from 'path'
+import { join, basename, extname, dirname } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import os from 'os'
 import {
@@ -35,6 +35,20 @@ interface BackupMetadata {
   backupPath: string
   createdAt: string
   description: string
+}
+
+/**
+ * 配置元数据入参结构
+ * @description 调用方传入的元数据片段，所有字段均为可选，最终由 saveConfigMetadata 合并补全
+ */
+interface ConfigMetadataInput {
+  name?: string
+  description?: string
+  type?: string
+  isActive?: boolean
+  isInUse?: boolean
+  created?: string
+  lastModified?: string
 }
 
 export class ConfigService {
@@ -200,10 +214,9 @@ export class ConfigService {
    * 对于所有配置文件，统一返回纯文件内容，不返回元数据
    * 元数据由单独的getConfigMetadata方法获取
    */
-  async getConfig(path: string): Promise<any> {
+  async getConfig(path: string): Promise<unknown> {
     try {
       const resolvedPath = this.validateConfigPath(path, '配置文件路径')
-      const fs = require('fs/promises')
       const content = await fs.readFile(resolvedPath, 'utf8')
 
       // 统一处理：MD文件返回字符串，JSON文件解析后返回对象
@@ -227,19 +240,18 @@ export class ConfigService {
   /**
    * 获取配置文件元数据（从.meta文件读取）
    */
-  async getConfigMetadata(path: string): Promise<any> {
+  async getConfigMetadata(path: string): Promise<Record<string, unknown> | null> {
     try {
       const resolvedPath = this.validateConfigPath(path, '配置文件元数据路径')
       if (this.isSystemConfigPath(resolvedPath)) {
         return null
       }
 
-      const fs = require('fs/promises')
       const metaPath = `${resolvedPath}.meta`
 
       try {
         const metaContent = await fs.readFile(metaPath, 'utf8')
-        return JSON.parse(metaContent)
+        return JSON.parse(metaContent) as Record<string, unknown>
       } catch {
         // .meta文件不存在，返回null
         return null
@@ -255,14 +267,15 @@ export class ConfigService {
    * 统一保存逻辑：直接保存纯内容到文件
    * metadata通过单独的saveConfigMetadata方法保存
    */
-  async saveConfig(path: string, content: any, metadata?: any): Promise<void> {
+  async saveConfig(path: string, content: unknown, metadata?: ConfigMetadataInput): Promise<void> {
     try {
       const resolvedPath = this.validateConfigPath(path, '配置文件路径')
 
       // 检查并处理 undefined/null content
-      if (content === undefined || content === null) {
+      let normalizedContent: unknown = content
+      if (normalizedContent === undefined || normalizedContent === null) {
         logger.warn(`配置内容为空，使用默认值: ${resolvedPath}`)
-        content = resolvedPath.endsWith('.md') ? '' : {}
+        normalizedContent = resolvedPath.endsWith('.md') ? '' : {}
       }
 
       // 检查是否为系统配置文件
@@ -280,15 +293,14 @@ export class ConfigService {
       }
 
       // 统一保存内容文件
-      const fs = require('fs/promises')
 
       if (resolvedPath.endsWith('.md') || resolvedPath.endsWith('CLAUDE.md')) {
         // MD文件保存为纯文本
-        const contentString = typeof content === 'string' ? content : String(content)
+        const contentString = typeof normalizedContent === 'string' ? normalizedContent : String(normalizedContent)
         await fs.writeFile(resolvedPath, contentString, 'utf8')
       } else {
         // JSON文件保存为JSON格式
-        const jsonString = JSON.stringify(content, null, 2)
+        const jsonString = JSON.stringify(normalizedContent, null, 2)
         await fs.writeFile(resolvedPath, jsonString, 'utf8')
       }
 
@@ -308,18 +320,17 @@ export class ConfigService {
   /**
    * 保存配置文件元数据（到.meta文件）
    */
-  async saveConfigMetadata(path: string, metadata?: any): Promise<void> {
+  async saveConfigMetadata(path: string, metadata?: ConfigMetadataInput): Promise<void> {
     try {
       const resolvedPath = this.validateUserConfigPath(path, '配置元数据路径')
-      const fs = require('fs/promises')
       const fileName = basename(resolvedPath)
       const metaPath = `${resolvedPath}.meta`
 
       // 尝试读取现有元数据,保留created时间
-      let existingMetadata: any = {}
+      let existingMetadata: ConfigMetadataInput = {}
       try {
         const existingContent = await fs.readFile(metaPath, 'utf8')
-        existingMetadata = JSON.parse(existingContent)
+        existingMetadata = JSON.parse(existingContent) as ConfigMetadataInput
       } catch {
         // 元数据文件不存在,稍后创建新的
       }
@@ -356,7 +367,7 @@ export class ConfigService {
         // 没有扩展名，尝试从模板判断
         if (template) {
           try {
-            const parsedTemplate = JSON.parse(template)
+            const parsedTemplate = JSON.parse(template) as { type?: string }
             if (parsedTemplate.type === 'user-preferences' || parsedTemplate.type === 'claude-md') {
               fileName = `${name}.md`
             } else {
@@ -374,20 +385,25 @@ export class ConfigService {
       const filePath = this.validateUserConfigPath(join(this.claudeDir, fileName), '新配置文件路径')
 
       // 检查文件是否已存在
+      // 注意：必须独立捕获 fs.access 的 ENOENT，不能与“已存在”的 throw 共用 catch，
+      // 否则文件已存在时抛出的 Error 会被同一个 catch 吞掉，导致同名配置被静默覆盖。
+      let configExists = true
       try {
         await fs.access(filePath)
-        throw new Error(`配置文件已存在: ${fileName}`)
       } catch {
-        // 文件不存在，继续创建
+        configExists = false
+      }
+      if (configExists) {
+        throw new Error(`配置文件已存在: ${fileName}`)
       }
 
       // 准备内容
-      let content: any
+      let content: unknown
 
       if (template) {
         // 如果template是JSON字符串，解析它
         try {
-          const parsedTemplate = JSON.parse(template)
+          const parsedTemplate = JSON.parse(template) as { content?: unknown; type?: string }
           // 检查是否为多层JSON格式
           if (parsedTemplate && typeof parsedTemplate === 'object' && parsedTemplate.content !== undefined) {
             // 多层JSON格式，提取content字段作为实际内容
@@ -475,7 +491,7 @@ export class ConfigService {
         return { isValid: false, errors, warnings }
       }
 
-      const config = content as Record<string, any>
+      const config = content as Record<string, unknown>
 
       // 检查常用字段
       if (config.model && typeof config.model !== 'string') {
@@ -718,17 +734,11 @@ export class ConfigService {
    */
   private async scanUserSystemConfigs(files: string[]): Promise<void> {
     try {
-      const os = require('os')
-      const path = require('path')
-
-      // 获取用户主目录
-      const userHome = os.homedir()
-
-      // 要扫描的系统配置文件 - 只有这三个是系统配置
+      // 要扫描的系统配置文件（v2.0：复用 pathManager 常量，消除内联 require 与散落的 homedir 拼接）
       const systemConfigs = [
-        path.join(userHome, '.claude', 'settings.json'),
-        path.join(userHome, '.claude.json'),
-        path.join(userHome, '.claude', 'CLAUDE.md')
+        pathManager.userSettingsPath,
+        pathManager.claudeJsonPath,
+        pathManager.claudeMdPath
       ]
 
       for (const configPath of systemConfigs) {
@@ -761,8 +771,7 @@ export class ConfigService {
    */
   private async createDefaultSystemConfig(configPath: string): Promise<void> {
     try {
-      const path = require('path')
-      const dir = path.dirname(configPath)
+      const dir = dirname(configPath)
       
       // 确保目录存在
       await fs.mkdir(dir, { recursive: true })
@@ -975,10 +984,11 @@ export class ConfigService {
         // 没有.meta文件，尝试从配置文件内容读取元数据
         try {
           const content = await this.getConfig(filePath)
+          const contentObj = (content && typeof content === 'object' ? content : null) as Record<string, unknown> | null
 
         // 检查是否有_metadata字段（新格式）或多层JSON格式
-        if (content && typeof content === 'object' && content._metadata) {
-          const metadata = content._metadata
+        if (contentObj && contentObj._metadata) {
+          const metadata = contentObj._metadata as Record<string, unknown>
           if (metadata.type) {
             configType = metadata.type as ConfigType
           }
@@ -988,47 +998,50 @@ export class ConfigService {
           if (metadata.description) {
             description = String(metadata.description)
           }
-        } else if (content && typeof content === 'object' && content.name && content.type && content.content) {
+        } else if (contentObj && contentObj.name && contentObj.type && contentObj.content) {
           // 多层JSON格式（类似导入_CLAUDE.md.json的结构）
-          if (content.type) {
-            configType = content.type as ConfigType
+          if (contentObj.type) {
+            configType = contentObj.type as ConfigType
           }
-          if (content.name) {
-            configName = String(content.name)
+          if (contentObj.name) {
+            configName = String(contentObj.name)
           }
-          if (content.description) {
-            description = String(content.description)
+          if (contentObj.description) {
+            description = String(contentObj.description)
           }
-        } else if (content && typeof content === 'object') {
+        } else if (contentObj) {
           // 检查是否为旧格式，如果是则自动迁移
-          if (ConfigMigrationService.isOldFormat(content)) {
+          if (ConfigMigrationService.isOldFormat(contentObj)) {
             logger.info(`检测到旧格式配置文件，开始自动迁移: ${filePath}`)
             try {
               await ConfigMigrationService.migrateConfigFile(filePath)
               // 重新读取迁移后的内容
               const migratedContent = await this.getConfig(filePath)
-              if (migratedContent && migratedContent.type && migratedContent.name && migratedContent.content !== undefined) {
-                if (migratedContent.type) configType = migratedContent.type as ConfigType
-                if (migratedContent.name) configName = String(migratedContent.name)
-                if (migratedContent.description) description = String(migratedContent.description)
+              const migratedObj = (migratedContent && typeof migratedContent === 'object'
+                ? migratedContent
+                : null) as Record<string, unknown> | null
+              if (migratedObj && migratedObj.type && migratedObj.name && migratedObj.content !== undefined) {
+                if (migratedObj.type) configType = migratedObj.type as ConfigType
+                if (migratedObj.name) configName = String(migratedObj.name)
+                if (migratedObj.description) description = String(migratedObj.description)
               }
             } catch (migrationError) {
               logger.error(`自动迁移配置文件失败: ${filePath}`, migrationError)
               // 迁移失败时使用旧格式的字段
-              if (content.type) configType = content.type as ConfigType
-              if (content.name) configName = String(content.name)
-              if (content.description) description = String(content.description)
+              if (contentObj.type) configType = contentObj.type as ConfigType
+              if (contentObj.name) configName = String(contentObj.name)
+              if (contentObj.description) description = String(contentObj.description)
             }
           } else {
             // 兼容旧格式：直接检查根级别的字段
-            if (content.type) {
-              configType = content.type as ConfigType
+            if (contentObj.type) {
+              configType = contentObj.type as ConfigType
             }
-            if (content.name) {
-              configName = String(content.name)
+            if (contentObj.name) {
+              configName = String(contentObj.name)
             }
-            if (content.description) {
-              description = String(content.description)
+            if (contentObj.description) {
+              description = String(contentObj.description)
             }
           }
         }
@@ -1114,7 +1127,7 @@ export class ConfigService {
       const content2 = await this.getConfig(config2Path)
 
       // 标准化内容进行比较
-      const normalizeContent = (content: any) => {
+      const normalizeContent = (content: unknown): unknown => {
         if (typeof content === 'string') {
           try {
             return JSON.parse(content)
@@ -1125,11 +1138,11 @@ export class ConfigService {
         return content
       }
 
-      const normalized1 = normalizeContent(content1)
-      const normalized2 = normalizeContent(content2)
+      const normalized1 = normalizeContent(content1) as Record<string, unknown>
+      const normalized2 = normalizeContent(content2) as Record<string, unknown>
 
       // 深度比较，忽略键的顺序
-      return JSON.stringify(normalized1, Object.keys(normalized1).sort()) === 
+      return JSON.stringify(normalized1, Object.keys(normalized1).sort()) ===
              JSON.stringify(normalized2, Object.keys(normalized2).sort())
     } catch (error) {
       logger.error(`比较配置内容失败: ${error}`)
@@ -1142,13 +1155,11 @@ export class ConfigService {
    */
   async checkConfigMatch(configPath: string): Promise<boolean> {
     try {
-      const os = require('os')
-      const userHome = os.homedir()
-      const userSettingsPath = require('path').join(userHome, '.claude', 'settings.json')
+      const userSettingsPath = pathManager.userSettingsPath
 
       // 检查用户settings文件是否存在
       try {
-        await require('fs/promises').access(userSettingsPath)
+        await fs.access(userSettingsPath)
       } catch {
         return false // 用户settings文件不存在
       }
@@ -1165,11 +1176,34 @@ export class ConfigService {
     try {
       logger.info(`开始激活配置: ${configPath}`)
       const configContent = await this.getConfig(configPath)
-      const userSettingsPath = require('path').join(require('os').homedir(), '.claude', 'settings.json')
+      const userSettingsPath = pathManager.userSettingsPath
 
       logger.info(`用户系统settings路径: ${userSettingsPath}`)
+
+      // v2.0：字符串配置（.md 文件）直接写入，不走假 URL 热重载逻辑
+      // （spread 字符串会产生字符索引对象，损坏 settings.json）
+      if (typeof configContent === 'string') {
+        await this.saveConfig(userSettingsPath, configContent)
+        logger.info(`字符串配置内容已复制到用户系统settings`)
+        await this.autoUpdateClaudeCodeStatus()
+        logger.info(`✅ 配置激活完成，并已更新所有配置状态`)
+        return
+      }
+
+      // JSON 配置：先写入带随机假 ANTHROPIC_BASE_URL 的临时配置触发 Claude Code 检测到变更，
+      // 延时 1s 后写入真实配置，强制 CC 热重载（解决"同 baseUrl 仅换 key"时 CC 不识别变更、不热重载的问题）
+      const configObj = configContent as Record<string, unknown>
+      const fakeContent = {
+        ...configObj,
+        env: {
+          ...((configObj?.env as Record<string, unknown>) || {}),
+          ANTHROPIC_BASE_URL: `http://127.0.0.1:0/ccb-hotreload-${Math.random().toString(36).slice(2)}`
+        }
+      }
+      await this.saveConfig(userSettingsPath, fakeContent)
+      await new Promise((resolve) => setTimeout(resolve, 1000))
       await this.saveConfig(userSettingsPath, configContent)
-      logger.info(`配置内容已复制到用户系统settings`)
+      logger.info(`配置内容已复制到用户系统settings（已触发热重载）`)
 
       await this.autoUpdateClaudeCodeStatus();
       logger.info(`✅ 配置激活完成，并已更新所有配置状态`)
@@ -1197,9 +1231,9 @@ export class ConfigService {
    * @description 复用同一批已扫描配置，避免状态同步时再次触发 `scanConfigs()`。
    */
   private async syncClaudeCodeStatusForConfigs(configs: ConfigFile[]): Promise<number> {
-    const userSettingsPath = require('path').join(require('os').homedir(), '.claude', 'settings.json')
+    const userSettingsPath = pathManager.userSettingsPath
 
-    let systemSettingsContent: any
+    let systemSettingsContent: unknown
     try {
       systemSettingsContent = await this.getConfig(userSettingsPath)
     } catch {
@@ -1218,7 +1252,7 @@ export class ConfigService {
 
       if (config.isInUse !== isMatch) {
         const metadata = await this.getConfigMetadata(config.path) || {}
-        await this.saveConfigMetadata(config.path, { ...metadata, isInUse: isMatch, isActive: isMatch })
+        await this.saveConfigMetadata(config.path, { ...metadata, isInUse: isMatch, isActive: isMatch } as ConfigMetadataInput)
         updatedCount++
       }
 
@@ -1233,7 +1267,10 @@ export class ConfigService {
   /**
    * 获取默认配置内容
    */
-  private getDefaultContent(): any {
+  private getDefaultContent(): {
+    env: Record<string, string>
+    permissions: { allow: unknown[]; deny: unknown[] }
+  } {
     // 所有配置文件统一使用标准的 Claude Code settings 配置模板
     return {
       env: {
@@ -1300,7 +1337,7 @@ export class ConfigService {
 
         try {
           // 读取文件内容
-          const content = await this.getConfig(filePath)
+          const content = await this.getConfig(filePath) as Record<string, unknown>
 
           // 根据文件扩展名设置默认类型
           const defaultType = ext === '.md' ? 'user-preferences' : 'claude-code'
