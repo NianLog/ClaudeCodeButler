@@ -113,6 +113,18 @@ describe('ToolArtifactManagementService', () => {
     expect(restored.content).toBe('{"value":"original"}')
   })
 
+  it('应只列出当前 artifact 的有效可恢复备份', async () => {
+    const service = createService(createTool(['READ', 'BACKUP', 'RESTORE']))
+    const first = await service.createBackup('example-tool', 'settings', configPath)
+    await writeFile(path.join(backupDirectory, 'broken.json'), '{broken', 'utf8')
+
+    const backups = await service.listBackups('example-tool', 'settings', configPath)
+
+    expect(backups).toHaveLength(1)
+    expect(backups[0].backupId).toBe(first.backupId)
+    expect(backups[0]).not.toHaveProperty('contentFileName')
+  })
+
   it('应拒绝 backup metadata 篡改目标路径', async () => {
     const service = createService(createTool(['READ', 'BACKUP', 'RESTORE']))
     const backup = await service.createBackup('example-tool', 'settings', configPath)

@@ -141,6 +141,11 @@ function setupToolRegistryHandlers(): void {
     artifactId: string,
     requestedPath: string
   ) => toolArtifactManagementService.createBackup(toolId, artifactId, requestedPath)))
+  ipcMain.handle('toolRegistry:listArtifactBackups', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string
+  ) => toolArtifactManagementService.listBackups(toolId, artifactId, requestedPath)))
   ipcMain.handle('toolRegistry:restoreArtifactBackup', createSimpleHandler((backupId: string) =>
     toolArtifactManagementService.restoreBackup(backupId)
   ))

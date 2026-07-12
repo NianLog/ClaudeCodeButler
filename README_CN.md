@@ -27,7 +27,7 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 - **v1.5.0 已实施范围**：通用 codecs、validation、atomic edit、backup/restore 与安全 IPC foundation
 - **v1.5.0 待实施范围**：管理 UI 迁移与基于实测的 runtime performance 优化
 - **安全基线（2026-07-12）**：Semgrep `0 findings / 0 scan errors`，root 与 proxy-server npm audit 均为 `0 vulnerabilities`
-- **验证基线**：18 个测试文件共 114 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
+- **验证基线**：18 个测试文件共 115 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
 
 package version 已升级为 `1.5.0`，它表示当前开发版本，不代表公共 release 已完成。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
@@ -373,6 +373,7 @@ semgrep scan \
 - 新增声明式 JSON 工具规则库模型、bounded validation 与内置 Claude Code 兼容 adapter。
 - 新增只读 Codex CLI adapter、通用 `PATH_EXISTS` / `COMMAND_EXISTS` 检测与 registry allowlist 约束的 artifact discovery。
 - 新增 lazy-loaded“AI 工具配置”面板，以及具备 storage fingerprint 自动失效能力的 effective-registry snapshot cache。
+- 新增备份历史/恢复流程，并全局修正 Card/List 长路径和长描述导致的异常行高。
 - 新增需用户明确确认、具备 integrity 校验的规则库安装和 last-known-good rollback；自动检查只获取小型 manifest。
 - Settings/About 已加入规则库操作入口，main process 新增完全按需的 performance snapshot exporter。
 - 架构、安全协议、性能预算、迁移阶段与已接受的品牌决策见 [`docs/1.5.0`](./docs/1.5.0/README.md)。

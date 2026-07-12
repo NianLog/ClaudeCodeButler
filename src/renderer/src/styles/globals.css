@@ -139,6 +139,64 @@ html, body {
   color: var(--text-primary) !important;
   background: transparent !important;
 }
+
+/*
+ * Card 内标准 List 的全局紧凑布局。
+ * Ant Design flex children 默认 min-width:auto，长文本会撑开 meta 并导致 item 巨高；
+ * 这里建立单行 ellipsis 默认值，需要多行语义时由组件添加 .ccb-list-item-multiline。
+ */
+.ant-card-body .ant-list-item {
+  min-width: 0;
+  gap: var(--space-md);
+  padding-block: var(--space-md);
+}
+
+.ant-card-body .ant-list-item > :not(.ant-list-item-action) {
+  min-width: 0;
+}
+
+.ant-card-body .ant-list-item-meta,
+.ant-card-body .ant-list-item-meta-content,
+.ant-card-body .ant-list-item-meta-title,
+.ant-card-body .ant-list-item-meta-description {
+  min-width: 0;
+}
+
+.ant-card-body .ant-list-item-meta-title,
+.ant-card-body .ant-list-item-meta-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ant-card-body .ant-list-item-action {
+  flex: 0 0 auto;
+  margin-inline-start: var(--space-md);
+  white-space: nowrap;
+}
+
+.ant-card-body .ant-list-item-action > li {
+  white-space: nowrap;
+}
+
+.ant-card-body .ant-list-item.ccb-list-item-multiline,
+.ant-card-body .ccb-list-item-multiline .ant-list-item-meta-description {
+  white-space: normal;
+}
+
+.ant-card-body .ant-list-item.ccb-list-item-multiline {
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .ant-card-body .ant-list-item {
+    align-items: center;
+  }
+
+  .ant-card-body .ant-list-item-action {
+    margin-inline-start: var(--space-sm);
+  }
+}
 .ant-card-meta-title,
 .ant-card-meta-description {
   color: var(--text-primary) !important;

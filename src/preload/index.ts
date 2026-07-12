@@ -256,6 +256,12 @@ interface ToolRegistryAPI {
     data?: ConfigArtifactBackup
     error?: string
   }>
+  /** 列出 registry 授权配置的有效备份 */
+  listArtifactBackups: (toolId: string, artifactId: string, path: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactBackup[]
+    error?: string
+  }>
   /** 恢复受控 backup identifier */
   restoreArtifactBackup: (backupId: string) => Promise<{
     success: boolean
@@ -855,6 +861,8 @@ const toolRegistryAPI: ToolRegistryAPI = {
     ipcRenderer.invoke('toolRegistry:editArtifact', toolId, artifactId, path, content),
   createArtifactBackup: (toolId: string, artifactId: string, path: string) =>
     ipcRenderer.invoke('toolRegistry:createArtifactBackup', toolId, artifactId, path),
+  listArtifactBackups: (toolId: string, artifactId: string, path: string) =>
+    ipcRenderer.invoke('toolRegistry:listArtifactBackups', toolId, artifactId, path),
   restoreArtifactBackup: (backupId: string) =>
     ipcRenderer.invoke('toolRegistry:restoreArtifactBackup', backupId),
   getUpdateStatus: () => ipcRenderer.invoke('toolRegistry:getUpdateStatus'),

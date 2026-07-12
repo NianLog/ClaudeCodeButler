@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto'
 import { constants as fsConstants } from 'fs'
-import { copyFile, lstat, mkdir, open, readFile, rename, rm, stat } from 'fs/promises'
+import { copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, stat } from 'fs/promises'
 import path from 'path'
 import type {
   ConfigArtifactBackup,
@@ -163,6 +163,46 @@ export class ToolArtifactManagementService {
   }
 
   /**
+   * 列出指定 registry artifact 当前可恢复的备份。
+   * @param toolId stable tool identifier
+   * @param artifactId stable artifact identifier
+   * @param requestedPath registry candidate path
+   * @returns 按创建时间倒序的有效 backup metadata
+   */
+  public async listBackups(
+    toolId: string,
+    artifactId: string,
+    requestedPath: string
+  ): Promise<ConfigArtifactBackup[]> {
+    const authorization = await this.discoveryService.authorizeArtifact(
+      toolId,
+      artifactId,
+      requestedPath,
+      'RESTORE'
+    )
+    let fileNames: string[]
+    try {
+      fileNames = await readdir(this.backupDirectory)
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException
+      if (nodeError.code === 'ENOENT') return []
+      throw error
+    }
+    const backups = await Promise.all(fileNames
+      .filter((fileName) => /^[0-9a-f-]{36}\.json$/i.test(fileName))
+      .map((fileName) => this.readStoredBackup(path.join(this.backupDirectory, fileName))))
+    return backups
+      .filter((backup): backup is StoredArtifactBackup => Boolean(
+        backup
+        && backup.toolId === toolId
+        && backup.artifactId === artifactId
+        && backup.originalPath === authorization.resolvedPath
+      ))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .map((backup) => this.toPublicBackup(backup))
+  }
+
+  /**
    * 从受控 metadata 恢复 registry 仍授权的备份。
    * @param backupId UUID backup identifier
    * @returns 恢复后的 artifact snapshot
@@ -172,18 +212,8 @@ export class ToolArtifactManagementService {
       throw new Error('backupId 格式无效')
     }
     const metadataPath = path.join(this.backupDirectory, `${backupId}.json`)
-    const metadataFile = await lstat(metadataPath)
-    if (metadataFile.isSymbolicLink() || !metadataFile.isFile() || metadataFile.size > BACKUP_METADATA_MAX_BYTES) {
-      throw new Error('备份 metadata 不是允许大小的普通文件')
-    }
-    const backup = JSON.parse(await readFile(metadataPath, 'utf8')) as StoredArtifactBackup
-    if (
-      backup.backupId !== backupId
-      || backup.contentFileName !== `${backupId}.backup`
-      || typeof backup.originalPath !== 'string'
-    ) {
-      throw new Error('备份 metadata 无效')
-    }
+    const backup = await this.readStoredBackup(metadataPath)
+    if (!backup || backup.backupId !== backupId) throw new Error('备份 metadata 无效')
     const authorization = await this.discoveryService.authorizeArtifact(
       backup.toolId,
       backup.artifactId,
@@ -216,6 +246,41 @@ export class ToolArtifactManagementService {
       backup.artifactId,
       authorization.resolvedPath
     )
+  }
+
+  /**
+   * Fail-closed 读取单个 backup metadata 与对应内容文件边界。
+   * @param metadataPath 受控 backup directory 内 metadata path
+   * @returns 有效 metadata；损坏或过期记录返回 undefined
+   */
+  private async readStoredBackup(metadataPath: string): Promise<StoredArtifactBackup | undefined> {
+    try {
+      const backupId = path.basename(metadataPath, '.json')
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(backupId)) {
+        return undefined
+      }
+      const metadataFile = await lstat(metadataPath)
+      if (metadataFile.isSymbolicLink() || !metadataFile.isFile() || metadataFile.size > BACKUP_METADATA_MAX_BYTES) {
+        return undefined
+      }
+      const backup = JSON.parse(await readFile(metadataPath, 'utf8')) as StoredArtifactBackup
+      if (
+        backup.backupId !== backupId
+        || backup.contentFileName !== `${backupId}.backup`
+        || typeof backup.toolId !== 'string'
+        || typeof backup.artifactId !== 'string'
+        || typeof backup.originalPath !== 'string'
+        || typeof backup.createdAt !== 'string'
+        || typeof backup.size !== 'number'
+      ) return undefined
+      const contentFile = await lstat(path.join(this.backupDirectory, backup.contentFileName))
+      if (contentFile.isSymbolicLink() || !contentFile.isFile() || contentFile.size > CONFIG_ARTIFACT_MAX_BYTES) {
+        return undefined
+      }
+      return backup
+    } catch {
+      return undefined
+    }
   }
 
   /**

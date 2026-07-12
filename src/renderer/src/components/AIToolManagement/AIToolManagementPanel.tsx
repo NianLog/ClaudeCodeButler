@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons'
 import type {
   ArtifactFormat,
+  ConfigArtifactBackup,
   ConfigArtifactContent,
   DiscoveredConfigArtifact,
   ToolDefinition,
@@ -45,19 +46,21 @@ const PANEL_TEXT = {
     title: 'AI 工具配置', subtitle: '通过本地规则库发现并管理 AI Agent 工具配置，新增工具无需重写应用。',
     tools: '已注册工具', artifacts: '配置资产', detected: '已检测到', notDetected: '未检测到，可继续检查已存在的配置文件',
     scanArtifacts: '扫描配置', open: '打开', readOnly: '只读', validate: '校验', backup: '创建备份', emptyTools: '规则库中没有工具定义',
+    backupHistory: '历史备份', emptyBackups: '没有可恢复的备份', restore: '恢复', restoreTitle: '确认恢复备份', restoreContent: '将使用 {time} 的备份覆盖当前配置，是否继续？',
     emptyArtifacts: '未发现当前平台的配置文件', securityTitle: '规则驱动的本地管理', securityDescription: '路径和能力由 effective registry 限定；远程规则不能携带脚本，写入前会重新校验权限。',
     confirmSaveTitle: '确认更新配置', confirmSaveContent: '将原子更新 {path}。如果规则声明 BACKUP，会先自动创建备份。',
     loadRegistryError: '加载工具规则库失败', detectError: '检测 AI 工具失败', discoverError: '发现配置资产失败', readError: '读取配置资产失败',
-    validateError: '校验配置失败', saveError: '保存配置失败', backupError: '创建备份失败', valid: '配置校验通过', saved: '配置已安全保存', backupCreated: '备份已创建：{id}'
+    validateError: '校验配置失败', saveError: '保存配置失败', backupError: '创建备份失败', listBackupsError: '加载备份列表失败', restoreError: '恢复备份失败', valid: '配置校验通过', saved: '配置已安全保存', restored: '配置已从备份恢复', backupCreated: '备份已创建：{id}'
   },
   'en-US': {
     title: 'AI Tool Configuration', subtitle: 'Discover and manage AI agent tool configurations through the local registry without rebuilding the app for every tool.',
     tools: 'Registered tools', artifacts: 'Configuration artifacts', detected: 'Detected', notDetected: 'Not detected; existing configuration files can still be scanned',
     scanArtifacts: 'Scan configs', open: 'Open', readOnly: 'Read only', validate: 'Validate', backup: 'Create backup', emptyTools: 'No tool definitions in the registry',
+    backupHistory: 'Backup history', emptyBackups: 'No restorable backups', restore: 'Restore', restoreTitle: 'Confirm backup restore', restoreContent: 'This replaces the current configuration with the backup from {time}. Continue?',
     emptyArtifacts: 'No configuration files found for this platform', securityTitle: 'Registry-driven local management', securityDescription: 'The effective registry constrains paths and capabilities. Remote rules cannot carry scripts, and permissions are revalidated before writes.',
     confirmSaveTitle: 'Confirm configuration update', confirmSaveContent: 'This atomically updates {path}. A backup is created first when the registry declares BACKUP.',
     loadRegistryError: 'Failed to load the tool registry', detectError: 'Failed to detect AI tools', discoverError: 'Failed to discover configuration artifacts', readError: 'Failed to read the configuration artifact',
-    validateError: 'Failed to validate the configuration', saveError: 'Failed to save the configuration', backupError: 'Failed to create the backup', valid: 'Configuration validation passed', saved: 'Configuration saved safely', backupCreated: 'Backup created: {id}'
+    validateError: 'Failed to validate the configuration', saveError: 'Failed to save the configuration', backupError: 'Failed to create the backup', listBackupsError: 'Failed to load backup history', restoreError: 'Failed to restore the backup', valid: 'Configuration validation passed', saved: 'Configuration saved safely', restored: 'Configuration restored from backup', backupCreated: 'Backup created: {id}'
   }
 } as const
 
@@ -88,6 +91,9 @@ const AIToolManagementPanel: React.FC = () => {
   const [artifacts, setArtifacts] = useState<DiscoveredConfigArtifact[]>([])
   const [activeContent, setActiveContent] = useState<ConfigArtifactContent>()
   const [draftContent, setDraftContent] = useState('')
+  const [backups, setBackups] = useState<ConfigArtifactBackup[]>([])
+  const [backupHistoryOpen, setBackupHistoryOpen] = useState(false)
+  const [loadingBackups, setLoadingBackups] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingArtifacts, setLoadingArtifacts] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -103,6 +109,7 @@ const AIToolManagementPanel: React.FC = () => {
   const canEdit = activeDefinition?.capabilities.includes('EDIT') ?? false
   const canValidate = activeDefinition?.capabilities.includes('VALIDATE') ?? false
   const canBackup = activeDefinition?.capabilities.includes('BACKUP') ?? false
+  const canRestore = activeDefinition?.capabilities.includes('RESTORE') ?? false
 
   /** 加载 effective registry 与工具检测结果 */
   const loadTools = useCallback(async (): Promise<void> => {
@@ -238,6 +245,51 @@ const AIToolManagementPanel: React.FC = () => {
     message.success(formatPanelText(panelText.backupCreated, { id: response.data.backupId }))
   }
 
+  /** 按需加载当前 artifact 可恢复的备份 */
+  const openBackupHistory = async (): Promise<void> => {
+    if (!activeContent || !canRestore) return
+    setLoadingBackups(true)
+    setBackupHistoryOpen(true)
+    try {
+      const response = await window.electronAPI.toolRegistry.listArtifactBackups(
+        activeContent.toolId,
+        activeContent.artifactId,
+        activeContent.path
+      )
+      if (!response.success) throw new Error(response.error || panelText.listBackupsError)
+      setBackups(response.data ?? [])
+    } catch (error) {
+      setBackups([])
+      message.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setLoadingBackups(false)
+    }
+  }
+
+  /** 二次确认后恢复备份并刷新 editor snapshot */
+  const restoreBackup = (backup: ConfigArtifactBackup): void => {
+    modal.confirm({
+      title: panelText.restoreTitle,
+      content: formatPanelText(panelText.restoreContent, {
+        time: new Date(backup.createdAt).toLocaleString(language)
+      }),
+      okText: panelText.restore,
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        const response = await window.electronAPI.toolRegistry.restoreArtifactBackup(backup.backupId)
+        if (!response.success || !response.data) {
+          const error = new Error(response.error || panelText.restoreError)
+          message.error(error.message)
+          throw error
+        }
+        setActiveContent(response.data)
+        setDraftContent(response.data.content)
+        setBackupHistoryOpen(false)
+        message.success(panelText.restored)
+      }
+    })
+  }
+
   return (
     <div className="ai-tool-management-panel">
       <div className="ai-tool-header">
@@ -326,7 +378,7 @@ const AIToolManagementPanel: React.FC = () => {
         open={Boolean(activeContent)}
         width="min(1100px, 92vw)"
         footer={null}
-        destroyOnClose
+        destroyOnHidden
         onCancel={() => setActiveContent(undefined)}
       >
         {activeContent && (
@@ -336,6 +388,7 @@ const AIToolManagementPanel: React.FC = () => {
               {!canEdit && <Tag color="gold">{panelText.readOnly}</Tag>}
               {canValidate && <Button onClick={() => void validateDraft()}>{panelText.validate}</Button>}
               {canBackup && <Button onClick={() => void createBackup()}>{panelText.backup}</Button>}
+              {canRestore && <Button onClick={() => void openBackupHistory()}>{panelText.backupHistory}</Button>}
               {canEdit && (
                 <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={saveDraft}>
                   {t('common.save')}
@@ -354,6 +407,37 @@ const AIToolManagementPanel: React.FC = () => {
             </Suspense>
           </>
         )}
+      </Modal>
+
+      <Modal
+        title={panelText.backupHistory}
+        open={backupHistoryOpen}
+        footer={null}
+        width={720}
+        destroyOnHidden
+        onCancel={() => setBackupHistoryOpen(false)}
+      >
+        <Spin spinning={loadingBackups}>
+          <List
+            dataSource={backups}
+            locale={{ emptyText: <Empty description={panelText.emptyBackups} /> }}
+            renderItem={(backup) => (
+              <List.Item
+                actions={[
+                  <Button key="restore" type="link" onClick={() => restoreBackup(backup)}>
+                    {panelText.restore}
+                  </Button>
+                ]}
+              >
+                <List.Item.Meta
+                  title={new Date(backup.createdAt).toLocaleString(language)}
+                  description={backup.originalPath}
+                />
+                <Tag>{Math.max(1, Math.ceil(backup.size / 1024))} KB</Tag>
+              </List.Item>
+            )}
+          />
+        </Spin>
       </Modal>
     </div>
   )

@@ -27,7 +27,7 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 - **v1.5.0 implemented scope**: generic codecs, validation, atomic edit, backup/restore, and secure IPC foundation
 - **v1.5.0 remaining scope**: management UI migration and measured runtime performance optimization
 - **Security baseline (2026-07-12)**: Semgrep `0 findings / 0 scan errors`, root and proxy-server npm audits `0 vulnerabilities`
-- **Verification baseline**: 114 tests across 18 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
+- **Verification baseline**: 115 tests across 18 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
 
 The package version is now `1.5.0`; this marks an active development version rather than a completed public release. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
 
@@ -373,6 +373,7 @@ The three excluded registry rules require the Semgrep Pro engine. Their correspo
 - Added a declarative JSON tool registry model with bounded validation and an embedded Claude Code compatibility adapter.
 - Added a read-only Codex CLI adapter plus generic `PATH_EXISTS` / `COMMAND_EXISTS` detection and registry-allowlisted artifact discovery.
 - Added a lazy-loaded AI Tool Configuration panel and effective-registry snapshot cache with storage fingerprint invalidation.
+- Added backup history/restore workflows and globally compact Card/List text handling for long paths and descriptions.
 - Added explicit, integrity-checked registry installation and last-known-good rollback; automatic checks fetch only the small manifest.
 - Added registry controls under Settings/About and a main-process-only on-demand performance snapshot exporter.
 - Architecture, security protocol, performance budgets, migration phases, and the accepted brand decision are documented in [`docs/1.5.0`](./docs/1.5.0/README.md).

@@ -35,6 +35,8 @@
 - [x] 第二个真实 AI tool read-only adapter
 - [x] Generic format codecs、validation、edit/backup/restore foundation
 - [x] Lazy-loaded generic AI tool management UI
+- [x] Generic backup history 与 restore UI
+- [x] Global compact Card/List layout policy
 - [x] Effective registry fingerprint cache 与 single-flight load
 - [ ] 实机 performance baseline 与首批优化
 - [x] 品牌恢复为 Claude Code Butler
