@@ -4,7 +4,7 @@
  */
 
 import { app, dialog } from 'electron'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import { promises as fs } from 'fs'
 import * as fsSync from 'fs'
 import { join } from 'path'
@@ -39,6 +39,94 @@ export interface ElevationOptions {
   elevationMethod?: 'relaunch' | 'prompt'
   showWarning?: boolean
   retryOnFailure?: boolean
+}
+
+/** 参数化权限提升进程规格 */
+export interface ElevationLaunchSpec {
+  /** 允许执行的系统提权程序 */
+  command: string
+  /** 直接传给提权程序的参数数组 */
+  args: string[]
+}
+
+const ELEVATION_COMMANDS = new Set(['powershell.exe', 'osascript', 'pkexec', 'sudo'])
+
+/**
+ * 将文本编码为 PowerShell 单引号字面量内容
+ * @param value 原始参数
+ * @returns 可安全放入 PowerShell 单引号字符串的内容
+ */
+function escapePowerShellLiteral(value: string): string {
+  return value.replace(/'/g, "''")
+}
+
+/**
+ * 将参数编码为 POSIX shell 单引号参数
+ * @param value 原始参数
+ * @returns 不会被 shell 解释为额外语法的参数文本
+ */
+function quotePosixShellArgument(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+/**
+ * 转义 AppleScript 双引号字符串内容
+ * @param value 原始脚本文本
+ * @returns 可安全嵌入 AppleScript 字符串的内容
+ */
+function escapeAppleScriptString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/**
+ * 构造跨平台权限提升进程规格
+ * @description 所有动态值均先按目标解释器转义，返回值必须通过 execFile 参数化执行。
+ * @param platform 目标操作系统
+ * @param currentExecutable 当前应用可执行文件
+ * @param currentArgs 当前应用参数
+ * @param linuxCommand Linux 上已探测可用的提权程序
+ * @returns 受控 executable 与 argument array
+ */
+export function buildElevationLaunchSpec(
+  platform: NodeJS.Platform,
+  currentExecutable: string,
+  currentArgs: string[],
+  linuxCommand: 'pkexec' | 'sudo' = 'sudo'
+): ElevationLaunchSpec {
+  if (platform === 'win32') {
+    const executableLiteral = escapePowerShellLiteral(currentExecutable)
+    const argumentListLiteral = currentArgs.length > 0
+      ? `@(${currentArgs.map((arg) => `'${escapePowerShellLiteral(arg)}'`).join(', ')})`
+      : '@()'
+
+    return {
+      command: 'powershell.exe',
+      args: [
+        '-NoProfile',
+        '-Command',
+        `Start-Process -FilePath '${executableLiteral}' -ArgumentList ${argumentListLiteral} -Verb RunAs`
+      ]
+    }
+  }
+
+  if (platform === 'darwin') {
+    const shellCommand = [currentExecutable, ...currentArgs]
+      .map(quotePosixShellArgument)
+      .join(' ')
+
+    return {
+      command: 'osascript',
+      args: [
+        '-e',
+        `do shell script "exec ${escapeAppleScriptString(shellCommand)}" with administrator privileges`
+      ]
+    }
+  }
+
+  return {
+    command: linuxCommand,
+    args: [currentExecutable, ...currentArgs]
+  }
 }
 
 /**
@@ -299,45 +387,17 @@ export class PrivilegeManager {
    */
   public async relaunchAsAdmin(): Promise<boolean> {
     try {
-      const isWindows = process.platform === 'win32'
-      const isMacOS = process.platform === 'darwin'
-
       const currentExecutable = process.execPath
       const currentArgs = process.argv.slice(1)
-
-      let command: string
-      let args: string[]
-
-      if (isWindows) {
-        // Windows: 使用 PowerShell 以管理员权限运行
-        command = 'powershell.exe'
-        args = [
-          '-Command',
-          'Start-Process',
-          `"${currentExecutable}"`,
-          '-ArgumentList',
-          `"${currentArgs.join('" "').replace(/"/g, '""')}"`,
-          '-Verb',
-          'RunAs'
-        ]
-      } else if (isMacOS) {
-        // macOS: 使用 osascript 提升权限
-        command = 'osascript'
-        args = [
-          '-e',
-          `do shell script "exec '${currentExecutable}' ${currentArgs.join(' ')}" with administrator privileges`
-        ]
-      } else {
-        // Linux: 使用 pkexec 或 sudo
-        const hasPkexec = await this.checkCommandExists('pkexec')
-        if (hasPkexec) {
-          command = 'pkexec'
-          args = [currentExecutable, ...currentArgs]
-        } else {
-          command = 'sudo'
-          args = [currentExecutable, ...currentArgs]
-        }
-      }
+      const linuxCommand = process.platform === 'linux' && await this.checkCommandExists('pkexec')
+        ? 'pkexec'
+        : 'sudo'
+      const { command, args } = buildElevationLaunchSpec(
+        process.platform,
+        currentExecutable,
+        currentArgs,
+        linuxCommand
+      )
 
       logger.info(`准备以管理员权限重启应用: ${command} ${args.join(' ')}`)
 
@@ -395,7 +455,7 @@ export class PrivilegeManager {
       }
 
       // 方法2: 使用 whoami /priv 检查权限
-      exec('whoami /priv', (error: unknown, stdout: string, _stderr: string) => {
+      execFile('whoami', ['/priv'], (error: unknown, stdout: string, _stderr: string) => {
         if (!error) {
           // 检查是否包含 SeShutdownPrivilege 等管理员权限
           const adminPrivileges = [
@@ -415,7 +475,7 @@ export class PrivilegeManager {
         }
 
         // 方法3: 检查管理员组SID
-        exec('whoami /groups', (error: unknown, stdout: string, _stderr: string) => {
+        execFile('whoami', ['/groups'], (error: unknown, stdout: string, _stderr: string) => {
           if (!error) {
             const adminIndicators = [
               'S-1-5-32-544', // Administrators group SID
@@ -436,7 +496,7 @@ export class PrivilegeManager {
           }
 
           // 方法4: 尝试 net session 命令
-          exec('net session', (netError: unknown, _netStdout: string, _netStderr: string) => {
+          execFile('net', ['session'], (netError: unknown, _netStdout: string, _netStderr: string) => {
             if (!netError) {
               logger.debug('方法4成功: net session 命令执行成功')
               resolve(true)
@@ -444,7 +504,11 @@ export class PrivilegeManager {
             }
 
             // 方法5: 检查进程完整性级别
-            exec('powershell -Command "([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)"', (psError: unknown, psStdout: string) => {
+            execFile('powershell.exe', [
+              '-NoProfile',
+              '-Command',
+              '([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)'
+            ], (psError: unknown, psStdout: string) => {
               if (!psError && psStdout.includes('True')) {
                 logger.debug('方法5成功: PowerShell 管理员角色检查')
                 resolve(true)
@@ -465,7 +529,7 @@ export class PrivilegeManager {
    */
   private async checkMacOSAdminPrivileges(): Promise<boolean> {
     return new Promise((resolve) => {
-      exec('id -un', (error: unknown, stdout: string) => {
+      execFile('id', ['-un'], (error: unknown, stdout: string) => {
         // 检查是否是 root 用户
         resolve(!error && stdout.trim() === 'root')
       })
@@ -477,7 +541,7 @@ export class PrivilegeManager {
    */
   private async checkLinuxAdminPrivileges(): Promise<boolean> {
     return new Promise((resolve) => {
-      exec('id -u', (error: unknown, stdout: string) => {
+      execFile('id', ['-u'], (error: unknown, stdout: string) => {
         // 检查用户 ID 是否为 0 (root)
         resolve(!error && stdout.trim() === '0')
       })
@@ -513,7 +577,7 @@ export class PrivilegeManager {
       return result.response === 0
     } catch (error) {
       logger.error('显示权限提升警告失败:', error)
-      return true // 默认允许
+      return false
     }
   }
 
@@ -556,8 +620,13 @@ export class PrivilegeManager {
    * 检查命令是否存在
    */
   private async checkCommandExists(command: string): Promise<boolean> {
+    if (!/^[A-Za-z0-9._+-]+$/.test(command)) {
+      logger.warn(`拒绝检查非法命令名称: ${command}`)
+      return false
+    }
+
     return new Promise((resolve) => {
-      exec(`which ${command}`, (error: unknown) => {
+      execFile('which', [command], (error: unknown) => {
         resolve(!error)
       })
     })
@@ -567,8 +636,12 @@ export class PrivilegeManager {
    * 执行提升权限的命令
    */
   private async executeElevatedCommand(command: string, args: string[]): Promise<void> {
+    if (!ELEVATION_COMMANDS.has(command)) {
+      throw new Error(`不允许执行未注册的提权命令: ${command}`)
+    }
+
     return new Promise((resolve, reject) => {
-      exec(`${command} ${args.join(' ')}`, (_error: unknown, _stdout: string, stderr: string) => {
+      execFile(command, args, (_error: unknown, _stdout: string, stderr: string) => {
         if (_error) {
           reject(new Error(`执行命令失败: ${stderr}`))
         } else {

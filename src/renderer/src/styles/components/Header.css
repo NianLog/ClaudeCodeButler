@@ -140,13 +140,3 @@
     padding: 4px 8px;
   }
 }
-
-/* 暗色主题 */
-
-
-
-  color: var(--border);
-}
-
-  background: var(--border-light);
-}

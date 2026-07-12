@@ -39,6 +39,12 @@ build/Release
 node_modules/
 jspm_packages/
 
+# Local Python tooling environments
+.venv/
+
+# Local Semgrep audit artifacts (the reviewed report remains tracked)
+.semgrep/
+
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 

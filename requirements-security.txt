@@ -1,0 +1,2 @@
+# Semgrep CLI used for reproducible local security audits.
+semgrep==1.169.0

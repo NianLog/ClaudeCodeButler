@@ -67,11 +67,10 @@ export class TaskScheduler extends EventEmitter {
         return
       }
 
-      // 创建定时任务
-      const task = cron.schedule(cronExpression, async () => {
+      // createTask 不会自动启动，确保 disabled rule 不会在注册瞬间执行
+      const task = cron.createTask(cronExpression, async () => {
         await this.executeRule(rule)
       }, {
-        scheduled: false, // 先不启动
         timezone: 'Asia/Shanghai'
       })
 

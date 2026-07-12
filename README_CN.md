@@ -7,15 +7,26 @@
 [English](./README.md) | 简体中文
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Electron](https://img.shields.io/badge/Electron-40.0.0-47848F?logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3.0-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Electron](https://img.shields.io/badge/Electron-40.10.6-47848F?logo=electron)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+
+</div>
 
 ---
 
 ## 📖 简介
 
 CCB (Claude Code Butler) 是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用，用于统一管理 Claude Code 相关配置资产。它把配置文件、MCP 服务器、项目绑定、自动化规则、环境诊断以及托管模式工具集中到同一个界面中，方便用户在图形界面内完成编辑、校验、预览、切换与审计，而不需要手工在多个目录里来回处理文件。
+
+### 项目状态
+
+- **当前发布基线**：`1.4.0`
+- **下一里程碑**：`1.5.0` 规划与开发准备阶段
+- **安全基线（2026-07-12）**：Semgrep `0 findings / 0 scan errors`，root 与 proxy-server npm audit 均为 `0 vulnerabilities`
+- **验证基线**：10 个测试文件共 65 项测试、TypeScript 检查、root production build 与 proxy-server build 全部通过
+
+在 `1.5.0` 的范围、验收标准与发布计划确认前，package version 继续保持 `1.4.0`，避免把开发目标误标为已发布版本。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
 ### ✨ 核心功能
 
@@ -87,8 +98,9 @@ CCB (Claude Code Butler) 是一个基于 Electron、React 和 TypeScript 构建�
 
 ### 环境要求
 
-- Node.js >= 20.0.9
-- npm >= 9.0.0
+- Node.js >= 20.19.0（推荐 Node.js 22 LTS）
+- npm >= 10.0.0
+- 仅在执行本地 Semgrep 审计时需要 Python >= 3.10
 
 ### 安装
 
@@ -99,8 +111,11 @@ git clone https://github.com/NianLog/ClaudeCodeButler.git
 # 进入项目目录
 cd ClaudeCodeButler
 
-# 安装依赖
-npm install
+# 按 lockfile 安装应用依赖
+npm ci
+
+# 安装独立 proxy-server 依赖
+npm ci --prefix src/proxy-server
 ```
 
 ### 开发模式
@@ -122,8 +137,12 @@ npm run build
 # 类型检查
 npm run type-check
 
-# 运行测试
-npm test
+# 单次运行测试（非 watch 模式）
+npm run test -- --run
+
+# 审计 root 与 proxy-server 依赖
+npm audit --audit-level=low
+npm audit --audit-level=low --prefix src/proxy-server
 
 # 启动构建后的应用
 npm start
@@ -184,18 +203,18 @@ npm run dist:all
 
 ### 应用运行时
 
-- **Electron**: 40.0.0
+- **Electron**: 40.10.6
 - **electron-vite**: 5.0.0
-- **Vite**: 7.3.1
-- **TypeScript**: 5.3
+- **Vite**: 7.3.6
+- **TypeScript**: 5.9.3
 
 ### 渲染层
 
-- **React**: 18.2
-- **Ant Design**: 5.12
-- **Zustand**: 4.4
+- **React**: 18.3.1
+- **Ant Design**: 5.27.6
+- **Zustand**: 4.5.7
 - **Monaco Editor**: 0.55.1，搭配 `@monaco-editor/react` 4.7
-- **Recharts**: 2.8
+- **Recharts**: 2.15.4
 - **react-markdown**: 9.1
 - **react-syntax-highlighter**: 16.1
 - **remark-gfm**: 4.0.1
@@ -203,18 +222,19 @@ npm run dist:all
 ### 主进程与服务层
 
 - **Express**: 5.1.0
-- **Axios**: 1.12.2
-- **Chokidar**: 3.5.3
-- **node-cron**: 3.0.3
-- **js-yaml**: 4.1.1
-- **uuid**: 9.0.0
+- **Axios**: 1.18.0
+- **Chokidar**: 3.6.0
+- **node-cron**: 4.6.0
+- **js-yaml**: 4.3.0
+- **uuid**: 14.0.1
 
 ### 工具链与质量保障
 
-- **Vitest**: 4.0.17
-- **ESLint**: 8.57
-- **electron-builder**: 26.5.0
-- **patch-package**: 8.0.0
+- **Vitest**: 4.1.10
+- **ESLint**: 8.57.1
+- **electron-builder**: 26.15.3
+- **patch-package**: 8.0.1
+- **Semgrep CLI**: 1.169.0（隔离安装在 root `.venv`）
 
 ---
 
@@ -280,7 +300,9 @@ npm run preview
 # 质量检查
 npm run type-check
 npm run lint
-npm test
+npm run test -- --run
+npm audit --audit-level=low
+npm audit --audit-level=low --prefix src/proxy-server
 
 # 打包
 npm run pack
@@ -295,6 +317,32 @@ npm run pack:dir
 - `@/` → `src/renderer/src/`
 - `@shared/*` → `src/shared/*`
 
+### 本地安全审计（Windows Git Bash）
+
+Semgrep 与 Node.js 工具链隔离，安装在 root `.venv`。可通过以下命令重建环境并运行本次审计使用的 rulesets：
+
+```bash
+python -m venv .venv
+source .venv/Scripts/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-security.txt
+
+semgrep scan \
+  --config p/security-audit \
+  --config p/owasp-top-ten \
+  --config p/javascript \
+  --exclude-rule javascript.crypto-js.cryptojs-weak-algorithm.cryptojs-weak-algorithm \
+  --exclude-rule javascript.koa.web.cors-default-config-koa.cors-default-config-koa \
+  --exclude-rule javascript.express.web.cors-default-config-express.cors-default-config-express \
+  --timeout 60 \
+  --timeout-threshold 3 \
+  --json-output .semgrep/security-audit.json \
+  --sarif-output .semgrep/security-audit.sarif \
+  .
+```
+
+上述 3 条被排除的 registry rules 依赖 Semgrep Pro engine；对应的 CryptoJS、Koa 与 Express CORS 场景已执行人工补偿检查。完整原因与审计记录保存在 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
+
 ### 开发注意事项
 
 - 仅用于渲染层打包的依赖会尽量保留在非运行时依赖范围，减少最终包体积。
@@ -304,6 +352,18 @@ npm run pack:dir
 ---
 
 ## 🆕 最近更新
+
+### 2026-07-12 安全与质量基线
+
+- 权限提升改为 `execFile` 参数化执行，增加 executable allowlist 与平台级 escaping；权限确认异常时默认拒绝。
+- GitHub Actions 固定为完整 commit SHA，降低 mutable tag 带来的供应链风险。
+- 移除本地 proxy server 默认全开放的 CORS，并清理不再使用的 CORS dependencies。
+- 更新安全相关 dependencies，root 与 proxy-server npm audit 均降至 0 vulnerabilities。
+- 迁移至 node-cron 4 的 `createTask` 语义，并补充 enabled/disabled rule 回归测试。
+- 恢复 production bundle 中的组件 CSS imports，并清理 PostCSS 检查发现的残缺无效样式片段。
+- 增加可复现的 Semgrep 虚拟环境、JSON/SARIF 原始结果流程与持续维护的安全审计报告。
+
+### 产品体验更新
 
 - 新增“新建配置默认模板”，可在 `设置 -> 编辑器设置` 中编辑、保存和弹窗预览。
 - 模板预览改为弹窗方式，并复用同一套编辑器能力进行格式化与校验。

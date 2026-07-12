@@ -7,9 +7,9 @@
 English | [简体中文](./README_CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Electron](https://img.shields.io/badge/Electron-40.0.0-47848F?logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3.0-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Electron](https://img.shields.io/badge/Electron-40.10.6-47848F?logo=electron)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
 </div>
 
@@ -18,6 +18,15 @@ English | [简体中文](./README_CN.md)
 ## 📖 Introduction
 
 CCB (Claude Code Butler) is a local-first desktop application built with Electron, React, and TypeScript for managing Claude Code related assets. It centralizes config files, MCP servers, project bindings, automation rules, environment diagnostics, and managed-mode tooling into a single interface so users can edit, validate, preview, switch, and audit their setup without manually chasing files across directories.
+
+### Project Status
+
+- **Current release baseline**: `1.4.0`
+- **Next milestone**: `1.5.0` planning and development preparation
+- **Security baseline (2026-07-12)**: Semgrep `0 findings / 0 scan errors`, root and proxy-server npm audits `0 vulnerabilities`
+- **Verification baseline**: 65 tests across 10 test files, TypeScript checks, root production build, and proxy-server build passing
+
+The package version remains `1.4.0` until the `1.5.0` scope, acceptance criteria, and release plan are finalized. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
 
 ### ✨ Key Features
 
@@ -89,8 +98,9 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 
 ### Requirements
 
-- Node.js >= 20.0.9
-- npm >= 9.0.0
+- Node.js >= 20.19.0 (Node.js 22 LTS recommended)
+- npm >= 10.0.0
+- Python >= 3.10 only when running the local Semgrep audit
 
 ### Installation
 
@@ -101,8 +111,11 @@ git clone https://github.com/NianLog/ClaudeCodeButler.git
 # Navigate to project directory
 cd ClaudeCodeButler
 
-# Install dependencies
-npm install
+# Install locked application dependencies
+npm ci
+
+# Install the standalone proxy-server dependencies
+npm ci --prefix src/proxy-server
 ```
 
 ### Development Mode
@@ -124,8 +137,12 @@ npm run build
 # Type-check
 npm run type-check
 
-# Run tests
-npm test
+# Run tests once (non-watch mode)
+npm run test -- --run
+
+# Audit root and proxy-server dependencies
+npm audit --audit-level=low
+npm audit --audit-level=low --prefix src/proxy-server
 
 # Launch the built app
 npm start
@@ -186,18 +203,18 @@ npm run dist:all
 
 ### Application runtime
 
-- **Electron**: 40.0.0
+- **Electron**: 40.10.6
 - **electron-vite**: 5.0.0
-- **Vite**: 7.3.1
-- **TypeScript**: 5.3
+- **Vite**: 7.3.6
+- **TypeScript**: 5.9.3
 
 ### Renderer
 
-- **React**: 18.2
-- **Ant Design**: 5.12
-- **Zustand**: 4.4
+- **React**: 18.3.1
+- **Ant Design**: 5.27.6
+- **Zustand**: 4.5.7
 - **Monaco Editor**: 0.55.1 via `@monaco-editor/react` 4.7
-- **Recharts**: 2.8
+- **Recharts**: 2.15.4
 - **react-markdown**: 9.1
 - **react-syntax-highlighter**: 16.1
 - **remark-gfm**: 4.0.1
@@ -205,18 +222,19 @@ npm run dist:all
 ### Main process & services
 
 - **Express**: 5.1.0
-- **Axios**: 1.12.2
-- **Chokidar**: 3.5.3
-- **node-cron**: 3.0.3
-- **js-yaml**: 4.1.1
-- **uuid**: 9.0.0
+- **Axios**: 1.18.0
+- **Chokidar**: 3.6.0
+- **node-cron**: 4.6.0
+- **js-yaml**: 4.3.0
+- **uuid**: 14.0.1
 
 ### Tooling & quality gates
 
-- **Vitest**: 4.0.17
-- **ESLint**: 8.57
-- **electron-builder**: 26.5.0
-- **patch-package**: 8.0.0
+- **Vitest**: 4.1.10
+- **ESLint**: 8.57.1
+- **electron-builder**: 26.15.3
+- **patch-package**: 8.0.1
+- **Semgrep CLI**: 1.169.0 (isolated in the root `.venv`)
 
 ---
 
@@ -282,7 +300,9 @@ npm run preview
 # Quality gates
 npm run type-check
 npm run lint
-npm test
+npm run test -- --run
+npm audit --audit-level=low
+npm audit --audit-level=low --prefix src/proxy-server
 
 # Packaging
 npm run pack
@@ -297,6 +317,32 @@ npm run pack:dir
 - `@/` → `src/renderer/src/`
 - `@shared/*` → `src/shared/*`
 
+### Local Security Audit (Windows Git Bash)
+
+Semgrep is isolated from the Node.js toolchain in the root `.venv`. Recreate and run the audited rulesets with:
+
+```bash
+python -m venv .venv
+source .venv/Scripts/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-security.txt
+
+semgrep scan \
+  --config p/security-audit \
+  --config p/owasp-top-ten \
+  --config p/javascript \
+  --exclude-rule javascript.crypto-js.cryptojs-weak-algorithm.cryptojs-weak-algorithm \
+  --exclude-rule javascript.koa.web.cors-default-config-koa.cors-default-config-koa \
+  --exclude-rule javascript.express.web.cors-default-config-express.cors-default-config-express \
+  --timeout 60 \
+  --timeout-threshold 3 \
+  --json-output .semgrep/security-audit.json \
+  --sarif-output .semgrep/security-audit.sarif \
+  .
+```
+
+The three excluded registry rules require the Semgrep Pro engine. Their corresponding CryptoJS, Koa, and Express CORS cases were manually reviewed; details and the exact rationale are retained in [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md).
+
 ### Notes for contributors
 
 - Renderer-only dependencies are intentionally kept out of runtime `dependencies` where possible to reduce packaged size.
@@ -306,6 +352,18 @@ npm run pack:dir
 ---
 
 ## 🆕 Recent Product Updates
+
+### 2026-07-12 Security and quality baseline
+
+- Parameterized privilege elevation with `execFile`, executable allowlists, and platform-specific escaping; elevation confirmation now fails closed.
+- GitHub Actions are pinned to full commit SHAs to reduce mutable-tag supply-chain risk.
+- Removed default-open CORS from the local proxy server and removed the unused CORS dependencies.
+- Updated security-sensitive dependencies; root and proxy-server npm audits now report 0 vulnerabilities.
+- Migrated scheduling to node-cron 4 `createTask` semantics and added regression coverage for enabled/disabled rules.
+- Restored component CSS imports to the production bundle and removed invalid orphaned style fragments exposed by PostCSS validation.
+- Added a reproducible Semgrep environment, raw JSON/SARIF output workflow, and a maintained security audit report.
+
+### Product experience updates
 
 - Added a customizable default template for new configs in `Settings -> Editor Settings`.
 - Reworked template preview so it opens in a modal and reuses the same editor capabilities for validation and formatting.
