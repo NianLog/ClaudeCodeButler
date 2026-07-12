@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 CCB（Coding Context Butler，原 Claude Code Butler）的所有显著变更。
+本文件记录 CCB（Claude Code Butler）的所有显著变更。
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本 Semantic Versioning](https://semver.org/lang/zh-CN/)。
@@ -20,6 +20,7 @@
 - 新增受控 path template resolver 与无 shell 的 `PATH_EXISTS` / `COMMAND_EXISTS` detector executor。
 - 新增 registry-allowlisted artifact discovery/read service 与 IPC facade，拒绝 traversal、UNC、glob、symbolic link、任意 renderer 路径和超过 1 MiB 的配置文件。
 - 新增内置 JSON/JSONC/YAML/MARKDOWN/TEXT codec、bounded validation、atomic edit 与 capability-driven backup/restore。
+- 新增 lazy-loaded AI 工具配置面板，支持 detection、artifact discovery、raw view、validation、edit 与 backup 的 capability-aware 操作。
 - 新增 installed/last-known-good registry 原子存储、SHA-256 integrity、app compatibility、downgrade protection、merge 与显式 rollback。
 - 新增 main-process registry manifest 检查；启动时只检查小型 manifest，不自动下载完整 bundle。
 - Settings/About 新增规则库版本、检查、用户确认安装与 rollback 控件。
@@ -29,8 +30,9 @@
 ### Changed
 
 - 应用版本检查与 registry manifest 检查并发执行，避免两个网络 timeout 串行叠加。
-- `Coding Configuration Bridge（编程配置桥）` 候选因过于基础设施化且缺少产品性格被否决；正式采用 `Coding Context Butler（代码上下文管家）`。
+- 品牌恢复并保留原始名称 `Claude Code Butler`；`Coding Configuration Bridge` 与 `Coding Context Butler` 两个候选均已否决，产品能力范围不再强行映射到缩写释义。
 - 主应用 package version 升级为 `1.5.0`；独立 proxy package、appId、`.ccb` 与 repository identity 保持兼容。
+- Effective registry 增加 single-flight snapshot cache，并根据 installed/last-known-good storage fingerprint 自动失效。
 
 ### Security
 
@@ -43,7 +45,7 @@
 - 新增 registry validator、registry storage/rollback、manifest-only update、explicit install 与 performance snapshot 单元测试。
 - 新增 detector/path resolver 与 artifact discovery/read 安全边界单元测试。
 - 新增 codec 与 capability-driven edit/backup/restore 回归测试。
-- Full Vitest 当前为 18 个测试文件、113 项测试全部通过。
+- Full Vitest 当前为 18 个测试文件、114 项测试全部通过。
 
 ## [1.4.0] - 2026-06-15
 

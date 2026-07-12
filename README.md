@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⚡ CCB (Coding Context Butler)
+# ⚡ CCB (Claude Code Butler)
 
-**Your local-first butler for AI coding context**
+**A local-first desktop manager for AI agent configurations**
 
 English | [简体中文](./README_CN.md)
 
@@ -17,7 +17,7 @@ English | [简体中文](./README_CN.md)
 
 ## 📖 Introduction
 
-CCB (Coding Context Butler) is a local-first desktop application built with Electron, React, and TypeScript. Version `1.5.0` evolves the original Claude Code Butler into a rule-driven manager for the configuration, instructions, MCP servers, agents, skills, and other context used by AI coding tools.
+CCB (Claude Code Butler) is a local-first desktop application built with Electron, React, and TypeScript. Version `1.5.0` preserves the original product name while evolving its architecture into a rule-driven manager for Claude Code and additional AI agent tool configurations.
 
 ### Project Status
 
@@ -27,11 +27,11 @@ CCB (Coding Context Butler) is a local-first desktop application built with Elec
 - **v1.5.0 implemented scope**: generic codecs, validation, atomic edit, backup/restore, and secure IPC foundation
 - **v1.5.0 remaining scope**: management UI migration and measured runtime performance optimization
 - **Security baseline (2026-07-12)**: Semgrep `0 findings / 0 scan errors`, root and proxy-server npm audits `0 vulnerabilities`
-- **Verification baseline**: 113 tests across 18 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
+- **Verification baseline**: 114 tests across 18 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
 
 The package version is now `1.5.0`; this marks an active development version rather than a completed public release. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
 
-The accepted new meaning of CCB is **Coding Context Butler**. `Coding` preserves why the project exists, `Context` covers the complete working context around AI coding tools, and `Butler` keeps the approachable personality and continuity of the original product. Existing `.ccb`, app identity, and repository identifiers remain compatible.
+The product name remains **Claude Code Butler**. The name records the project's origin rather than limiting its architecture: new tools are integrated through a bounded registry and built-in capabilities, while `CCB`, `.ccb`, app identity, and repository identifiers remain stable.
 
 ### ✨ Key Features
 
@@ -372,6 +372,7 @@ The three excluded registry rules require the Semgrep Pro engine. Their correspo
 
 - Added a declarative JSON tool registry model with bounded validation and an embedded Claude Code compatibility adapter.
 - Added a read-only Codex CLI adapter plus generic `PATH_EXISTS` / `COMMAND_EXISTS` detection and registry-allowlisted artifact discovery.
+- Added a lazy-loaded AI Tool Configuration panel and effective-registry snapshot cache with storage fingerprint invalidation.
 - Added explicit, integrity-checked registry installation and last-known-good rollback; automatic checks fetch only the small manifest.
 - Added registry controls under Settings/About and a main-process-only on-demand performance snapshot exporter.
 - Architecture, security protocol, performance budgets, migration phases, and the accepted brand decision are documented in [`docs/1.5.0`](./docs/1.5.0/README.md).

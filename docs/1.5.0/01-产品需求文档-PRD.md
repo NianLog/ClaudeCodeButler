@@ -10,7 +10,7 @@ v1.5.0 将 CCB 转向“规则驱动的配置控制平面”：应用提供稳�
 
 让用户在一个本地优先的桌面应用中发现、理解、备份、验证和管理多个 AI 工具的配置；让维护者通过受约束的 JSON 规则演进适配，而不是不断复制业务代码。
 
-品牌确定使用 `CCB — Coding Context Butler`，中文描述为“代码上下文管家”。`Coding` 保留项目因编程而生的核心语义，`Context` 覆盖配置、instructions、MCP、Agents、Skills 与 rules，`Butler` 延续原产品有趣、亲切的管家人格，同时不再绑定 Claude Code。
+品牌继续使用原始名称 `CCB — Claude Code Butler`。名称记录项目起源，但不再作为 domain boundary；多 AI Agent 工具通过通用 registry、artifact 与 capability model 接入，产品范围由架构和功能说明表达，而不是强行改写缩写寓意。
 
 ## 3. v1.5.0 目标
 

@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⚡ CCB (Coding Context Butler / 代码上下文管家)
+# ⚡ CCB (Claude Code Butler)
 
-**你的本地优先 AI Coding 上下文管家**
+**本地优先的 AI Agent 配置管理桌面工具**
 
 [English](./README.md) | 简体中文
 
@@ -17,7 +17,7 @@
 
 ## 📖 简介
 
-CCB（Coding Context Butler / 代码上下文管家）是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用。`1.5.0` 将原 Claude Code Butler 演进为规则驱动的多 AI Coding 工具管理平台，统一治理配置、instructions、MCP servers、Agents、Skills 及其他工作上下文。
+CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用。`1.5.0` 保留原始产品名称，同时把底层架构演进为规则驱动的 Claude Code 与多 AI Agent 工具配置管理平台。
 
 ### 项目状态
 
@@ -27,11 +27,11 @@ CCB（Coding Context Butler / 代码上下文管家）是一个基于 Electron�
 - **v1.5.0 已实施范围**：通用 codecs、validation、atomic edit、backup/restore 与安全 IPC foundation
 - **v1.5.0 待实施范围**：管理 UI 迁移与基于实测的 runtime performance 优化
 - **安全基线（2026-07-12）**：Semgrep `0 findings / 0 scan errors`，root 与 proxy-server npm audit 均为 `0 vulnerabilities`
-- **验证基线**：18 个测试文件共 113 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
+- **验证基线**：18 个测试文件共 114 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
 
 package version 已升级为 `1.5.0`，它表示当前开发版本，不代表公共 release 已完成。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
-CCB 的新全称确定为 **Coding Context Butler（代码上下文管家）**：`Coding` 保留项目因编程而生的核心语义，`Context` 覆盖 AI Coding 工具运行所需的完整上下文，`Butler` 延续原产品更有趣、亲切的管家性格。现有 `.ccb`、应用 identity 和仓库标识继续兼容。
+产品名称继续使用 **Claude Code Butler**。名称用于记录项目起源，不再承担描述全部管理范围的职责；新增工具通过受约束 registry 与内置 capabilities 接入，`CCB`、`.ccb`、应用 identity 和仓库标识保持稳定。
 
 ### ✨ 核心功能
 
@@ -372,6 +372,7 @@ semgrep scan \
 
 - 新增声明式 JSON 工具规则库模型、bounded validation 与内置 Claude Code 兼容 adapter。
 - 新增只读 Codex CLI adapter、通用 `PATH_EXISTS` / `COMMAND_EXISTS` 检测与 registry allowlist 约束的 artifact discovery。
+- 新增 lazy-loaded“AI 工具配置”面板，以及具备 storage fingerprint 自动失效能力的 effective-registry snapshot cache。
 - 新增需用户明确确认、具备 integrity 校验的规则库安装和 last-known-good rollback；自动检查只获取小型 manifest。
 - Settings/About 已加入规则库操作入口，main process 新增完全按需的 performance snapshot exporter。
 - 架构、安全协议、性能预算、迁移阶段与已接受的品牌决策见 [`docs/1.5.0`](./docs/1.5.0/README.md)。

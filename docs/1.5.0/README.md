@@ -18,7 +18,7 @@
 2. 远程规则只允许引用应用内置、审计过的 declarative capabilities，不允许携带 JS、shell 或动态 module。
 3. 应用可以自动检查规则 manifest 版本，但完整规则包必须由用户明确确认后下载。
 4. Claude Code 在 v1.5.0 中作为第一个内置 adapter，现有配置和功能必须保持兼容。
-5. 品牌正式解释为 `Coding Context Butler（代码上下文管家）`；保留 `CCB`、`.ccb`、appId 与 repository identity 的兼容策略。
+5. 品牌保留原始名称 `Claude Code Butler`；名称记录项目起源，通用架构不受单工具品牌语义限制。
 6. 性能优化以数据基线和预算为门禁，不接受无法测量的“感觉更快”。
 
 ## 当前实现进度
@@ -34,10 +34,12 @@
 - [x] Generic detector/path resolver 与 read-only artifact discovery
 - [x] 第二个真实 AI tool read-only adapter
 - [x] Generic format codecs、validation、edit/backup/restore foundation
+- [x] Lazy-loaded generic AI tool management UI
+- [x] Effective registry fingerprint cache 与 single-flight load
 - [ ] 实机 performance baseline 与首批优化
-- [x] 品牌全称确认为 Coding Context Butler
-- [x] Runtime display branding 迁移
-- [ ] Generic management UI 与 installer 长文案迁移
+- [x] 品牌恢复为 Claude Code Butler
+- [x] Runtime display branding 回退
+- [ ] Installer 与官网多工具能力说明更新
 
 ### 当前安全边界
 

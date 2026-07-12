@@ -417,6 +417,7 @@ const zhCN: TranslationDict = {
   'layout.user.preferences': '偏好设置',
   'layout.user.logout': '退出登录',
   'layout.nav.configs': '配置管理',
+  'layout.nav.aiTools': 'AI 工具配置',
   'layout.nav.automation': '自动化规则',
   'layout.nav.statistics': '统计信息',
   'layout.nav.projects': '项目管理',
@@ -958,7 +959,7 @@ const zhCN: TranslationDict = {
 
   // 统计
   'statistics.title': '统计信息',
-  'statistics.subtitle': '查看 Coding Context Butler 和 Claude Code 使用情况',
+  'statistics.subtitle': '查看 Claude Code Butler 和 Claude Code 使用情况',
   'statistics.tabs.app': '应用统计',
   'statistics.tabs.claudeCode': 'Claude Code分析',
   'statistics.actions.refresh': '刷新',
@@ -1260,7 +1261,7 @@ const zhCN: TranslationDict = {
   'settings.data.reset': '重置设置',
 
   // 关于页面
-  'about.app.name': 'Coding Context Butler',
+  'about.app.name': 'Claude Code Butler',
   'about.app.description': 'Claude Code 配置管理工具',
   'about.app.info': '应用信息',
   'about.app.currentVersion': '当前版本',
@@ -1711,6 +1712,7 @@ const enUS: TranslationDict = {
   'layout.user.preferences': 'Preferences',
   'layout.user.logout': 'Sign out',
   'layout.nav.configs': 'Configuration',
+  'layout.nav.aiTools': 'AI Tool Configs',
   'layout.nav.automation': 'Automation rules',
   'layout.nav.statistics': 'Statistics',
   'layout.nav.projects': 'Projects',
@@ -2252,7 +2254,7 @@ const enUS: TranslationDict = {
 
   // Statistics
   'statistics.title': 'Statistics',
-  'statistics.subtitle': 'View usage of Coding Context Butler and Claude Code',
+  'statistics.subtitle': 'View usage of Claude Code Butler and Claude Code',
   'statistics.tabs.app': 'App Statistics',
   'statistics.tabs.claudeCode': 'Claude Code Analytics',
   'statistics.actions.refresh': 'Refresh',
@@ -2554,7 +2556,7 @@ const enUS: TranslationDict = {
   'settings.data.reset': 'Reset Settings',
 
   // 关于页面
-  'about.app.name': 'Coding Context Butler',
+  'about.app.name': 'Claude Code Butler',
   'about.app.description': 'Claude Code Configuration Management Tool',
   'about.app.info': 'Application Information',
   'about.app.currentVersion': 'Current Version',

@@ -1,0 +1,54 @@
+/**
+ * @file src/renderer/src/components/AIToolManagement/AIToolManagementPanel.css
+ * @description AI 工具配置管理面板布局与状态样式。
+ */
+
+.ai-tool-management-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+
+.ai-tool-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ai-tool-header .ant-typography {
+  margin-bottom: 4px;
+}
+
+.ai-tool-list-item {
+  cursor: pointer;
+  padding-inline: 12px !important;
+  border-radius: 8px;
+}
+
+.ai-tool-list-item:hover,
+.ai-tool-list-item.selected {
+  background: var(--bg-hover);
+}
+
+.detected-icon {
+  color: var(--green);
+}
+
+.artifact-actions {
+  width: 100%;
+  margin-bottom: 12px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .ai-tool-management-panel {
+    padding: 16px;
+  }
+
+  .ai-tool-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

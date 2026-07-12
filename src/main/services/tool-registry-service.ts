@@ -88,6 +88,9 @@ export function mergeToolRegistryBundles(
 export class ToolRegistryService {
   private readonly paths: ToolRegistryPaths
   private readonly embedded: ToolRegistryBundle
+  private cachedFingerprint?: string
+  private cachedSnapshot?: ToolRegistrySnapshot
+  private snapshotPromise?: Promise<ToolRegistrySnapshot>
 
   constructor(paths?: Partial<ToolRegistryPaths>) {
     this.paths = {
@@ -107,6 +110,28 @@ export class ToolRegistryService {
    * @returns embedded 与 installed/last-known-good 合并结果
    */
   public async getSnapshot(): Promise<ToolRegistrySnapshot> {
+    const fingerprint = await this.createStorageFingerprint()
+    if (this.cachedSnapshot && this.cachedFingerprint === fingerprint) {
+      return this.cachedSnapshot
+    }
+    if (this.snapshotPromise) return this.snapshotPromise
+
+    this.snapshotPromise = this.loadSnapshot()
+    try {
+      const snapshot = await this.snapshotPromise
+      this.cachedFingerprint = await this.createStorageFingerprint()
+      this.cachedSnapshot = snapshot
+      return snapshot
+    } finally {
+      this.snapshotPromise = undefined
+    }
+  }
+
+  /**
+   * 从本地 storage 加载并验证 effective registry。
+   * @returns embedded 与 installed/last-known-good 合并结果
+   */
+  private async loadSnapshot(): Promise<ToolRegistrySnapshot> {
     const installedResult = await this.readBundle(this.paths.installed)
     if (installedResult.bundle) {
       return {
@@ -191,6 +216,7 @@ export class ToolRegistryService {
       source: 'REMOTE'
     }
     await writeJsonAtomic(this.paths.metadata, metadata)
+    this.invalidateSnapshotCache()
     return bundle.registryVersion
   }
 
@@ -213,7 +239,36 @@ export class ToolRegistryService {
       source: 'ROLLBACK'
     }
     await writeJsonAtomic(this.paths.metadata, metadata)
+    this.invalidateSnapshotCache()
     return fallbackResult.bundle.registryVersion
+  }
+
+  /** 清除 effective snapshot cache */
+  private invalidateSnapshotCache(): void {
+    this.cachedFingerprint = undefined
+    this.cachedSnapshot = undefined
+  }
+
+  /**
+   * 使用 storage 文件 metadata 创建轻量 cache fingerprint。
+   * @returns installed 与 last-known-good 的 mtime/size fingerprint
+   */
+  private async createStorageFingerprint(): Promise<string> {
+    const describe = async (filePath: string): Promise<string> => {
+      try {
+        const metadata = await fs.stat(filePath, { bigint: true })
+        return `${metadata.mtimeNs}:${metadata.ctimeNs}:${metadata.size}`
+      } catch (error) {
+        const nodeError = error as NodeJS.ErrnoException
+        if (nodeError.code === 'ENOENT') return 'missing'
+        throw error
+      }
+    }
+    const [installed, lastKnownGood] = await Promise.all([
+      describe(this.paths.installed),
+      describe(this.paths.lastKnownGood)
+    ])
+    return `${installed}|${lastKnownGood}`
   }
 
   /**

@@ -31,6 +31,7 @@ import {
   CheckCircleOutlined,
   RobotOutlined as AgentOutlined,
   AppstoreOutlined as SkillsOutlined,
+  CodeOutlined,
   DownOutlined,
   UpOutlined
 } from '@ant-design/icons'
@@ -363,7 +364,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
             {!sidebarCollapsed && (
               <div className="logo-text">
                 <Text className="logo-title">CCB</Text>
-                <Text className="logo-subtitle">Coding Context Butler</Text>
+                <Text className="logo-subtitle">Claude Code Butler</Text>
               </div>
             )}
           </div>
@@ -372,6 +373,15 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
         <div className="sidebar-content">
           <div className="sidebar-nav">
             <div className="nav-section">
+              <div
+                className={`nav-item ${activeMainTab === 'ai-tools' ? 'active' : ''}`}
+                onClick={() => setActiveMainTab('ai-tools')}
+              >
+                <div className="nav-icon">
+                  <CodeOutlined />
+                </div>
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.aiTools')}</span>}
+              </div>
               <div
                 className={`nav-item ${activeMainTab === 'configs' ? 'active' : ''}`}
                 onClick={() => setActiveMainTab('configs')}

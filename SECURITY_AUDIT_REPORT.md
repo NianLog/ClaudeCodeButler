@@ -117,3 +117,12 @@ Registry 中以下规则使用 `metavariable-name:module`，Semgrep OSS CLI `1.1
 3. Edit 使用目标目录内随机 exclusive temp file、flush 与 atomic rename；带 `BACKUP` capability 的 artifact 在更新前自动备份，invalid content 不修改原文件。
 4. Backup 使用 UUID、exclusive copy、受控目录和 bounded metadata；restore 根据 metadata 重新校验 registry path 与 `RESTORE` capability，拒绝 symbolic link、超限内容、无效 UTF-8 和目标路径篡改。
 5. Codex CLI adapter 继续仅声明 `DISCOVER` / `READ`，因此新管理 IPC 不会扩大其写权限。
+
+### 2026-07-13：generic management UI 与 registry cache 增量复审
+
+- Semgrep full scan 覆盖 183 targets、369 rules，结果为 `0 findings / 0 errors`；对 staged 新 UI TSX 显式补扫 1 target、332 applicable rules，同样为 `0 findings / 0 errors`。
+- Full Vitest 为 18 files / 114 tests；TypeScript、ESLint、root/proxy builds 与两套 npm audit 全部通过。
+- 新增 AI Tool Configuration lazy panel；renderer 只能调用既有 capability-aware IPC，不能提供额外 filesystem roots、handlers 或 executable code。
+- UI 仅在 registry 声明对应 capability 时展示 validate/edit/backup 操作；main process 仍在每次调用时重新授权，因此 UI 隐藏不是安全边界。
+- Effective registry snapshot 使用 single-flight cache，fingerprint 包含 installed/last-known-good 的 nanosecond `mtime`、`ctime` 与 size；storage 变化后重新读取并执行完整 validator。
+- Codex CLI 在 UI 中保持 read-only；未实现可信 TOML codec 前不会显示 edit/validate 操作。

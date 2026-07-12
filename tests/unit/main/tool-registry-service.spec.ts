@@ -4,6 +4,7 @@
  */
 
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
+import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -156,5 +157,26 @@ describe('ToolRegistryService', () => {
     expect(rolledBackVersion).toBe('1.1.0')
     const installed = JSON.parse(await readFile(registryPaths.installed, 'utf8')) as typeof builtinRegistryJson
     expect(installed.registryVersion).toBe('1.1.0')
+  })
+
+  it('应缓存未变化 snapshot 并在 storage 变化后失效', async () => {
+    const service = new ToolRegistryService(registryPaths)
+    const readFileSpy = vi.spyOn(fs, 'readFile')
+
+    const [first, concurrent] = await Promise.all([service.getSnapshot(), service.getSnapshot()])
+    const readsAfterFirstLoad = readFileSpy.mock.calls.length
+    const cached = await service.getSnapshot()
+
+    expect(concurrent).toEqual(first)
+    expect(cached).toEqual(first)
+    expect(readFileSpy.mock.calls).toHaveLength(readsAfterFirstLoad)
+
+    const rawJson = createBundle('1.3.0', 'cached-tool')
+    await writeFile(registryPaths.installed, rawJson, 'utf8')
+    const refreshed = await service.getSnapshot()
+
+    expect(refreshed.tools.map((tool) => tool.toolId)).toContain('cached-tool')
+    expect(readFileSpy.mock.calls.length).toBeGreaterThan(readsAfterFirstLoad)
+    readFileSpy.mockRestore()
   })
 })

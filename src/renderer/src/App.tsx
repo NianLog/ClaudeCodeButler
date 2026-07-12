@@ -21,6 +21,7 @@ const MCPManagementPanel = React.lazy(() => import('./components/MCP/MCPManageme
 const AgentsManagementPanel = React.lazy(() => import('./components/AgentsManagement/AgentsManagementPanel'))
 const SkillsManagementPanel = React.lazy(() => import('./components/SkillsManagement/SkillsManagementPanel'))
 const EnvironmentCheckPanel = React.lazy(() => import('./components/EnvironmentCheck/EnvironmentCheckPanel'))
+const AIToolManagementPanel = React.lazy(() => import('./components/AIToolManagement/AIToolManagementPanel'))
 import LoadingScreen from './components/Common/LoadingScreen'
 import ErrorBoundary from './components/Common/ErrorBoundary'
 import NotificationContainer from './components/Common/NotificationContainer'
@@ -184,6 +185,8 @@ const AppContent: React.FC = () => {
     switch (activeMainTab) {
       case 'configs':
         return <ModernConfigPanel />
+      case 'ai-tools':
+        return <AIToolManagementPanel />
       case 'automation':
         return <AutomationPanel />
       case 'statistics':

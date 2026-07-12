@@ -2,7 +2,7 @@
 
 ## 状态
 
-Accepted（修订 2）— 产品所有者确认至少一个 `C` 必须代表 `Coding`，并否决上一版 `Coding Configuration Bridge` 候选。
+Accepted（修订 3）— 产品所有者决定保留原始名称 `Claude Code Butler`，不再为扩展范围强行改写 `CCB` 寓意。
 
 ## 背景
 
@@ -16,24 +16,24 @@ Accepted（修订 2）— 产品所有者确认至少一个 `C` 必须代表 `Co
 
 ## 已接受方案
 
-### Coding Context Butler
+### Claude Code Butler
 
-- 中文描述：代码上下文管家。
-- `Coding` 保留项目因 coding 而生的核心定位，并覆盖 Claude Code、Cursor、Codex CLI、Gemini CLI 等 AI coding tools。
-- `Context` 覆盖配置、instructions、MCP、Agents、Skills、rules 等完整 coding context。
-- `Butler` 延续原产品的趣味、亲切感与用户认知，不把产品降格为抽象基础设施。
-- 保留 `CCB` acronym 和现有技术 identity。
+- 保留项目原始名称、用户认知和 `CCB` acronym。
+- 名称用于记录产品起源，不再承担精确描述全部支持工具的职责。
+- 多 AI Agent 配置管理范围通过产品副标题、UI 和文档表达。
+- Domain model 继续使用 `tool/registry/artifact/capability`，不因品牌回退重新耦合 Claude。
 
 ## 未采用方案
 
 - `Config Control Base`：技术语义清晰，但品牌辨识度较弱，也没有保留 coding-first 的产品根基。
 - `Cross-tool Configuration Butler`：传承 Butler 语义，但仍偏桌面助手，不足以表达规则平台。
 - `Coding Configuration Bridge（编程配置桥）`：曾在修订 1 中采用，后因语义过于基础设施化、中文表达生硬且缺少产品性格被产品所有者否决。
+- `Coding Context Butler（代码上下文管家）`：曾在修订 2 中采用，但配置文件管理与 context 概念并不等价，语义偏离核心业务，后被产品所有者否决。
 - 使用泛化的 AI/cognitive 语义：覆盖范围较宽，但弱化了项目服务 AI coding workflows 的核心定位。
 
 ## 决策
 
-采用 `CCB — Coding Context Butler（代码上下文管家）` 作为 v1.5.0 产品全称，保留：
+采用 `CCB — Claude Code Butler` 作为 v1.5.0 产品全称，保留：
 
 - package name `ccb`
 - user data directory `.ccb`
@@ -46,6 +46,6 @@ Accepted（修订 2）— 产品所有者确认至少一个 `C` 必须代表 `Co
 
 以下事项不影响本 ADR 的 `Accepted` 状态，可在对应 UI/installer 实施阶段决定：
 
-1. 中文界面展示“CCB”“代码上下文管家”或组合名称的具体层级。
-2. v1.5.0 installer 显示 `CCB`，还是 `CCB - Coding Context Butler`。
+1. 中文界面以 `CCB` 或 `Claude Code Butler` 为主，副标题说明多 AI Agent 配置管理能力。
+2. v1.5.0 installer 继续显示 `CCB`，避免不必要的安装 identity 变化。
 3. repository rename 是否推迟到 v1.5.0 发布后，以降低代码迁移和链接失效风险。
