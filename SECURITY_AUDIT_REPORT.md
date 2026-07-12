@@ -131,3 +131,12 @@ Registry 中以下规则使用 `metavariable-name:module`，Semgrep OSS CLI `1.1
 - 本阶段 Semgrep full scan 继续覆盖 183 targets / 369 rules，结果为 `0 findings / 0 errors`。
 - 通用 backup create/prune 使用单进程 mutation queue；retention 只删除经过 UUID、metadata/content 普通文件与路径一致性校验的 service-owned records。
 - 本阶段 Semgrep full scan 覆盖 183 targets / 369 rules，结果保持 `0 findings / 0 errors`。
+
+### 2026-07-13：Phase 5 performance lifecycle 增量复审
+
+- Semgrep full scan 覆盖 184 个 Git tracked targets、执行 369 条规则，约 100% lines parsed，结果为 `0 findings / 0 errors`。
+- 对本阶段 5 个 lifecycle/scheduler implementation 与 spec paths 显式补扫，执行 332 条适用规则，结果同为 `0 findings / 0 errors`。
+- Root 与独立 proxy package 的 `npm audit --audit-level=low` 均为 `0 vulnerabilities`；full Vitest 为 20 files / 122 tests，TypeScript、ESLint、root/proxy builds 全部通过。
+- Renderer background scheduler 只调度固定 store actions，不接收 renderer 字符串、路径或 executable；cancel 仅阻止尚未启动的 batch，不隐藏已发出 IPC 的真实状态。
+- StatisticsService shutdown 使用幂等 Promise barrier，auto-save 串行化，并由 app-level single quit guard 等待 cleanup，降低退出阶段部分写入与并发写入风险。
+- 本轮未启动应用，安全结论只覆盖静态分析、dependency audit、unit contract 与 production build；runtime Electron security checklist 仍应在 release 验收阶段执行。

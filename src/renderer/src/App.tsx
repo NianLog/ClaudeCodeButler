@@ -10,6 +10,7 @@ import { useSettingsStore } from './store/settings-store'
 import { useConfigListStore } from './store/config-list-store'
 import { useRuleStore } from './store/rule-store'
 import { useTranslation } from './locales/useTranslation'
+import { scheduleStartupBatches, withTimeout } from './utils/startup-scheduler'
 import ModernLayout from './components/Layout/ModernLayout'
 const ModernConfigPanel = React.lazy(() => import('./components/Config/ModernConfigPanel'))
 const AutomationPanel = React.lazy(() => import('./components/Automation/AutomationPanel'))
@@ -93,18 +94,9 @@ const AppContent: React.FC = () => {
   // 应用初始化
   useEffect(() => {
     let cancelled = false
+    let cancelBackgroundTasks: (() => void) | undefined
 
     const initApp = async () => {
-      // 带超时的 Promise 包装
-      const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> => {
-        return Promise.race([
-          promise,
-          new Promise<T>((_, reject) => 
-            setTimeout(() => reject(new Error(`${name} 初始化超时 (${timeoutMs}ms)`)), timeoutMs)
-          )
-        ])
-      }
-
       // 安全执行初始化函数
       const safeInit = async (fn: () => Promise<void>, name: string): Promise<void> => {
         try {
@@ -122,15 +114,6 @@ const AppContent: React.FC = () => {
           safeInit(initializeSettings, 'Settings')
         ]
 
-        // 后台任务：不再阻塞首屏渲染
-        const backgroundTasks = [
-          safeInit(refreshConfigs, 'Configs'),
-          safeInit(refreshRules, 'Rules'),
-          safeInit(loadExecutionLogs, 'ExecutionLogs'),
-          safeInit(loadStats, 'Stats')
-        ]
-
-        void Promise.allSettled(backgroundTasks)
         await Promise.allSettled(criticalTasks)
 
         if (cancelled) {
@@ -138,6 +121,19 @@ const AppContent: React.FC = () => {
         }
 
         setIsAppLoading(false)
+
+        // 非关键数据在首屏完成后分批加载，降低 IPC 与磁盘 I/O 的启动竞争。
+        const backgroundSchedule = scheduleStartupBatches([
+          [
+            () => safeInit(refreshConfigs, 'Configs'),
+            () => safeInit(refreshRules, 'Rules')
+          ],
+          [
+            () => safeInit(loadExecutionLogs, 'ExecutionLogs'),
+            () => safeInit(loadStats, 'Stats')
+          ]
+        ])
+        cancelBackgroundTasks = backgroundSchedule.cancel
       } catch (error) {
         if (cancelled) {
           return
@@ -157,6 +153,7 @@ const AppContent: React.FC = () => {
 
     return () => {
       cancelled = true
+      cancelBackgroundTasks?.()
     }
   }, [initialize, initializeSettings, loadExecutionLogs, loadStats, message, refreshConfigs, refreshRules, t])
 

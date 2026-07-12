@@ -1,6 +1,6 @@
 /**
- * 统计服务
- * 负责收集、存储和查询应用使用统计数据
+ * @file 统计服务
+ * @description 负责收集、持久化和查询应用使用统计数据，并管理自动保存生命周期。
  */
 
 import { app } from 'electron'
@@ -100,6 +100,10 @@ export class StatisticsService {
   private saveInterval = 60000  // 保存间隔(1分钟)
   private saveTimer: NodeJS.Timeout | null = null
   private appStartTime: number = Date.now()
+  private readonly initializationPromise: Promise<void>
+  private autoSavePromise: Promise<void> = Promise.resolve()
+  private shutdownPromise: Promise<void> | null = null
+  private isShuttingDown = false
 
   constructor() {
     const userDataPath = app.getPath('userData')
@@ -107,7 +111,7 @@ export class StatisticsService {
     this.eventsFile = path.join(this.statsDir, 'events.json')
     this.summaryFile = path.join(this.statsDir, 'summary.json')
 
-    this.initialize()
+    this.initializationPromise = this.initialize()
   }
 
   /**
@@ -119,13 +123,19 @@ export class StatisticsService {
       await fs.ensureDir(this.statsDir)
 
       // 加载已有事件
-      await this.loadEvents()
+      const storedEvents = await this.loadEvents()
+
+      // 合并初始化期间接收到的事件，避免异步磁盘读取覆盖内存中的新事件。
+      this.events = [...storedEvents, ...this.events]
+      this.trimEvents()
 
       // 记录应用启动
       this.recordEvent(StatEventType.APP_START)
 
       // 启动定期保存
-      this.startAutoSave()
+      if (!this.isShuttingDown) {
+        this.startAutoSave()
+      }
 
       statisticsLogger.info('初始化完成')
     } catch (error) {
@@ -136,22 +146,24 @@ export class StatisticsService {
   /**
    * 加载已有事件
    */
-  private async loadEvents(): Promise<void> {
+  private async loadEvents(): Promise<StatEvent[]> {
     try {
       if (await fs.pathExists(this.eventsFile)) {
         const data = await fs.readJSON(this.eventsFile)
-        this.events = Array.isArray(data) ? data : []
+        const events = Array.isArray(data) ? data as StatEvent[] : []
 
         // 清理过期事件(保留最近90天)
         const cutoffTime = Date.now() - 90 * 24 * 60 * 60 * 1000
-        this.events = this.events.filter(e => e.timestamp > cutoffTime)
+        const retainedEvents = events.filter(e => e.timestamp > cutoffTime)
 
-        statisticsLogger.info(`加载了 ${this.events.length} 个历史事件`)
+        statisticsLogger.info(`加载了 ${retainedEvents.length} 个历史事件`)
+        return retainedEvents
       }
     } catch (error) {
       statisticsLogger.error('加载事件失败', error)
-      this.events = []
     }
+
+    return []
   }
 
   /**
@@ -174,9 +186,23 @@ export class StatisticsService {
     }
 
     this.saveTimer = setInterval(() => {
-      this.saveEvents()
-      this.generateSummary()
+      this.queueAutoSave()
     }, this.saveInterval)
+    this.saveTimer.unref()
+  }
+
+  /**
+   * 将自动保存任务串行加入队列，防止慢磁盘上出现重叠写入。
+   */
+  private queueAutoSave(): void {
+    this.autoSavePromise = this.autoSavePromise
+      .then(async () => {
+        await this.saveEvents()
+        await this.generateSummary()
+      })
+      .catch(error => {
+        statisticsLogger.error('自动保存失败', error)
+      })
   }
 
   /**
@@ -201,12 +227,18 @@ export class StatisticsService {
 
     this.events.push(event)
 
-    // 限制事件数量
+    this.trimEvents()
+
+    // console.log(`[统计服务] 记录事件: ${type}`, data)
+  }
+
+  /**
+   * 将内存事件限制在最近的最大保留数量内。
+   */
+  private trimEvents(): void {
     if (this.events.length > this.maxEvents) {
       this.events = this.events.slice(-this.maxEvents)
     }
-
-    // console.log(`[统计服务] 记录事件: ${type}`, data)
   }
 
   /**
@@ -341,6 +373,8 @@ export class StatisticsService {
    * 生成统计摘要
    */
   public async generateSummary(timeRange?: { start: number; end: number }): Promise<StatisticsSummary> {
+    await this.initializationPromise
+
     const range = timeRange || {
       start: Date.now() - 30 * 24 * 60 * 60 * 1000,  // 最近30天
       end: Date.now()
@@ -367,6 +401,8 @@ export class StatisticsService {
    * 获取统计摘要
    */
   public async getSummary(timeRange?: { start: number; end: number }): Promise<StatisticsSummary> {
+    await this.initializationPromise
+
     // 如果有时间范围参数,实时生成
     if (timeRange) {
       return this.generateSummary(timeRange)
@@ -389,6 +425,8 @@ export class StatisticsService {
    * 清理过期数据
    */
   public async cleanup(daysToKeep: number = 90): Promise<void> {
+    await this.initializationPromise
+
     const cutoffTime = Date.now() - daysToKeep * 24 * 60 * 60 * 1000
     const originalLength = this.events.length
 
@@ -403,6 +441,8 @@ export class StatisticsService {
    * 导出统计数据
    */
   public async exportStats(exportPath: string): Promise<void> {
+    await this.initializationPromise
+
     const summary = await this.generateSummary()
     await fs.writeJSON(exportPath, {
       summary,
@@ -415,10 +455,24 @@ export class StatisticsService {
    * 关闭统计服务
    */
   public async shutdown(): Promise<void> {
+    if (this.shutdownPromise) {
+      return this.shutdownPromise
+    }
+
+    this.isShuttingDown = true
+    this.shutdownPromise = this.performShutdown()
+    return this.shutdownPromise
+  }
+
+  /**
+   * 等待初始化和在途自动保存完成，然后持久化唯一的关闭事件。
+   */
+  private async performShutdown(): Promise<void> {
     statisticsLogger.info('关闭中')
 
-    // 停止自动保存
+    await this.initializationPromise
     this.stopAutoSave()
+    await this.autoSavePromise
 
     // 记录应用关闭
     this.recordEvent(StatEventType.APP_CLOSE)

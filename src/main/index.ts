@@ -31,6 +31,8 @@ class CCBApp {
   private taskScheduler: TaskScheduler
   private ruleEngine: typeof ruleEngineService // 添加规则引擎属性
   private enableDevTools: boolean // 是否启用开发者工具
+  private cleanupPromise: Promise<void> | null = null
+  private cleanupCompleted = false
 
   constructor() {
     this.windowManager = new WindowManager()
@@ -78,13 +80,27 @@ class CCBApp {
       }
     })
 
-    app.on('before-quit', async () => {
+    app.on('before-quit', (event) => {
+      if (this.cleanupCompleted) {
+        return
+      }
+
+      // Electron 不会等待 async event listener，必须阻止本次退出并在清理完成后重新触发。
+      event.preventDefault()
+      if (this.cleanupPromise) {
+        return
+      }
+
       // 允许真正退出
       const mainWindow = this.windowManager.getMainWindow()
       if (mainWindow) {
         mainWindow.removeAllListeners('close')
       }
-      await this.cleanup()
+
+      this.cleanupPromise = this.cleanup().finally(() => {
+        this.cleanupCompleted = true
+        app.quit()
+      })
     })
 
     if (process.env.NODE_ENV === 'development') {

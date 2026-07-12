@@ -31,6 +31,8 @@
 ### Changed
 
 - 应用版本检查与 registry manifest 检查并发执行，避免两个网络 timeout 串行叠加。
+- 首屏只立即执行 AppStore 与 Settings critical 初始化；Configs/Rules 和 ExecutionLogs/Stats 改为首屏完成后的两组 idle batches，减少启动阶段 IPC 与磁盘 I/O 竞争。
+- StatisticsService 初始化、auto-save 与 shutdown 增加串行 lifecycle barrier；常驻 interval 使用 `unref()`，不再独自阻止 main process 退出。
 - 品牌恢复并保留原始名称 `Claude Code Butler`；`Coding Configuration Bridge` 与 `Coding Context Butler` 两个候选均已否决，产品能力范围不再强行映射到缩写释义。
 - 主应用 package version 升级为 `1.5.0`；独立 proxy package、appId、`.ccb` 与 repository identity 保持兼容。
 - Effective registry 增加 single-flight snapshot cache，并根据 installed/last-known-good storage fingerprint 自动失效。
@@ -41,6 +43,9 @@
 ### Fixed
 
 - 将 Ant Design Modal 已废弃的 `destroyOnClose` 迁移为 `destroyOnHidden`，消除控制台 deprecation warning。
+- 修复初始化 Promise 提前完成后 timeout timer 仍存活 15 秒的问题，并在 renderer 卸载时取消未启动的后台批次。
+- 修复 statistics 磁盘历史覆盖初始化期间新事件、auto-save 重叠写入、重复 shutdown 写入多个关闭事件的问题。
+- 修复 Electron 不等待 async `before-quit` listener 导致退出清理可能未完成的问题；改为单次 guard 阻止退出，cleanup 完成后再放行。
 
 ### Security
 
@@ -53,7 +58,8 @@
 - 新增 registry validator、registry storage/rollback、manifest-only update、explicit install 与 performance snapshot 单元测试。
 - 新增 detector/path resolver 与 artifact discovery/read 安全边界单元测试。
 - 新增 codec 与 capability-driven edit/backup/restore 回归测试。
-- Full Vitest 当前为 18 个测试文件、116 项测试全部通过。
+- 新增 renderer startup scheduler 与 StatisticsService lifecycle 回归测试。
+- Full Vitest 当前为 20 个测试文件、122 项测试全部通过。
 
 ## [1.4.0] - 2026-06-15
 
