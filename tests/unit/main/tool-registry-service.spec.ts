@@ -98,7 +98,7 @@ describe('ToolRegistryService', () => {
     const snapshot = await service.getSnapshot()
 
     expect(snapshot.installedVersion).toBe('1.1.0')
-    expect(snapshot.tools.map((tool) => tool.toolId)).toEqual(['claude-code', 'example-tool'])
+    expect(snapshot.tools.map((tool) => tool.toolId)).toEqual(['claude-code', 'codex-cli', 'example-tool'])
   })
 
   it('应拒绝不兼容 app version 与隐式 downgrade', async () => {

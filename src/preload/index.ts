@@ -46,7 +46,10 @@ import type {
   TerminalType
 } from '@shared/types/terminal'
 import type {
+  ConfigArtifactContent,
+  DiscoveredConfigArtifact,
   ToolDefinition,
+  ToolDetectionResult,
   ToolRegistrySnapshot,
   ToolRegistryUpdateStatus
 } from '@shared/tool-registry'
@@ -219,6 +222,20 @@ interface ToolRegistryAPI {
   getSnapshot: () => Promise<{ success: boolean; data?: ToolRegistrySnapshot; error?: string }>
   /** 按 toolId 获取 definition */
   getTool: (toolId: string) => Promise<{ success: boolean; data?: ToolDefinition; error?: string }>
+  /** 检测 effective registry 中的工具 */
+  detectTools: () => Promise<{ success: boolean; data?: ToolDetectionResult[]; error?: string }>
+  /** 发现指定工具在当前平台存在的配置资产 */
+  discoverArtifacts: (toolId: string) => Promise<{
+    success: boolean
+    data?: DiscoveredConfigArtifact[]
+    error?: string
+  }>
+  /** 读取 discovery 返回且 registry 允许的配置资产 */
+  readArtifact: (toolId: string, artifactId: string, path: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactContent
+    error?: string
+  }>
   /** 获取当前 update 状态 */
   getUpdateStatus: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
   /** 只检查 manifest，不下载 bundle */
@@ -802,6 +819,10 @@ const systemAPI: SystemAPI = {
 const toolRegistryAPI: ToolRegistryAPI = {
   getSnapshot: () => ipcRenderer.invoke('toolRegistry:getSnapshot'),
   getTool: (toolId: string) => ipcRenderer.invoke('toolRegistry:getTool', toolId),
+  detectTools: () => ipcRenderer.invoke('toolRegistry:detectTools'),
+  discoverArtifacts: (toolId: string) => ipcRenderer.invoke('toolRegistry:discoverArtifacts', toolId),
+  readArtifact: (toolId: string, artifactId: string, path: string) =>
+    ipcRenderer.invoke('toolRegistry:readArtifact', toolId, artifactId, path),
   getUpdateStatus: () => ipcRenderer.invoke('toolRegistry:getUpdateStatus'),
   checkForUpdates: () => ipcRenderer.invoke('toolRegistry:checkForUpdates'),
   installAvailableUpdate: () => ipcRenderer.invoke('toolRegistry:installAvailableUpdate'),

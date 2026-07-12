@@ -194,3 +194,37 @@ export interface ToolRegistrySnapshot {
   /** 是否因 installed 损坏回退到 last-known-good */
   recoveredFromLastKnownGood: boolean
 }
+
+/** 工具检测结果 */
+export interface ToolDetectionResult {
+  /** 工具 identifier */
+  toolId: string
+  /** 是否命中至少一个 detector */
+  detected: boolean
+  /** 命中的 detector 数量 */
+  matchedDetectors: number
+  /** detector 总数 */
+  totalDetectors: number
+}
+
+/** 只读配置资产发现结果 */
+export interface DiscoveredConfigArtifact {
+  /** 所属工具 identifier */
+  toolId: string
+  /** 配置资产 identifier */
+  artifactId: string
+  /** 文件内容格式 */
+  format: ArtifactFormat
+  /** 解析后的绝对路径 */
+  path: string
+  /** 文件大小 bytes */
+  size: number
+  /** ISO-8601 修改时间 */
+  lastModifiedAt: string
+}
+
+/** 只读配置资产内容 */
+export interface ConfigArtifactContent extends DiscoveredConfigArtifact {
+  /** 原始 UTF-8 文本；首版不对 TOML 等未实现 codec 的格式伪造 parse 结果 */
+  content: string
+}

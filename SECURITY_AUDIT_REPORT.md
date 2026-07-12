@@ -77,3 +77,26 @@ Registry 中以下规则使用 `metavariable-name:module`，Semgrep OSS CLI `1.1
 - `javascript.express.web.cors-default-config-express.cors-default-config-express`
 
 最终扫描通过 `--exclude-rule` 明确排除这 3 条规则。人工补偿检查确认项目未使用 CryptoJS 或 Koa；Express default CORS 问题已发现并移除。若 CI 后续启用 Semgrep Pro，应移除这些 exclusions 并恢复对应规则。
+
+### 2026-07-12：v1.5.0 generic discovery 增量复审
+
+#### 审计范围与结果
+
+- 使用根目录 `.venv` 中锁定的 Semgrep CLI `1.169.0`，复用 `p/security-audit`、`p/owasp-top-ten`、`p/javascript` 与既有 3 条 OSS Pro-only exclusions。
+- 扫描 179 个 Git tracked targets、执行 369 条规则，约 100% lines parsed；JSON 原始结果为 `0 findings / 0 errors`。
+- Root 与 `src/proxy-server` 的 `npm audit --audit-level=low` 均为 `0 vulnerabilities`。
+- Full Vitest 为 16 files / 104 tests，TypeScript、ESLint、root production build 与 proxy-server build 全部通过。
+
+#### 本阶段安全改进
+
+1. Registry path template 只允许 `HOME`、`APPDATA`、`LOCALAPPDATA`、`XDG_CONFIG_HOME`、`CCB_DATA` 根变量，并拒绝 traversal、UNC、glob、未知变量和嵌套变量。
+2. `COMMAND_EXISTS` 使用 `execFile(locator, [command])`、`shell: false`、5 秒 timeout 与 executable-name allowlist，不接受参数或 shell metacharacters。
+3. Artifact discovery/read 每次从 effective registry 重新推导路径 allowlist；renderer 提供的 path 只作为候选选择器，不能扩展 main process 文件权限。
+4. Read-only artifact 限制为当前平台 registry 声明、具有 `READ` capability、最大 1 MiB 的普通文件，并拒绝最终文件及中间目录中的 symbolic link/junction。
+5. Codex CLI adapter 首版只声明 `DISCOVER` / `READ`，TOML 以 raw UTF-8 text 返回；未验证的 edit semantics 不会伪装为通用能力。
+
+#### 保留建议
+
+- Semgrep 属于 pattern-based SAST，`0 findings` 不能替代 runtime authorization review、secret scanning 或手工 threat modeling。
+- 当前路径校验适合本地可信用户模型；若未来引入多用户服务或不可信本地进程对抗，应进一步采用 OS-level file handles、identity checks 与更严格的 TOCTOU 防护。
+- Remote registry 在 Ed25519 publisher signature 未实施前应维持 preview/beta，不能仅凭 HTTPS 与 SHA-256 宣称 publisher authenticity。

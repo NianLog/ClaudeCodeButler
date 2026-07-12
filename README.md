@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⚡ CCB (Claude Code Butler)
+# ⚡ CCB (Coding Configuration Bridge)
 
-**A desktop configuration workbench for Claude Code power users**
+**A local-first configuration bridge for AI coding tools**
 
 English | [简体中文](./README_CN.md)
 
@@ -17,18 +17,20 @@ English | [简体中文](./README_CN.md)
 
 ## 📖 Introduction
 
-CCB (Claude Code Butler) is a local-first desktop application built with Electron, React, and TypeScript for managing Claude Code related assets. It centralizes config files, MCP servers, project bindings, automation rules, environment diagnostics, and managed-mode tooling into a single interface so users can edit, validate, preview, switch, and audit their setup without manually chasing files across directories.
+CCB (Coding Configuration Bridge) is a local-first desktop application built with Electron, React, and TypeScript. The current `1.4.0` release manages Claude Code assets; the in-development `1.5.0` foundation adds a bounded JSON registry, generic tool detection, and read-only configuration discovery so additional AI coding tools can be adapted without embedding tool-specific branches throughout the application.
 
 ### Project Status
 
 - **Current release baseline**: `1.4.0`
 - **Next milestone**: `1.5.0` foundation development in progress
+- **v1.5.0 implemented scope**: Claude Code and Codex CLI registry adapters, generic detection, and registry-allowlisted read-only artifact discovery
+- **v1.5.0 remaining scope**: generic validation/edit/backup/restore, UI migration, and measured runtime performance optimization
 - **Security baseline (2026-07-12)**: Semgrep `0 findings / 0 scan errors`, root and proxy-server npm audits `0 vulnerabilities`
-- **Verification baseline**: 84 tests across 14 test files, TypeScript checks, root production build, and proxy-server build passing
+- **Verification baseline**: 104 tests across 16 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
 
 The package version remains `1.4.0` until the `1.5.0` scope, acceptance criteria, and release plan are finalized. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
 
-The proposed new meaning of CCB is **Cognitive Configuration Bridge**, reflecting the transition from a Claude Code-only manager to a rule-driven multi-AI-tool configuration platform. This name is provisional until the product naming decision is confirmed.
+The accepted new meaning of CCB is **Coding Configuration Bridge**, preserving the project's coding-first origin while reflecting its transition from a Claude Code-only manager to a rule-driven configuration platform for multiple AI coding tools. The `CCB` acronym and existing `.ccb`, app identity, and repository identifiers remain compatible during the v1.5.0 transition.
 
 ### ✨ Key Features
 
@@ -368,9 +370,10 @@ The three excluded registry rules require the Semgrep Pro engine. Their correspo
 ### v1.5.0 foundation in progress
 
 - Added a declarative JSON tool registry model with bounded validation and an embedded Claude Code compatibility adapter.
+- Added a read-only Codex CLI adapter plus generic `PATH_EXISTS` / `COMMAND_EXISTS` detection and registry-allowlisted artifact discovery.
 - Added explicit, integrity-checked registry installation and last-known-good rollback; automatic checks fetch only the small manifest.
 - Added registry controls under Settings/About and a main-process-only on-demand performance snapshot exporter.
-- Architecture, security protocol, performance budgets, migration phases, and provisional brand naming are documented in [`docs/1.5.0`](./docs/1.5.0/README.md).
+- Architecture, security protocol, performance budgets, migration phases, and the accepted brand decision are documented in [`docs/1.5.0`](./docs/1.5.0/README.md).
 
 ### Product experience updates
 

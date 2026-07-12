@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⚡ CCB (Claude Code Butler)
+# ⚡ CCB (Coding Configuration Bridge / 编程配置桥)
 
-**面向 Claude Code 深度用户的桌面配置工作台**
+**面向 AI Coding 工具的本地优先配置桥**
 
 [English](./README.md) | 简体中文
 
@@ -17,18 +17,20 @@
 
 ## 📖 简介
 
-CCB (Claude Code Butler) 是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用，用于统一管理 Claude Code 相关配置资产。它把配置文件、MCP 服务器、项目绑定、自动化规则、环境诊断以及托管模式工具集中到同一个界面中，方便用户在图形界面内完成编辑、校验、预览、切换与审计，而不需要手工在多个目录里来回处理文件。
+CCB（Coding Configuration Bridge / 编程配置桥）是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用。当前 `1.4.0` 发布版聚焦 Claude Code 配置资产；开发中的 `1.5.0` foundation 已加入受约束 JSON registry、通用工具检测与只读配置发现，使新增 AI Coding 工具优先通过规则适配，而不是在应用中持续堆叠工具专用分支。
 
 ### 项目状态
 
 - **当前发布基线**：`1.4.0`
 - **下一里程碑**：`1.5.0` 基础设施开发中
+- **v1.5.0 已实施范围**：Claude Code 与 Codex CLI registry adapter、通用检测、registry allowlist 约束的只读 artifact discovery
+- **v1.5.0 待实施范围**：通用 validation/edit/backup/restore、UI 迁移与基于实测的 runtime performance 优化
 - **安全基线（2026-07-12）**：Semgrep `0 findings / 0 scan errors`，root 与 proxy-server npm audit 均为 `0 vulnerabilities`
-- **验证基线**：14 个测试文件共 84 项测试、TypeScript 检查、root production build 与 proxy-server build 全部通过
+- **验证基线**：16 个测试文件共 104 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
 
 在 `1.5.0` 的范围、验收标准与发布计划确认前，package version 继续保持 `1.4.0`，避免把开发目标误标为已发布版本。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
-CCB 的新全称建议为 **Cognitive Configuration Bridge（智能配置桥）**，用于表达从 Claude Code 专用管理器向规则驱动的多 AI 工具配置平台演进。该名称在产品命名决策确认前保持 provisional 状态。
+CCB 的新全称已确定为 **Coding Configuration Bridge（编程配置桥）**：`Coding` 保留项目因编程而生的核心语义，`Configuration Bridge` 表达从 Claude Code 专用管理器向规则驱动的多 AI 编程工具配置平台演进。v1.5.0 过渡期间继续兼容 `CCB` 缩写以及现有 `.ccb`、应用 identity 和仓库标识。
 
 ### ✨ 核心功能
 
@@ -368,9 +370,10 @@ semgrep scan \
 ### v1.5.0 基础设施开发中
 
 - 新增声明式 JSON 工具规则库模型、bounded validation 与内置 Claude Code 兼容 adapter。
+- 新增只读 Codex CLI adapter、通用 `PATH_EXISTS` / `COMMAND_EXISTS` 检测与 registry allowlist 约束的 artifact discovery。
 - 新增需用户明确确认、具备 integrity 校验的规则库安装和 last-known-good rollback；自动检查只获取小型 manifest。
 - Settings/About 已加入规则库操作入口，main process 新增完全按需的 performance snapshot exporter。
-- 架构、安全协议、性能预算、迁移阶段与 provisional 品牌方案见 [`docs/1.5.0`](./docs/1.5.0/README.md)。
+- 架构、安全协议、性能预算、迁移阶段与已接受的品牌决策见 [`docs/1.5.0`](./docs/1.5.0/README.md)。
 
 ### 产品体验更新
 

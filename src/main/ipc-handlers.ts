@@ -27,6 +27,7 @@ import { terminalManagementService } from './services/terminal-management-servic
 import { toolRegistryService } from './services/tool-registry-service'
 import { registryUpdateService } from './services/registry-update-service'
 import { performanceSnapshotService } from './services/performance-snapshot-service'
+import { toolArtifactDiscoveryService } from './services/tool-artifact-discovery-service'
 import {
   ensureAllowedUrl,
   ensurePathWithinBase,
@@ -113,6 +114,15 @@ export function setupIpcHandlers(): void {
 function setupToolRegistryHandlers(): void {
   ipcMain.handle('toolRegistry:getSnapshot', createSimpleHandler(() => toolRegistryService.getSnapshot()))
   ipcMain.handle('toolRegistry:getTool', createSimpleHandler((toolId: string) => toolRegistryService.getTool(toolId)))
+  ipcMain.handle('toolRegistry:detectTools', createSimpleHandler(() => toolArtifactDiscoveryService.detectTools()))
+  ipcMain.handle('toolRegistry:discoverArtifacts', createSimpleHandler((toolId: string) =>
+    toolArtifactDiscoveryService.discoverArtifacts(toolId)
+  ))
+  ipcMain.handle('toolRegistry:readArtifact', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string
+  ) => toolArtifactDiscoveryService.readArtifact(toolId, artifactId, requestedPath)))
   ipcMain.handle('toolRegistry:getUpdateStatus', createSimpleHandler(() => registryUpdateService.getStatus()))
   ipcMain.handle('toolRegistry:checkForUpdates', createSimpleHandler(() => registryUpdateService.checkForUpdates(app.getVersion())))
   ipcMain.handle('toolRegistry:installAvailableUpdate', createSimpleHandler(() =>

@@ -73,6 +73,43 @@
           "defaultTemplate": "# Global Instructions\n"
         }
       ]
+    },
+    {
+      "toolId": "codex-cli",
+      "definitionVersion": "1.0.0",
+      "displayName": {
+        "zh-CN": "Codex CLI",
+        "en-US": "Codex CLI"
+      },
+      "platforms": ["WINDOWS", "MACOS", "LINUX"],
+      "detectors": [
+        {
+          "type": "COMMAND_EXISTS",
+          "command": "codex"
+        },
+        {
+          "type": "PATH_EXISTS",
+          "path": "${HOME}/.codex/config.toml"
+        }
+      ],
+      "artifacts": [
+        {
+          "artifactId": "user-config",
+          "displayName": {
+            "zh-CN": "用户配置",
+            "en-US": "User Configuration"
+          },
+          "format": "TOML",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": ["${HOME}/.codex/config.toml"],
+            "MACOS": ["${HOME}/.codex/config.toml"],
+            "LINUX": ["${HOME}/.codex/config.toml"]
+          },
+          "capabilities": ["DISCOVER", "READ"],
+          "handler": "TEXT_FILE_V1"
+        }
+      ]
     }
   ]
 }

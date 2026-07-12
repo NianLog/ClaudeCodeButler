@@ -19,6 +19,8 @@ describe('validateToolRegistryBundle', () => {
     expect(result.success).toBe(true)
     expect(result.data?.tools[0].toolId).toBe('claude-code')
     expect(result.data?.tools[0].artifacts).toHaveLength(3)
+    expect(result.data?.tools[1].toolId).toBe('codex-cli')
+    expect(result.data?.tools[1].artifacts[0].capabilities).toEqual(['DISCOVER', 'READ'])
   })
 
   it('应拒绝 command detector 参数与未知 capability', () => {
