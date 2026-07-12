@@ -10,7 +10,7 @@ v1.5.0 将 CCB 转向“规则驱动的配置控制平面”：应用提供稳�
 
 让用户在一个本地优先的桌面应用中发现、理解、备份、验证和管理多个 AI 工具的配置；让维护者通过受约束的 JSON 规则演进适配，而不是不断复制业务代码。
 
-品牌确定使用 `CCB — Coding Configuration Bridge`，中文名称为“编程配置桥”。`Coding` 保留项目因编程而生的核心语义，`Configuration Bridge` 强调跨 AI 编程工具、跨配置形态的连接与治理，不再绑定 Claude Code。
+品牌确定使用 `CCB — Coding Context Butler`，中文描述为“代码上下文管家”。`Coding` 保留项目因编程而生的核心语义，`Context` 覆盖配置、instructions、MCP、Agents、Skills 与 rules，`Butler` 延续原产品有趣、亲切的管家人格，同时不再绑定 Claude Code。
 
 ## 3. v1.5.0 目标
 

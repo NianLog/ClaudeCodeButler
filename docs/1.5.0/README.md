@@ -2,7 +2,7 @@
 
 > 状态：Phase 1 registry core、manifest update、generic detection/read-only discovery 与 performance snapshot foundation 已实施
 > 基线提交：`42dff6d`
-> 当前发布版本：`1.4.0`（在 v1.5.0 验收完成前不提前修改 package version）
+> 当前开发版本：`1.5.0`（公共 release 仍需完成 UI 与性能验收）
 
 ## 文档
 
@@ -18,7 +18,7 @@
 2. 远程规则只允许引用应用内置、审计过的 declarative capabilities，不允许携带 JS、shell 或动态 module。
 3. 应用可以自动检查规则 manifest 版本，但完整规则包必须由用户明确确认后下载。
 4. Claude Code 在 v1.5.0 中作为第一个内置 adapter，现有配置和功能必须保持兼容。
-5. 品牌正式解释为 `Coding Configuration Bridge（编程配置桥）`；保留 `CCB`、`.ccb`、appId 与 repository identity 的兼容策略。
+5. 品牌正式解释为 `Coding Context Butler（代码上下文管家）`；保留 `CCB`、`.ccb`、appId 与 repository identity 的兼容策略。
 6. 性能优化以数据基线和预算为门禁，不接受无法测量的“感觉更快”。
 
 ## 当前实现进度
@@ -33,10 +33,11 @@
 - [x] On-demand performance snapshot/export foundation
 - [x] Generic detector/path resolver 与 read-only artifact discovery
 - [x] 第二个真实 AI tool read-only adapter
-- [ ] Generic format codecs、edit/backup/restore
+- [x] Generic format codecs、validation、edit/backup/restore foundation
 - [ ] 实机 performance baseline 与首批优化
-- [x] 品牌全称确认为 Coding Configuration Bridge
-- [ ] UI/installer 品牌迁移
+- [x] 品牌全称确认为 Coding Context Butler
+- [x] Runtime display branding 迁移
+- [ ] Generic management UI 与 installer 长文案迁移
 
 ### 当前安全边界
 
@@ -45,4 +46,4 @@
 - `COMMAND_EXISTS` 通过 `execFile` 参数数组和 `shell: false` 执行；首版 artifact read 拒绝 symbolic link 与超过 1 MiB 的文件。
 - Codex CLI adapter 当前仅支持 `DISCOVER` / `READ`，TOML 保持 raw UTF-8 text；未验证的 write semantics 不进入 1.5.0 foundation。
 
-> 开发期兼容提示：package version 当前仍为 `1.4.0`，因此 `minimumAppVersion: 1.5.0` 的远程 manifest 会被按设计拒绝。Release phase 正式 bump 到 `1.5.0` 后才启用 production registry update；内置 registry 不受影响。
+> 开发期兼容提示：package version 已为 `1.5.0`，满足同版本 remote manifest 的 compatibility check；remote registry 在 publisher signature 未实施前仍保持 preview/beta，不因版本升级自动扩大信任。

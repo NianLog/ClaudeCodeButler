@@ -10,7 +10,8 @@ import type {
   ConfigArtifactDefinition,
   DiscoveredConfigArtifact,
   ToolDefinition,
-  ToolDetectionResult
+  ToolDetectionResult,
+  ToolCapability
 } from '@shared/tool-registry'
 import { toolRegistryService, type ToolRegistryService } from './tool-registry-service'
 import { ToolDetectionService } from './tool-detection-service'
@@ -24,6 +25,16 @@ export interface ToolArtifactDiscoveryServiceOptions {
   registryService?: ToolRegistryService
   /** 安全 detector 与路径解析器 */
   detectionService?: ToolDetectionService
+}
+
+/** Registry capability 校验后的 artifact 与绝对路径 */
+export interface AuthorizedToolArtifact {
+  /** 当前 effective registry 中的工具定义 */
+  tool: ToolDefinition
+  /** 当前 effective registry 中的资产定义 */
+  artifact: ConfigArtifactDefinition
+  /** 与 registry candidate 完全匹配的规范路径 */
+  resolvedPath: string
 }
 
 /**
@@ -77,16 +88,12 @@ export class ToolArtifactDiscoveryService {
     artifactId: string,
     requestedPath: string
   ): Promise<ConfigArtifactContent> {
-    const tool = await this.requireTool(toolId)
-    const artifact = tool.artifacts.find((candidate) => candidate.artifactId === artifactId)
-    if (!artifact) throw new Error(`配置资产不存在: ${artifactId}`)
-    if (!artifact.capabilities.includes('READ')) {
-      throw new Error(`配置资产未声明 READ capability: ${artifactId}`)
-    }
-
-    const allowedPaths = this.resolveArtifactPaths(artifact)
-    const resolvedPath = allowedPaths.find((candidate) => this.pathsEqual(candidate, requestedPath))
-    if (!resolvedPath) throw new Error('拒绝读取 registry 未声明的配置路径')
+    const { artifact, resolvedPath } = await this.authorizeArtifact(
+      toolId,
+      artifactId,
+      requestedPath,
+      'READ'
+    )
 
     await this.assertNoSymbolicLinks(resolvedPath)
     const fileHandle = await open(resolvedPath, 'r')
@@ -119,6 +126,36 @@ export class ToolArtifactDiscoveryService {
     } finally {
       await fileHandle.close()
     }
+  }
+
+  /**
+   * 重新从 effective registry 解析并授权 artifact capability。
+   * @param toolId stable tool identifier
+   * @param artifactId stable artifact identifier
+   * @param requestedPath 调用方选择的绝对路径
+   * @param capability 本次操作要求的 capability
+   * @returns registry 授权后的 artifact 与规范路径
+   */
+  public async authorizeArtifact(
+    toolId: string,
+    artifactId: string,
+    requestedPath: string,
+    capability: ToolCapability
+  ): Promise<AuthorizedToolArtifact> {
+    const tool = await this.requireTool(toolId)
+    if (!tool.platforms.includes(this.detectionService.getPlatform())) {
+      throw new Error(`工具不支持当前平台: ${toolId}`)
+    }
+    const artifact = tool.artifacts.find((candidate) => candidate.artifactId === artifactId)
+    if (!artifact) throw new Error(`配置资产不存在: ${artifactId}`)
+    if (!artifact.capabilities.includes(capability)) {
+      throw new Error(`配置资产未声明 ${capability} capability: ${artifactId}`)
+    }
+    const resolvedPath = this.resolveArtifactPaths(artifact)
+      .find((candidate) => this.pathsEqual(candidate, requestedPath))
+    if (!resolvedPath) throw new Error('拒绝访问 registry 未声明的配置路径')
+    await this.assertNoSymbolicLinks(resolvedPath)
+    return { tool, artifact, resolvedPath }
   }
 
   /**

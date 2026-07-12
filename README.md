@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⚡ CCB (Coding Configuration Bridge)
+# ⚡ CCB (Coding Context Butler)
 
-**A local-first configuration bridge for AI coding tools**
+**Your local-first butler for AI coding context**
 
 English | [简体中文](./README_CN.md)
 
@@ -17,20 +17,21 @@ English | [简体中文](./README_CN.md)
 
 ## 📖 Introduction
 
-CCB (Coding Configuration Bridge) is a local-first desktop application built with Electron, React, and TypeScript. The current `1.4.0` release manages Claude Code assets; the in-development `1.5.0` foundation adds a bounded JSON registry, generic tool detection, and read-only configuration discovery so additional AI coding tools can be adapted without embedding tool-specific branches throughout the application.
+CCB (Coding Context Butler) is a local-first desktop application built with Electron, React, and TypeScript. Version `1.5.0` evolves the original Claude Code Butler into a rule-driven manager for the configuration, instructions, MCP servers, agents, skills, and other context used by AI coding tools.
 
 ### Project Status
 
-- **Current release baseline**: `1.4.0`
-- **Next milestone**: `1.5.0` foundation development in progress
+- **Current development version**: `1.5.0`
+- **Release baseline**: `1.4.0`
 - **v1.5.0 implemented scope**: Claude Code and Codex CLI registry adapters, generic detection, and registry-allowlisted read-only artifact discovery
-- **v1.5.0 remaining scope**: generic validation/edit/backup/restore, UI migration, and measured runtime performance optimization
+- **v1.5.0 implemented scope**: generic codecs, validation, atomic edit, backup/restore, and secure IPC foundation
+- **v1.5.0 remaining scope**: management UI migration and measured runtime performance optimization
 - **Security baseline (2026-07-12)**: Semgrep `0 findings / 0 scan errors`, root and proxy-server npm audits `0 vulnerabilities`
-- **Verification baseline**: 104 tests across 16 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
+- **Verification baseline**: 113 tests across 18 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
 
-The package version remains `1.4.0` until the `1.5.0` scope, acceptance criteria, and release plan are finalized. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
+The package version is now `1.5.0`; this marks an active development version rather than a completed public release. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
 
-The accepted new meaning of CCB is **Coding Configuration Bridge**, preserving the project's coding-first origin while reflecting its transition from a Claude Code-only manager to a rule-driven configuration platform for multiple AI coding tools. The `CCB` acronym and existing `.ccb`, app identity, and repository identifiers remain compatible during the v1.5.0 transition.
+The accepted new meaning of CCB is **Coding Context Butler**. `Coding` preserves why the project exists, `Context` covers the complete working context around AI coding tools, and `Butler` keeps the approachable personality and continuity of the original product. Existing `.ccb`, app identity, and repository identifiers remain compatible.
 
 ### ✨ Key Features
 

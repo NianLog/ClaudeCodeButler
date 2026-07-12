@@ -84,7 +84,7 @@ export const Logo: React.FC<LogoProps> = ({
   return (
     <img
       src={getIconPath()}
-      alt="Claude Code Butler Logo"
+      alt="Coding Context Butler Logo"
       className={`logo ${animated ? 'logo-animated' : ''} ${className}`}
       style={combinedStyle}
       decoding="async"

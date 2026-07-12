@@ -4,6 +4,7 @@
 
 import { join } from 'path'
 import { homedir } from 'os'
+import packageJson from '../../../package.json'
 
 /**
  * 应用信息
@@ -12,11 +13,11 @@ export const APP_INFO = {
   /** 应用名称 */
   NAME: 'CCB',
   /** 应用全称 */
-  FULL_NAME: 'Claude Code Butler',
+  FULL_NAME: 'Coding Context Butler',
   /** 版本号 */
-  VERSION: '1.4.0',
+  VERSION: packageJson.version,
   /** 描述 */
-  DESCRIPTION: 'Claude Code 配置管理工具',
+  DESCRIPTION: 'AI Coding 工具上下文管理平台',
   /** 作者 */
   AUTHOR: 'NianSir',
   /** 主页 */

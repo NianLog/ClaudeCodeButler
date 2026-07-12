@@ -982,7 +982,7 @@ const SettingsPanel: React.FC = () => {
           <div style={{ marginBottom: '16px' }}>
             <img
               src={new URL('../../assets/icons/ccb_256.png', import.meta.url).href}
-              alt="Claude Code Butler"
+              alt="Coding Context Butler"
               style={{ width: 128, height: 128 }}
             />
           </div>

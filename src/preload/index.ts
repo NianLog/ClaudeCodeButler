@@ -47,6 +47,8 @@ import type {
 } from '@shared/types/terminal'
 import type {
   ConfigArtifactContent,
+  ConfigArtifactBackup,
+  ConfigArtifactValidationResult,
   DiscoveredConfigArtifact,
   ToolDefinition,
   ToolDetectionResult,
@@ -232,6 +234,30 @@ interface ToolRegistryAPI {
   }>
   /** 读取 discovery 返回且 registry 允许的配置资产 */
   readArtifact: (toolId: string, artifactId: string, path: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactContent
+    error?: string
+  }>
+  /** 使用 registry format codec 校验配置 */
+  validateArtifact: (toolId: string, artifactId: string, path: string, content: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactValidationResult
+    error?: string
+  }>
+  /** 校验并原子更新 registry 授权配置 */
+  editArtifact: (toolId: string, artifactId: string, path: string, content: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactContent
+    error?: string
+  }>
+  /** 创建 registry 授权配置备份 */
+  createArtifactBackup: (toolId: string, artifactId: string, path: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactBackup
+    error?: string
+  }>
+  /** 恢复受控 backup identifier */
+  restoreArtifactBackup: (backupId: string) => Promise<{
     success: boolean
     data?: ConfigArtifactContent
     error?: string
@@ -823,6 +849,14 @@ const toolRegistryAPI: ToolRegistryAPI = {
   discoverArtifacts: (toolId: string) => ipcRenderer.invoke('toolRegistry:discoverArtifacts', toolId),
   readArtifact: (toolId: string, artifactId: string, path: string) =>
     ipcRenderer.invoke('toolRegistry:readArtifact', toolId, artifactId, path),
+  validateArtifact: (toolId: string, artifactId: string, path: string, content: string) =>
+    ipcRenderer.invoke('toolRegistry:validateArtifact', toolId, artifactId, path, content),
+  editArtifact: (toolId: string, artifactId: string, path: string, content: string) =>
+    ipcRenderer.invoke('toolRegistry:editArtifact', toolId, artifactId, path, content),
+  createArtifactBackup: (toolId: string, artifactId: string, path: string) =>
+    ipcRenderer.invoke('toolRegistry:createArtifactBackup', toolId, artifactId, path),
+  restoreArtifactBackup: (backupId: string) =>
+    ipcRenderer.invoke('toolRegistry:restoreArtifactBackup', backupId),
   getUpdateStatus: () => ipcRenderer.invoke('toolRegistry:getUpdateStatus'),
   checkForUpdates: () => ipcRenderer.invoke('toolRegistry:checkForUpdates'),
   installAvailableUpdate: () => ipcRenderer.invoke('toolRegistry:installAvailableUpdate'),

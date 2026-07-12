@@ -35,6 +35,7 @@ export const pathManager = {
   cacheDir: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.CACHE_DIR),
   configDir: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.CONFIG_DIR),
   registryDir: path.join(APP_DATA_BASE_DIR, 'registry'),
+  toolArtifactBackupDir: path.join(APP_DATA_BASE_DIR, 'backups', 'tool-artifacts'),
 
   // Claude 配置目录 (用户目录/.ccb/claude-configs)
   claudeConfigsDir: CLAUDE_CONFIGS_DIR,

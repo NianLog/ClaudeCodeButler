@@ -363,7 +363,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
             {!sidebarCollapsed && (
               <div className="logo-text">
                 <Text className="logo-title">CCB</Text>
-                <Text className="logo-subtitle">Claude Code Butler</Text>
+                <Text className="logo-subtitle">Coding Context Butler</Text>
               </div>
             )}
           </div>

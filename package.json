@@ -1,7 +1,7 @@
 {
   "name": "ccb",
-  "version": "1.4.0",
-  "description": "Claude Code Butler - 配置管理工具",
+  "version": "1.5.0",
+  "description": "Coding Context Butler - AI Coding 工具上下文管理平台",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "node scripts/dev-runner.cjs dev",

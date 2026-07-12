@@ -28,6 +28,7 @@ import { toolRegistryService } from './services/tool-registry-service'
 import { registryUpdateService } from './services/registry-update-service'
 import { performanceSnapshotService } from './services/performance-snapshot-service'
 import { toolArtifactDiscoveryService } from './services/tool-artifact-discovery-service'
+import { toolArtifactManagementService } from './services/tool-artifact-management-service'
 import {
   ensureAllowedUrl,
   ensurePathWithinBase,
@@ -123,6 +124,26 @@ function setupToolRegistryHandlers(): void {
     artifactId: string,
     requestedPath: string
   ) => toolArtifactDiscoveryService.readArtifact(toolId, artifactId, requestedPath)))
+  ipcMain.handle('toolRegistry:validateArtifact', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string,
+    content: string
+  ) => toolArtifactManagementService.validateArtifact(toolId, artifactId, requestedPath, content)))
+  ipcMain.handle('toolRegistry:editArtifact', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string,
+    content: string
+  ) => toolArtifactManagementService.editArtifact(toolId, artifactId, requestedPath, content)))
+  ipcMain.handle('toolRegistry:createArtifactBackup', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string
+  ) => toolArtifactManagementService.createBackup(toolId, artifactId, requestedPath)))
+  ipcMain.handle('toolRegistry:restoreArtifactBackup', createSimpleHandler((backupId: string) =>
+    toolArtifactManagementService.restoreBackup(backupId)
+  ))
   ipcMain.handle('toolRegistry:getUpdateStatus', createSimpleHandler(() => registryUpdateService.getStatus()))
   ipcMain.handle('toolRegistry:checkForUpdates', createSimpleHandler(() => registryUpdateService.checkForUpdates(app.getVersion())))
   ipcMain.handle('toolRegistry:installAvailableUpdate', createSimpleHandler(() =>

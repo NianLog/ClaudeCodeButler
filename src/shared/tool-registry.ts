@@ -228,3 +228,29 @@ export interface ConfigArtifactContent extends DiscoveredConfigArtifact {
   /** 原始 UTF-8 文本；首版不对 TOML 等未实现 codec 的格式伪造 parse 结果 */
   content: string
 }
+
+/** 配置资产 validation 结果 */
+export interface ConfigArtifactValidationResult {
+  /** 是否通过对应 format codec 校验 */
+  valid: boolean
+  /** format codec 标识 */
+  format: ArtifactFormat
+  /** 面向用户的错误摘要 */
+  errors: string[]
+}
+
+/** 通用配置资产备份 metadata */
+export interface ConfigArtifactBackup {
+  /** 不可预测的 backup identifier */
+  backupId: string
+  /** 所属工具 identifier */
+  toolId: string
+  /** 配置资产 identifier */
+  artifactId: string
+  /** 原始 registry allowlisted 路径 */
+  originalPath: string
+  /** 备份文件大小 bytes */
+  size: number
+  /** ISO-8601 创建时间 */
+  createdAt: string
+}

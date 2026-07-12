@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⚡ CCB (Coding Configuration Bridge / 编程配置桥)
+# ⚡ CCB (Coding Context Butler / 代码上下文管家)
 
-**面向 AI Coding 工具的本地优先配置桥**
+**你的本地优先 AI Coding 上下文管家**
 
 [English](./README.md) | 简体中文
 
@@ -17,20 +17,21 @@
 
 ## 📖 简介
 
-CCB（Coding Configuration Bridge / 编程配置桥）是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用。当前 `1.4.0` 发布版聚焦 Claude Code 配置资产；开发中的 `1.5.0` foundation 已加入受约束 JSON registry、通用工具检测与只读配置发现，使新增 AI Coding 工具优先通过规则适配，而不是在应用中持续堆叠工具专用分支。
+CCB（Coding Context Butler / 代码上下文管家）是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用。`1.5.0` 将原 Claude Code Butler 演进为规则驱动的多 AI Coding 工具管理平台，统一治理配置、instructions、MCP servers、Agents、Skills 及其他工作上下文。
 
 ### 项目状态
 
-- **当前发布基线**：`1.4.0`
-- **下一里程碑**：`1.5.0` 基础设施开发中
+- **当前开发版本**：`1.5.0`
+- **发布基线**：`1.4.0`
 - **v1.5.0 已实施范围**：Claude Code 与 Codex CLI registry adapter、通用检测、registry allowlist 约束的只读 artifact discovery
-- **v1.5.0 待实施范围**：通用 validation/edit/backup/restore、UI 迁移与基于实测的 runtime performance 优化
+- **v1.5.0 已实施范围**：通用 codecs、validation、atomic edit、backup/restore 与安全 IPC foundation
+- **v1.5.0 待实施范围**：管理 UI 迁移与基于实测的 runtime performance 优化
 - **安全基线（2026-07-12）**：Semgrep `0 findings / 0 scan errors`，root 与 proxy-server npm audit 均为 `0 vulnerabilities`
-- **验证基线**：16 个测试文件共 104 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
+- **验证基线**：18 个测试文件共 113 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
 
-在 `1.5.0` 的范围、验收标准与发布计划确认前，package version 继续保持 `1.4.0`，避免把开发目标误标为已发布版本。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
+package version 已升级为 `1.5.0`，它表示当前开发版本，不代表公共 release 已完成。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
-CCB 的新全称已确定为 **Coding Configuration Bridge（编程配置桥）**：`Coding` 保留项目因编程而生的核心语义，`Configuration Bridge` 表达从 Claude Code 专用管理器向规则驱动的多 AI 编程工具配置平台演进。v1.5.0 过渡期间继续兼容 `CCB` 缩写以及现有 `.ccb`、应用 identity 和仓库标识。
+CCB 的新全称确定为 **Coding Context Butler（代码上下文管家）**：`Coding` 保留项目因编程而生的核心语义，`Context` 覆盖 AI Coding 工具运行所需的完整上下文，`Butler` 延续原产品更有趣、亲切的管家性格。现有 `.ccb`、应用 identity 和仓库标识继续兼容。
 
 ### ✨ 核心功能
 

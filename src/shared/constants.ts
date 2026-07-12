@@ -10,15 +10,15 @@ import packageJson from '../../package.json'
  * 应用信息
  */
 export const APP_INFO = {
-  name: 'Claude Code Butler',
+  name: 'Coding Context Butler',
   version: packageJson.version,
-  description: 'Claude Code 配置管理工具',
+  description: 'AI Coding 工具上下文管理平台',
   author: 'NianSir',
   repository: 'https://github.com/ccb-team/claude-code-butler',
   // 别名
-  FULL_NAME: 'Claude Code Butler',
+  FULL_NAME: 'Coding Context Butler',
   VERSION: packageJson.version,
-  DESCRIPTION: 'Claude Code 配置管理工具',
+  DESCRIPTION: 'AI Coding 工具上下文管理平台',
   AUTHOR: 'NianSir',
   HOMEPAGE: 'https://github.com/ccb-team/claude-code-butler'
 } as const

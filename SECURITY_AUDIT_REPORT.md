@@ -100,3 +100,20 @@ Registry 中以下规则使用 `metavariable-name:module`，Semgrep OSS CLI `1.1
 - Semgrep 属于 pattern-based SAST，`0 findings` 不能替代 runtime authorization review、secret scanning 或手工 threat modeling。
 - 当前路径校验适合本地可信用户模型；若未来引入多用户服务或不可信本地进程对抗，应进一步采用 OS-level file handles、identity checks 与更严格的 TOCTOU 防护。
 - Remote registry 在 Ed25519 publisher signature 未实施前应维持 preview/beta，不能仅凭 HTTPS 与 SHA-256 宣称 publisher authenticity。
+
+### 2026-07-12：v1.5.0 generic management 增量复审
+
+#### 审计范围与结果
+
+- Semgrep CLI `1.169.0` full scan 覆盖 181 个既有 Git tracked targets、执行 369 条规则，约 100% lines parsed，结果为 `0 findings / 0 errors`。
+- Semgrep 默认 tracked-file 枚举不包含 staged-but-uncommitted new files，因此对 2 个新 services 与 2 个新 specs 额外执行显式路径扫描；4 targets、332 applicable rules 同样为 `0 findings / 0 errors`。
+- Full Vitest 为 18 files / 113 tests；TypeScript、ESLint、root production build、proxy-server build 全部通过。
+- Root 与独立 proxy package 的 `npm audit --audit-level=low` 均为 `0 vulnerabilities`。
+
+#### 本阶段安全改进
+
+1. Generic edit、validate、backup、restore 各自要求 effective registry 中对应 UPPERCASE capability，不能由 format 或 renderer 自行推导权限。
+2. JSON/JSONC/YAML codecs 限制为内置实现，并加入 64-level / 50,000-node 结构预算；remote registry 不能下载 parser code。TOML 在可信 parser 接入前明确拒绝 validation/edit，不伪造支持。
+3. Edit 使用目标目录内随机 exclusive temp file、flush 与 atomic rename；带 `BACKUP` capability 的 artifact 在更新前自动备份，invalid content 不修改原文件。
+4. Backup 使用 UUID、exclusive copy、受控目录和 bounded metadata；restore 根据 metadata 重新校验 registry path 与 `RESTORE` capability，拒绝 symbolic link、超限内容、无效 UTF-8 和目标路径篡改。
+5. Codex CLI adapter 继续仅声明 `DISCOVER` / `READ`，因此新管理 IPC 不会扩大其写权限。
