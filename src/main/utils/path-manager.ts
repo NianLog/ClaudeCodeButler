@@ -7,6 +7,7 @@
 import path from 'path';
 import os from 'os';
 import { CONFIG_FILES, PATHS as PATH_CONSTANTS } from '@shared/constants';
+import { ClaudeWorkspacePathFacade } from './claude-workspace-path-facade';
 
 // 使用用户主目录而不是程序运行目录
 const HOME_DIR = os.homedir();
@@ -14,9 +15,9 @@ const HOME_DIR = os.homedir();
 // CCB 主目录 (用户目录/.ccb)
 const APP_DATA_BASE_DIR = path.join(HOME_DIR, PATH_CONSTANTS.USER_DATA);
 
-// Claude 配置目录 (用户目录/.ccb/claude-configs)
-// 不再使用独立的 .claude 目录,统一管理到 .ccb 下
-const CLAUDE_CONFIGS_DIR = path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.CLAUDE_CONFIGS_DIR);
+// v1.5.0 明确保持 legacy path，只有受控 migration 完成后才能切换 WORKSPACE_V2。
+export const claudeWorkspacePathFacade = new ClaudeWorkspacePathFacade(APP_DATA_BASE_DIR, 'LEGACY_COMPAT');
+const CLAUDE_WORKSPACE_PATHS = claudeWorkspacePathFacade.getPaths();
 
 /**
  * 包含应用所有关键绝对路径的对象
@@ -37,8 +38,11 @@ export const pathManager = {
   registryDir: path.join(APP_DATA_BASE_DIR, 'registry'),
   toolArtifactBackupDir: path.join(APP_DATA_BASE_DIR, 'backups', 'tool-artifacts'),
 
-  // Claude 配置目录 (用户目录/.ccb/claude-configs)
-  claudeConfigsDir: CLAUDE_CONFIGS_DIR,
+  // Claude 配置目录 compatibility alias；v1.5.0 active path 仍为 ~/.ccb/claude-configs。
+  claudeConfigsDir: CLAUDE_WORKSPACE_PATHS.activePath,
+  claudeLegacyConfigsDir: CLAUDE_WORKSPACE_PATHS.legacyPath,
+  claudeWorkspaceDir: CLAUDE_WORKSPACE_PATHS.workspacePath,
+  claudeWorkspaceMode: CLAUDE_WORKSPACE_PATHS.mode,
 
   // 具体文件路径
   rulesFile: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.DATA_DIR, CONFIG_FILES.RULES_FILE),
@@ -61,7 +65,7 @@ export const pathManager = {
    * @returns {string} 绝对路径 (用户目录/.ccb/claude-configs/文件名)
    */
   getClaudeConfigPath(fileName: string): string {
-    return path.join(CLAUDE_CONFIGS_DIR, fileName);
+    return claudeWorkspacePathFacade.resolveActiveFile(fileName);
   },
 
   /**

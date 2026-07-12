@@ -20,6 +20,7 @@ import type {
 import { managedModeLogRotationService } from './managed-mode-log-rotation.service'
 import { ManagedModeConfigStore } from './managed-mode-config-store'
 import { logger } from '../utils/logger'
+import { pathManager } from '../utils/path-manager'
 
 const managedModeLogger = logger.child('ManagedModeService')
 
@@ -919,7 +920,7 @@ export class ManagedModeService extends EventEmitter {
       if (!this.config) return
       const managedConfig = this.config
 
-      const configDir = path.join(os.homedir(), '.ccb', 'claude-configs')
+      const configDir = pathManager.claudeConfigsDir
 
       // 检查目录是否存在
       try {

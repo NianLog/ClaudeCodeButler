@@ -336,8 +336,7 @@ export const PATHS = {
   DATA_DIR: 'data',
   CACHE_DIR: 'cache',
 
-  // Claude 配置目录 (用户目录/.ccb/claude-configs)
-  // 将原 .claude 目录的配置统一管理到 .ccb 下
+  // @deprecated 仅保留 legacy compatibility；main process 新代码应使用 ClaudeWorkspacePathFacade。
   CLAUDE_CONFIGS_DIR: 'claude-configs'
 } as const
 

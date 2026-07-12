@@ -152,3 +152,14 @@ Registry 中以下规则使用 `metavariable-name:module`，Semgrep OSS CLI `1.1
 - Semgrep full scan 覆盖 186 个 Git tracked targets、执行 369 条规则，结果为 `0 findings / 0 errors`；对签名链路 9 个 implementation/spec/script paths 显式补扫 332 条适用规则，结果同为 `0 findings / 0 errors`。
 
 保留的 release blocker：维护者必须执行 offline key ceremony，将 private key 保存在 repository/CI/application package 之外，并只把对应 SPKI public key 注入 `REGISTRY_TRUSTED_PUBLIC_KEYS`。Verifier 完成不等于 publisher identity 已建立。
+
+### 2026-07-13：Claude legacy workspace compatibility 增量复审
+
+- 新增 `ClaudeWorkspacePathFacade`，集中声明 legacy `.ccb/claude-configs` 与 future `.ccb/workspaces/claude-code`；v1.5.0 active mode 固定为 `LEGACY_COMPAT`。
+- 路径选择不访问 filesystem，不根据目录存在性隐式切换，不创建 future workspace，也不复制、删除或移动用户数据。
+- Managed Mode provider sync 移除 legacy path 直接拼接，与 ConfigService、FileWatcher、菜单统一消费 main-process `pathManager.claudeConfigsDir` compatibility alias。
+- `resolveActiveFile` 只允许直接子文件名，跨平台拒绝 `/`、`\\`、`.`、`..`、empty 与 NUL 输入；relative app data root 同样拒绝。
+- Full Vitest 为 21 files / 129 tests；TypeScript、ESLint、root/proxy builds 与两套 npm audit 全部通过。Main bundle 为 `278.57 KB`，preload/renderer 保持 `12.53 KB / 196.05 KB`。
+- Semgrep full scan 覆盖 188 个 Git tracked targets、执行 369 条规则，结果为 `0 findings / 0 errors`；对 facade/path manager/Managed Mode/spec 等 5 paths 显式补扫 332 条适用规则，结果同为 `0 findings / 0 errors`。
+
+该 facade 不等同于物理 migration 完成。旧目录业务回归仍需用户后续启动应用验收；future workspace 只有在具备 backup、journal、idempotency 与 rollback rehearsal 后才能显式启用。

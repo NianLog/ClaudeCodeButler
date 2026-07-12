@@ -82,7 +82,7 @@ v1.5.0 将 CCB 转向“规则驱动的配置控制平面”：应用提供稳�
 
 - Claude-specific service 在迁移期可保留 facade，但新增代码必须依赖通用 `ToolRegistryService` 与 `ConfigArtifactService` contract。
 - 原 `ConfigType` 不继续增加 tool-specific enum；逐步替换为 `toolId + artifactId + format`。
-- `.ccb/claude-configs` 数据目录 v1.5.0 只读兼容并迁移到 `.ccb/workspaces/claude-code`，迁移需幂等、可回滚；在迁移实现完成前不得删除旧目录。
+- ~~`.ccb/claude-configs` 数据目录在 v1.5.0 迁移到 `.ccb/workspaces/claude-code`。~~ 经 Phase 6 风险复审修订：v1.5.0 只引入 compatibility facade 并继续使用旧目录，不执行物理迁移；future workspace 迁移必须另行具备 backup、journal、幂等与 rollback rehearsal，旧目录在迁移完成前不得删除。
 
 ## 7. 性能与质量指标
 

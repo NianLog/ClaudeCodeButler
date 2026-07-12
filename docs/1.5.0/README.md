@@ -45,7 +45,8 @@
 - [x] 品牌恢复为 Claude Code Butler
 - [x] Runtime display branding 回退
 - [ ] Production registry publisher public key 注入与签名 rehearsal
-- [ ] Claude legacy path compatibility facade 与 template ownership
+- [x] Claude legacy path compatibility facade（不移动用户数据）
+- [ ] Artifact-specific template ownership
 - [ ] Installer 与官网多工具能力说明更新
 
 ### 当前安全边界

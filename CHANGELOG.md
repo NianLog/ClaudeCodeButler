@@ -31,6 +31,8 @@
 
 ### Changed
 
+- 新增 `ClaudeWorkspacePathFacade` 集中管理 legacy/future Claude workspace 路径；v1.5.0 固定使用 `LEGACY_COMPAT`，不根据目录存在性隐式切换或移动用户数据。
+- Managed Mode provider sync 移除 `.ccb/claude-configs` 直接拼接，统一依赖 main-process path ownership。
 - 应用版本检查与 registry manifest 检查并发执行，避免两个网络 timeout 串行叠加。
 - 首屏只立即执行 AppStore 与 Settings critical 初始化；Configs/Rules 和 ExecutionLogs/Stats 改为首屏完成后的两组 idle batches，减少启动阶段 IPC 与磁盘 I/O 竞争。
 - StatisticsService 初始化、auto-save 与 shutdown 增加串行 lifecycle barrier；常驻 interval 使用 `unref()`，不再独自阻止 main process 退出。
@@ -62,7 +64,7 @@
 - 新增 detector/path resolver 与 artifact discovery/read 安全边界单元测试。
 - 新增 codec 与 capability-driven edit/backup/restore 回归测试。
 - 新增 renderer startup scheduler 与 StatisticsService lifecycle 回归测试。
-- Full Vitest 当前为 20 个测试文件、125 项测试全部通过。
+- Full Vitest 当前为 21 个测试文件、129 项测试全部通过。
 
 ## [1.4.0] - 2026-06-15
 
