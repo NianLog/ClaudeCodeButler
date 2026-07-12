@@ -130,6 +130,12 @@ export interface ToolRegistryManifest {
   bundleSha256: string
   /** bundle 预期字节数 */
   bundleSize: number
+  /** detached signature 算法 */
+  signatureAlgorithm: 'ED25519'
+  /** 应用内置 public key identifier */
+  keyId: string
+  /** raw bundle bytes 的标准 Base64 Ed25519 signature */
+  signature: string
   /** 更新说明 */
   releaseNotes: LocalizedText
 }
@@ -152,6 +158,7 @@ export const REGISTRY_UPDATE_STATES = [
   'UPDATE_AVAILABLE',
   'CHECK_FAILED',
   'DOWNLOADING',
+  'VERIFYING_SIGNATURE',
   'VERIFYING_HASH',
   'VALIDATING_SCHEMA',
   'CHECKING_COMPATIBILITY',

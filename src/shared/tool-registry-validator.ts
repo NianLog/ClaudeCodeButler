@@ -47,6 +47,7 @@ const MAX_JSON_NODES = 50_000
 const IDENTIFIER_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const STRICT_SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
+const ED25519_SIGNATURE_PATTERN = /^[A-Za-z0-9+/]{86}==$/
 const COMMAND_NAME_PATTERN = /^[A-Za-z0-9._+-]+$/
 const ALLOWED_PATH_VARIABLES = new Set(['HOME', 'APPDATA', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'CCB_DATA'])
 const FORBIDDEN_PATH_PATTERNS = [/\.\.(?:[/\\]|$)/, /^[/\\]{2}/, /^[a-z]+:\/\//i]
@@ -512,7 +513,19 @@ export function validateToolRegistryManifest(
   }
   validateAllowedKeys(
     parsed,
-    ['schemaVersion', 'registryVersion', 'minimumAppVersion', 'publishedAt', 'bundleUrl', 'bundleSha256', 'bundleSize', 'releaseNotes'],
+    [
+      'schemaVersion',
+      'registryVersion',
+      'minimumAppVersion',
+      'publishedAt',
+      'bundleUrl',
+      'bundleSha256',
+      'bundleSize',
+      'signatureAlgorithm',
+      'keyId',
+      'signature',
+      'releaseNotes'
+    ],
     '$',
     errors
   )
@@ -533,6 +546,13 @@ export function validateToolRegistryManifest(
   }
   const publishedAt = readString(parsed.publishedAt, '$.publishedAt', errors, 64)
   if (publishedAt && Number.isNaN(Date.parse(publishedAt))) errors.push('$.publishedAt: 必须为 ISO-8601 时间')
+  const signatureAlgorithm = readString(parsed.signatureAlgorithm, '$.signatureAlgorithm', errors, 32)
+  if (signatureAlgorithm !== 'ED25519') errors.push('$.signatureAlgorithm: 当前只支持 ED25519')
+  const keyId = readIdentifier(parsed.keyId, '$.keyId', errors)
+  const signature = readString(parsed.signature, '$.signature', errors, 88)
+  if (signature && !ED25519_SIGNATURE_PATTERN.test(signature)) {
+    errors.push('$.signature: 必须为 64-byte Ed25519 signature 的标准 Base64')
+  }
   const manifest: ToolRegistryManifest = {
     schemaVersion: 1,
     registryVersion: readSemVer(parsed.registryVersion, '$.registryVersion', errors),
@@ -541,6 +561,9 @@ export function validateToolRegistryManifest(
     bundleUrl,
     bundleSha256,
     bundleSize: Number(bundleSize),
+    signatureAlgorithm: 'ED25519',
+    keyId,
+    signature,
     releaseNotes: readLocalizedText(parsed.releaseNotes, '$.releaseNotes', errors)
   }
   return errors.length === 0

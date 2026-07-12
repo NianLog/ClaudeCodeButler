@@ -42,12 +42,16 @@ export interface InstalledRegistryMetadata {
 
 /** 安装 bundle 输入 */
 export interface InstallRegistryBundleInput {
-  /** 下载到的原始 JSON */
-  rawJson: string
+  /** 下载到的 exact raw bytes */
+  rawBytes: Buffer
   /** manifest 声明的 SHA-256 */
   expectedSha256: string
   /** manifest 声明的 bytes */
   expectedSize: number
+  /** manifest 声明的 registry version */
+  expectedRegistryVersion: string
+  /** manifest 声明的最低应用版本 */
+  expectedMinimumAppVersion: string
   /** 当前应用版本 */
   currentAppVersion: string
   /** 仅显式 rollback/debug 流程允许降级 */
@@ -56,11 +60,17 @@ export interface InstallRegistryBundleInput {
 
 /**
  * 计算 raw registry bundle 的 SHA-256
- * @param rawJson 原始 JSON 文本
+ * @param rawBytes 原始 JSON bytes
  * @returns lowercase hex digest
  */
-export function calculateRegistrySha256(rawJson: string): string {
-  return createHash('sha256').update(rawJson, 'utf8').digest('hex')
+export function calculateRegistrySha256(rawBytes: string | Buffer): string {
+  const hash = createHash('sha256')
+  if (typeof rawBytes === 'string') {
+    hash.update(rawBytes, 'utf8')
+  } else {
+    hash.update(rawBytes)
+  }
+  return hash.digest('hex')
 }
 
 /**
@@ -176,22 +186,36 @@ export class ToolRegistryService {
    * @returns 新安装的 registry version
    */
   public async installBundle(input: InstallRegistryBundleInput): Promise<string> {
-    const actualSize = Buffer.byteLength(input.rawJson, 'utf8')
+    const actualSize = input.rawBytes.length
     if (actualSize !== input.expectedSize) {
       throw new Error(`规则库大小不匹配: expected=${input.expectedSize}, actual=${actualSize}`)
     }
     if (actualSize > REGISTRY_BUNDLE_MAX_BYTES) {
       throw new Error(`规则库超过最大限制: ${REGISTRY_BUNDLE_MAX_BYTES}`)
     }
-    const actualSha256 = calculateRegistrySha256(input.rawJson)
+    const actualSha256 = calculateRegistrySha256(input.rawBytes)
     if (actualSha256 !== input.expectedSha256) {
       throw new Error('规则库 SHA-256 校验失败')
     }
-    const validation = validateToolRegistryBundle(input.rawJson)
+    let rawJson: string
+    try {
+      rawJson = new TextDecoder('utf-8', { fatal: true }).decode(input.rawBytes)
+    } catch {
+      throw new Error('规则库不是有效 UTF-8')
+    }
+    const validation = validateToolRegistryBundle(rawJson)
     if (!validation.success || !validation.data) {
       throw new Error(`规则库结构无效: ${validation.errors.join('; ')}`)
     }
     const bundle = validation.data
+    if (bundle.registryVersion !== input.expectedRegistryVersion) {
+      throw new Error(`规则库版本与 manifest 不匹配: expected=${input.expectedRegistryVersion}, actual=${bundle.registryVersion}`)
+    }
+    if (bundle.minimumAppVersion !== input.expectedMinimumAppVersion) {
+      throw new Error(
+        `规则库最低应用版本与 manifest 不匹配: expected=${input.expectedMinimumAppVersion}, actual=${bundle.minimumAppVersion}`
+      )
+    }
     if (compareStrictSemVer(bundle.minimumAppVersion, input.currentAppVersion) > 0) {
       throw new Error(`规则库要求 CCB >= ${bundle.minimumAppVersion}`)
     }

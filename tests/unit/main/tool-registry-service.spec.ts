@@ -58,6 +58,30 @@ function createBundle(registryVersion: string, toolId: string = 'example-tool'):
   })
 }
 
+/**
+ * 创建与 bundle metadata 绑定的安装参数。
+ * @param rawJson 原始 bundle JSON
+ * @param currentAppVersion 当前应用版本
+ */
+function createInstallInput(rawJson: string, currentAppVersion: string): {
+  rawBytes: Buffer
+  expectedSha256: string
+  expectedSize: number
+  expectedRegistryVersion: string
+  expectedMinimumAppVersion: string
+  currentAppVersion: string
+} {
+  const bundle = JSON.parse(rawJson) as { registryVersion: string; minimumAppVersion: string }
+  return {
+    rawBytes: Buffer.from(rawJson, 'utf8'),
+    expectedSha256: calculateRegistrySha256(rawJson),
+    expectedSize: Buffer.byteLength(rawJson),
+    expectedRegistryVersion: bundle.registryVersion,
+    expectedMinimumAppVersion: bundle.minimumAppVersion,
+    currentAppVersion
+  }
+}
+
 beforeEach(async () => {
   tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'ccb-registry-'))
   registryPaths = {
@@ -84,22 +108,29 @@ describe('ToolRegistryService', () => {
     const rawJson = createBundle('1.1.0')
 
     await expect(service.installBundle({
-      rawJson,
+      ...createInstallInput(rawJson, '1.5.0'),
       expectedSha256: '0'.repeat(64),
-      expectedSize: Buffer.byteLength(rawJson),
-      currentAppVersion: '1.5.0'
     })).rejects.toThrow('SHA-256')
 
-    await service.installBundle({
-      rawJson,
-      expectedSha256: calculateRegistrySha256(rawJson),
-      expectedSize: Buffer.byteLength(rawJson),
-      currentAppVersion: '1.5.0'
-    })
+    await service.installBundle(createInstallInput(rawJson, '1.5.0'))
     const snapshot = await service.getSnapshot()
 
     expect(snapshot.installedVersion).toBe('1.1.0')
     expect(snapshot.tools.map((tool) => tool.toolId)).toEqual(['claude-code', 'codex-cli', 'example-tool'])
+  })
+
+  it('应在 schema parse 前拒绝无效 UTF-8 bytes', async () => {
+    const service = new ToolRegistryService(registryPaths)
+    const rawBytes = Buffer.from([0xc3, 0x28])
+
+    await expect(service.installBundle({
+      rawBytes,
+      expectedSha256: calculateRegistrySha256(rawBytes),
+      expectedSize: rawBytes.length,
+      expectedRegistryVersion: '1.1.0',
+      expectedMinimumAppVersion: '1.4.0',
+      currentAppVersion: '1.5.0'
+    })).rejects.toThrow('不是有效 UTF-8')
   })
 
   it('应拒绝不兼容 app version 与隐式 downgrade', async () => {
@@ -108,45 +139,25 @@ describe('ToolRegistryService', () => {
     futureBundle.minimumAppVersion = '2.0.0'
     const futureRaw = JSON.stringify(futureBundle)
 
-    await expect(service.installBundle({
-      rawJson: futureRaw,
-      expectedSha256: calculateRegistrySha256(futureRaw),
-      expectedSize: Buffer.byteLength(futureRaw),
-      currentAppVersion: '1.5.0'
-    })).rejects.toThrow('要求 CCB')
+    await expect(service.installBundle(createInstallInput(futureRaw, '1.5.0'))).rejects.toThrow('要求 CCB')
 
     const newerRaw = createBundle('2.0.0')
-    await service.installBundle({
-      rawJson: newerRaw,
-      expectedSha256: calculateRegistrySha256(newerRaw),
-      expectedSize: Buffer.byteLength(newerRaw),
-      currentAppVersion: '2.0.0'
-    })
+    await service.installBundle(createInstallInput(newerRaw, '2.0.0'))
     const olderRaw = createBundle('1.9.0')
+    await expect(service.installBundle(createInstallInput(olderRaw, '2.0.0'))).rejects.toThrow('拒绝规则库降级')
+
     await expect(service.installBundle({
-      rawJson: olderRaw,
-      expectedSha256: calculateRegistrySha256(olderRaw),
-      expectedSize: Buffer.byteLength(olderRaw),
-      currentAppVersion: '2.0.0'
-    })).rejects.toThrow('拒绝规则库降级')
+      ...createInstallInput(newerRaw, '2.0.0'),
+      expectedRegistryVersion: '2.0.1'
+    })).rejects.toThrow('版本与 manifest 不匹配')
   })
 
   it('installed 损坏时应回退 last-known-good，并支持显式 rollback', async () => {
     const service = new ToolRegistryService(registryPaths)
     const firstRaw = createBundle('1.1.0', 'first-tool')
-    await service.installBundle({
-      rawJson: firstRaw,
-      expectedSha256: calculateRegistrySha256(firstRaw),
-      expectedSize: Buffer.byteLength(firstRaw),
-      currentAppVersion: '1.5.0'
-    })
+    await service.installBundle(createInstallInput(firstRaw, '1.5.0'))
     const secondRaw = createBundle('1.2.0', 'second-tool')
-    await service.installBundle({
-      rawJson: secondRaw,
-      expectedSha256: calculateRegistrySha256(secondRaw),
-      expectedSize: Buffer.byteLength(secondRaw),
-      currentAppVersion: '1.5.0'
-    })
+    await service.installBundle(createInstallInput(secondRaw, '1.5.0'))
 
     await writeFile(registryPaths.installed, '{broken', 'utf8')
     const recovered = await service.getSnapshot()

@@ -15,11 +15,21 @@ import {
   validateToolRegistryManifest
 } from '@shared/tool-registry-validator'
 import { toolRegistryService, type ToolRegistryService } from './tool-registry-service'
+import {
+  getTrustedRegistryPublicKey,
+  verifyRegistryBundleSignature,
+  type RegistryTrustedPublicKeys
+} from './registry-signature-verifier'
 
 /** 默认 registry manifest URL */
 export const REGISTRY_MANIFEST_URL = 'https://dev.niansir.com/software/ccb/registry/manifest.json'
 /** Registry 固定允许的 origin */
 export const REGISTRY_ALLOWED_ORIGINS = ['https://dev.niansir.com'] as const
+/**
+ * Production registry publisher keys。
+ * @description 正式 release 前必须由维护者注入其离线保管 private key 对应的 SPKI public key。
+ */
+export const REGISTRY_TRUSTED_PUBLIC_KEYS: RegistryTrustedPublicKeys = Object.freeze({})
 
 /** 受限文本 HTTP client contract */
 export interface RegistryHttpClient {
@@ -30,6 +40,12 @@ export interface RegistryHttpClient {
    * @returns 响应文本
    */
   getText(url: string, maxBytes: number): Promise<string>
+  /**
+   * 获取原始 bytes，调用方提供最大响应大小。
+   * @param url 固定或已验证 URL
+   * @param maxBytes 最大响应 bytes
+   */
+  getBytes(url: string, maxBytes: number): Promise<Buffer>
 }
 
 /**
@@ -61,6 +77,27 @@ export class AxiosRegistryHttpClient implements RegistryHttpClient {
     }
     return response.data
   }
+
+  /**
+   * 获取受大小限制的原始 bytes，供 detached signature 与 hash 验证。
+   * @param url 已验证 HTTPS URL
+   * @param maxBytes 最大响应 bytes
+   */
+  public async getBytes(url: string, maxBytes: number): Promise<Buffer> {
+    const response = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      timeout: 15_000,
+      maxRedirects: 0,
+      maxContentLength: maxBytes,
+      maxBodyLength: maxBytes,
+      validateStatus: (status) => status === 200
+    })
+    const bytes = Buffer.from(response.data)
+    if (bytes.length > maxBytes) {
+      throw new Error(`Registry 响应超过 ${maxBytes} bytes`)
+    }
+    return bytes
+  }
 }
 
 /**
@@ -72,6 +109,7 @@ export class RegistryUpdateService {
   private readonly httpClient: RegistryHttpClient
   private readonly manifestUrl: string
   private readonly allowedOrigins: string[]
+  private readonly trustedPublicKeys: RegistryTrustedPublicKeys
   private verifiedManifest?: ToolRegistryManifest
   private checkPromise?: Promise<ToolRegistryUpdateStatus>
   private status: ToolRegistryUpdateStatus = {
@@ -84,11 +122,13 @@ export class RegistryUpdateService {
     httpClient?: RegistryHttpClient
     manifestUrl?: string
     allowedOrigins?: string[]
+    trustedPublicKeys?: RegistryTrustedPublicKeys
   }) {
     this.registryService = options?.registryService ?? toolRegistryService
     this.httpClient = options?.httpClient ?? new AxiosRegistryHttpClient()
     this.manifestUrl = options?.manifestUrl ?? REGISTRY_MANIFEST_URL
     this.allowedOrigins = options?.allowedOrigins ?? [...REGISTRY_ALLOWED_ORIGINS]
+    this.trustedPublicKeys = options?.trustedPublicKeys ?? REGISTRY_TRUSTED_PUBLIC_KEYS
   }
 
   /**
@@ -135,6 +175,7 @@ export class RegistryUpdateService {
       if (compareStrictSemVer(validation.data.minimumAppVersion, currentAppVersion) > 0) {
         throw new Error(`Registry manifest 要求 CCB >= ${validation.data.minimumAppVersion}`)
       }
+      getTrustedRegistryPublicKey(validation.data.keyId, this.trustedPublicKeys)
       this.verifiedManifest = validation.data
       const currentVersion = snapshot.installedVersion ?? snapshot.embeddedVersion
       const updateAvailable = compareStrictSemVer(validation.data.registryVersion, currentVersion) > 0
@@ -175,12 +216,21 @@ export class RegistryUpdateService {
     this.status = { ...this.status, state: 'DOWNLOADING', error: undefined }
     try {
       this.validatePinnedUrl(manifest.bundleUrl, 'Registry bundle URL')
-      const rawBundle = await this.httpClient.getText(manifest.bundleUrl, REGISTRY_BUNDLE_MAX_BYTES)
+      const rawBundle = await this.httpClient.getBytes(manifest.bundleUrl, REGISTRY_BUNDLE_MAX_BYTES)
+      this.status = { ...this.status, state: 'VERIFYING_SIGNATURE' }
+      verifyRegistryBundleSignature(
+        rawBundle,
+        manifest.signature,
+        manifest.keyId,
+        this.trustedPublicKeys
+      )
       this.status = { ...this.status, state: 'VERIFYING_HASH' }
       await this.registryService.installBundle({
-        rawJson: rawBundle,
+        rawBytes: rawBundle,
         expectedSha256: manifest.bundleSha256,
         expectedSize: manifest.bundleSize,
+        expectedRegistryVersion: manifest.registryVersion,
+        expectedMinimumAppVersion: manifest.minimumAppVersion,
         currentAppVersion
       })
       const snapshot = await this.registryService.getSnapshot()

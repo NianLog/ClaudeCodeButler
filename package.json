@@ -9,6 +9,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "clean:release": "node scripts/clean-release.cjs",
+    "registry:sign": "node scripts/sign-registry-bundle.cjs",
     "pack": "npm run clean:release && electron-builder",
     "pack:dir": "npm run clean:release && electron-builder --dir",
     "pack:portable": "npm run clean:release && electron-builder --win portable",

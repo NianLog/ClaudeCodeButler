@@ -27,7 +27,7 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 - **v1.5.0 implemented scope**: generic codecs, validation, atomic edit, backup/restore, secure IPC, management UI, and the first lifecycle performance pass
 - **v1.5.0 remaining scope**: compatibility migration, release hardening, and user-run runtime startup/memory acceptance measurements
 - **Security baseline (2026-07-13)**: Semgrep `0 findings / 0 scan errors`, root and proxy-server npm audits `0 vulnerabilities`
-- **Verification baseline**: 122 tests across 20 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
+- **Verification baseline**: 125 tests across 20 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
 
 The package version is now `1.5.0`; this marks an active development version rather than a completed public release. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
 
@@ -376,6 +376,7 @@ The three excluded registry rules require the Semgrep Pro engine. Their correspo
 - Added backup history/restore workflows and globally compact Card/List text handling for long paths and descriptions.
 - Refined list rows into bounded text, structured metadata, and independent action regions; generic backups now retain at most 20 versions per artifact path.
 - Added explicit, integrity-checked registry installation and last-known-good rollback; automatic checks fetch only the small manifest.
+- Added Ed25519 raw-bundle signature verification and a key-rotation contract; remote registry remains fail-closed preview until the production publisher public key is injected.
 - Added registry controls under Settings/About and a main-process-only on-demand performance snapshot exporter.
 - Non-critical data now loads in idle batches after critical first-render initialization; resolved initialization timeouts release their timers and unmount cancels pending batches.
 - StatisticsService auto-save is serialized and its interval is `unref()`'d; app exit now waits for idempotent cleanup before allowing quit, preventing persistence races.

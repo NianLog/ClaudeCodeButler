@@ -13,6 +13,7 @@
 
 ### Added
 
+- 新增 Ed25519 detached registry signature verifier、pinned `keyId -> SPKI public key` trust map 与 offline signing helper。
 - 建立规则驱动多 AI 工具配置平台基础：`ToolDefinition -> ConfigArtifactDefinition -> Capability` 共享 domain contract。
 - 新增 bounded JSON registry validator，限制 bundle/manifest 大小、JSON 深度/节点数、路径变量、detector、handler 与 capability allowlist。
 - 新增内置 Claude Code registry adapter，声明用户 settings、MCP registry 与全局 instructions 三类配置资产。
@@ -49,6 +50,8 @@
 
 ### Security
 
+- Remote registry manifest 现在必须声明 `ED25519` signature metadata；未知 key、非 Ed25519 key、无效 Base64 或 raw bundle signature mismatch 均 fail-closed。
+- Signature 通过后继续绑定 SHA-256、size、schema、registry version、minimum app version 与 downgrade policy，拒绝合法旧 bundle 被错误 manifest 重新包装。
 - 远程 registry 禁止携带 JS、shell、动态 module、任意 executable arguments 或未知 capability。
 - Manifest/bundle URL 固定为 main-process pinned HTTPS origin；renderer 无法注入下载 URL 或 hash。
 - Registry 更新需 SHA-256、size、schema、SemVer、minimum app version 全部通过后原子安装。
@@ -59,7 +62,7 @@
 - 新增 detector/path resolver 与 artifact discovery/read 安全边界单元测试。
 - 新增 codec 与 capability-driven edit/backup/restore 回归测试。
 - 新增 renderer startup scheduler 与 StatisticsService lifecycle 回归测试。
-- Full Vitest 当前为 20 个测试文件、122 项测试全部通过。
+- Full Vitest 当前为 20 个测试文件、125 项测试全部通过。
 
 ## [1.4.0] - 2026-06-15
 

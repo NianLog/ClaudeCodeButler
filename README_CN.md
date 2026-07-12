@@ -27,7 +27,7 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 - **v1.5.0 已实施范围**：通用 codecs、validation、atomic edit、backup/restore、安全 IPC、管理 UI 与首轮 lifecycle performance 优化
 - **v1.5.0 待实施范围**：兼容迁移、release 收尾，以及由用户执行的 runtime startup/memory 实机验收
 - **安全基线（2026-07-13）**：Semgrep `0 findings / 0 scan errors`，root 与 proxy-server npm audit 均为 `0 vulnerabilities`
-- **验证基线**：20 个测试文件共 122 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
+- **验证基线**：20 个测试文件共 125 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
 
 package version 已升级为 `1.5.0`，它表示当前开发版本，不代表公共 release 已完成。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
@@ -376,6 +376,7 @@ semgrep scan \
 - 新增备份历史/恢复流程，并全局修正 Card/List 长路径和长描述导致的异常行高。
 - 将列表行细分为有限文本、结构化 metadata 与独立 actions 区域；通用备份默认每个 artifact path 最多保留 20 份。
 - 新增需用户明确确认、具备 integrity 校验的规则库安装和 last-known-good rollback；自动检查只获取小型 manifest。
+- Remote registry 已加入 Ed25519 raw-bundle signature verification 与 key rotation contract；正式 publisher public key 注入前保持 fail-closed preview。
 - Settings/About 已加入规则库操作入口，main process 新增完全按需的 performance snapshot exporter。
 - 首屏 critical 初始化完成后才按 idle batch 加载非关键数据；初始化 timeout 会及时释放 timer，卸载会取消尚未启动的批次。
 - StatisticsService auto-save 已串行化且 interval `unref()`；退出流程会等待幂等 cleanup 完成后再放行，避免落盘竞态。

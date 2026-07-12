@@ -1,8 +1,8 @@
 # CCB v1.5.0 规划索引
 
-> 状态：Phase 1 registry core、manifest update、generic detection/read-only discovery 与 performance snapshot foundation 已实施
+> 状态：Phase 1-5 foundation 与首轮 lifecycle performance 优化已实施，Phase 6 release hardening 进行中
 > 基线提交：`42dff6d`
-> 当前开发版本：`1.5.0`（公共 release 仍需完成 UI 与性能验收）
+> 当前开发版本：`1.5.0`（公共 release 仍需完成 publisher key、兼容迁移、模板 ownership 与实机性能验收）
 
 ## 文档
 
@@ -11,6 +11,7 @@
 - [03-规则库协议与安全模型.md](./03-规则库协议与安全模型.md)：JSON protocol、更新、校验、回滚与 threat model
 - [04-性能工程与实施路线图.md](./04-性能工程与实施路线图.md)：性能预算、测量方法、阶段计划与发布门禁
 - [05-品牌语义ADR.md](./05-品牌语义ADR.md)：CCB 新全称与兼容策略
+- [06-迁移与发布计划.md](./06-迁移与发布计划.md)：release blockers、兼容迁移、验收与回滚清单
 
 ## 决策摘要
 
@@ -39,9 +40,12 @@
 - [x] Global compact Card/List layout policy
 - [x] Per-artifact backup retention 与 serialized pruning
 - [x] Effective registry fingerprint cache 与 single-flight load
-- [ ] 实机 performance baseline 与首批优化
+- [x] 首轮 lifecycle performance 逻辑优化
+- [ ] 实机 performance baseline 与数据驱动的二次优化
 - [x] 品牌恢复为 Claude Code Butler
 - [x] Runtime display branding 回退
+- [ ] Production registry publisher public key 注入与签名 rehearsal
+- [ ] Claude legacy path compatibility facade 与 template ownership
 - [ ] Installer 与官网多工具能力说明更新
 
 ### 当前安全边界
@@ -51,4 +55,4 @@
 - `COMMAND_EXISTS` 通过 `execFile` 参数数组和 `shell: false` 执行；首版 artifact read 拒绝 symbolic link 与超过 1 MiB 的文件。
 - Codex CLI adapter 当前仅支持 `DISCOVER` / `READ`，TOML 保持 raw UTF-8 text；未验证的 write semantics 不进入 1.5.0 foundation。
 
-> 开发期兼容提示：package version 已为 `1.5.0`，满足同版本 remote manifest 的 compatibility check；remote registry 在 publisher signature 未实施前仍保持 preview/beta，不因版本升级自动扩大信任。
+> 开发期兼容提示：package version 已为 `1.5.0`。Ed25519 verifier 已实施，但正式 publisher public key 尚未注入；remote registry 因而保持 fail-closed preview，不能进入 production 安装链路。

@@ -140,3 +140,15 @@ Registry 中以下规则使用 `metavariable-name:module`，Semgrep OSS CLI `1.1
 - Renderer background scheduler 只调度固定 store actions，不接收 renderer 字符串、路径或 executable；cancel 仅阻止尚未启动的 batch，不隐藏已发出 IPC 的真实状态。
 - StatisticsService shutdown 使用幂等 Promise barrier，auto-save 串行化，并由 app-level single quit guard 等待 cleanup，降低退出阶段部分写入与并发写入风险。
 - 本轮未启动应用，安全结论只覆盖静态分析、dependency audit、unit contract 与 production build；runtime Electron security checklist 仍应在 release 验收阶段执行。
+
+### 2026-07-13：Ed25519 registry publisher identity 增量复审
+
+- Remote manifest schema 新增必填 `signatureAlgorithm: ED25519`、stable `keyId` 与 64-byte standard Base64 detached signature；额外字段和其他算法 fail-closed。
+- Bundle 使用 bounded `arraybuffer` 下载，先对 exact response bytes 验证 pinned Ed25519 public key signature，再校验 SHA-256/size，之后使用 fatal UTF-8 decoder 解析 schema。
+- Signature 后继续绑定 manifest/bundle `registryVersion` 与 `minimumAppVersion`，并保留 app compatibility 和 downgrade protection，拒绝合法旧 bundle 被错误 manifest 重新包装。
+- Unknown keyId 在 manifest check 阶段直接进入 `CHECK_FAILED`，不会向用户展示虚假的 `UPDATE_AVAILABLE`；production trust map 当前为空，正式 public key 注入前 remote registry 保持 fail-closed preview。
+- Offline signing helper 已用一次性 Ed25519 keypair对内置 registry 的 exact `3458 bytes` 完成 rehearsal；独立核对 size、SHA-256 与 signature 后删除临时 private key。
+- Full Vitest 为 20 files / 125 tests；TypeScript、ESLint、root/proxy builds 与两套 npm audit 全部通过。Main bundle 为 `277.85 KB`，preload/renderer 保持 `12.53 KB / 196.05 KB`。
+- Semgrep full scan 覆盖 186 个 Git tracked targets、执行 369 条规则，结果为 `0 findings / 0 errors`；对签名链路 9 个 implementation/spec/script paths 显式补扫 332 条适用规则，结果同为 `0 findings / 0 errors`。
+
+保留的 release blocker：维护者必须执行 offline key ceremony，将 private key 保存在 repository/CI/application package 之外，并只把对应 SPKI public key 注入 `REGISTRY_TRUSTED_PUBLIC_KEYS`。Verifier 完成不等于 publisher identity 已建立。

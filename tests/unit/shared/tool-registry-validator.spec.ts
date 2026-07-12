@@ -83,6 +83,9 @@ describe('validateToolRegistryManifest', () => {
       bundleUrl: 'https://dev.niansir.com/software/ccb/registry/1.1.0.json',
       bundleSha256: 'a'.repeat(64),
       bundleSize: 1024,
+      signatureAlgorithm: 'ED25519',
+      keyId: 'ccb-registry-2026',
+      signature: Buffer.alloc(64).toString('base64'),
       releaseNotes: { 'zh-CN': '更新', 'en-US': 'Update' }
     }), ['https://dev.niansir.com'])
 
@@ -98,12 +101,35 @@ describe('validateToolRegistryManifest', () => {
       bundleUrl: 'http://evil.example/registry.json',
       bundleSha256: 'a'.repeat(64),
       bundleSize: 1024,
+      signatureAlgorithm: 'ED25519',
+      keyId: 'ccb-registry-2026',
+      signature: Buffer.alloc(64).toString('base64'),
       releaseNotes: { 'zh-CN': '更新', 'en-US': 'Update' }
     }), ['https://dev.niansir.com'])
 
     expect(result.success).toBe(false)
     expect(result.errors.join('\n')).toContain('必须使用 HTTPS')
     expect(result.errors.join('\n')).toContain('origin 不在应用 allowlist')
+  })
+
+  it('应拒绝缺失或非 Ed25519 signature metadata', () => {
+    const result = validateToolRegistryManifest(JSON.stringify({
+      schemaVersion: 1,
+      registryVersion: '1.1.0',
+      minimumAppVersion: '1.5.0',
+      publishedAt: '2026-07-12T00:00:00.000Z',
+      bundleUrl: 'https://dev.niansir.com/software/ccb/registry/1.1.0.json',
+      bundleSha256: 'a'.repeat(64),
+      bundleSize: 1024,
+      signatureAlgorithm: 'RSA',
+      keyId: 'ccb-registry-2026',
+      signature: 'not-base64',
+      releaseNotes: { 'zh-CN': '更新', 'en-US': 'Update' }
+    }), ['https://dev.niansir.com'])
+
+    expect(result.success).toBe(false)
+    expect(result.errors.join('\n')).toContain('当前只支持 ED25519')
+    expect(result.errors.join('\n')).toContain('标准 Base64')
   })
 })
 
