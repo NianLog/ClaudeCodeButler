@@ -127,5 +127,7 @@ Registry 中以下规则使用 `metavariable-name:module`，Semgrep OSS CLI `1.1
 - Effective registry snapshot 使用 single-flight cache，fingerprint 包含 installed/last-known-good 的 nanosecond `mtime`、`ctime` 与 size；storage 变化后重新读取并执行完整 validator。
 - Codex CLI 在 UI 中保持 read-only；未实现可信 TOML codec 前不会显示 edit/validate 操作。
 - Backup history listing 会先重新授权 `RESTORE` capability，再逐条校验 UUID、metadata/content 普通文件属性、大小和 originalPath；损坏记录 fail-closed 排除。
-- Full Vitest 更新为 18 files / 115 tests；build 日志已确认无 Ant Design `destroyOnClose` deprecation warning。
+- Full Vitest 更新为 18 files / 116 tests；build 日志已确认无 Ant Design `destroyOnClose` deprecation warning。
 - 本阶段 Semgrep full scan 继续覆盖 183 targets / 369 rules，结果为 `0 findings / 0 errors`。
+- 通用 backup create/prune 使用单进程 mutation queue；retention 只删除经过 UUID、metadata/content 普通文件与路径一致性校验的 service-owned records。
+- 本阶段 Semgrep full scan 覆盖 183 targets / 369 rules，结果保持 `0 findings / 0 errors`。

@@ -348,6 +348,7 @@ const AIToolManagementPanel: React.FC = () => {
                     const definition = selectedTool?.artifacts.find((item) => item.artifactId === artifact.artifactId)
                     return (
                       <List.Item
+                        className="ccb-list-item-structured"
                         actions={[
                           <Button key="open" type="link" onClick={() => void openArtifact(artifact)}>
                             {panelText.open}
@@ -357,12 +358,18 @@ const AIToolManagementPanel: React.FC = () => {
                         <List.Item.Meta
                           avatar={<HddOutlined />}
                           title={definition?.displayName[language] ?? artifact.artifactId}
-                          description={<Text copyable ellipsis>{artifact.path}</Text>}
+                          description={(
+                            <div className="artifact-meta-description">
+                              <Text className="artifact-path" copyable title={artifact.path}>
+                                {artifact.path}
+                              </Text>
+                              <div className="artifact-capabilities" aria-label="Capabilities">
+                                <Tag>{artifact.format}</Tag>
+                                {definition?.capabilities.map((capability) => <Tag key={capability}>{capability}</Tag>)}
+                              </div>
+                            </div>
+                          )}
                         />
-                        <Space wrap>
-                          <Tag>{artifact.format}</Tag>
-                          {definition?.capabilities.map((capability) => <Tag key={capability}>{capability}</Tag>)}
-                        </Space>
                       </List.Item>
                     )
                   }}
@@ -423,6 +430,7 @@ const AIToolManagementPanel: React.FC = () => {
             locale={{ emptyText: <Empty description={panelText.emptyBackups} /> }}
             renderItem={(backup) => (
               <List.Item
+                className="ccb-list-item-structured"
                 actions={[
                   <Button key="restore" type="link" onClick={() => restoreBackup(backup)}>
                     {panelText.restore}
@@ -431,9 +439,13 @@ const AIToolManagementPanel: React.FC = () => {
               >
                 <List.Item.Meta
                   title={new Date(backup.createdAt).toLocaleString(language)}
-                  description={backup.originalPath}
+                  description={(
+                    <div className="backup-meta-description">
+                      <Text className="artifact-path" title={backup.originalPath}>{backup.originalPath}</Text>
+                      <Tag>{Math.max(1, Math.ceil(backup.size / 1024))} KB</Tag>
+                    </div>
+                  )}
                 />
-                <Tag>{Math.max(1, Math.ceil(backup.size / 1024))} KB</Tag>
               </List.Item>
             )}
           />

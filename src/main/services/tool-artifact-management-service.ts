@@ -30,6 +30,7 @@ interface StoredArtifactBackup extends ConfigArtifactBackup {
 }
 
 const BACKUP_METADATA_MAX_BYTES = 16 * 1024
+const DEFAULT_MAX_BACKUPS_PER_ARTIFACT = 20
 
 /** Artifact management service 可替换依赖 */
 export interface ToolArtifactManagementServiceOptions {
@@ -39,6 +40,8 @@ export interface ToolArtifactManagementServiceOptions {
   codecService?: ToolArtifactCodecService
   /** 受控 backup directory */
   backupDirectory?: string
+  /** 单个 artifact/path 保留的最大备份数 */
+  maxBackupsPerArtifact?: number
 }
 
 /**
@@ -49,6 +52,9 @@ export class ToolArtifactManagementService {
   private readonly discoveryService: ToolArtifactDiscoveryService
   private readonly codecService: ToolArtifactCodecService
   private readonly backupDirectory: string
+  private readonly maxBackupsPerArtifact: number
+  private backupMutationQueue: Promise<void> = Promise.resolve()
+  private lastBackupCreatedAtMs = 0
 
   /**
    * 创建通用 artifact management service。
@@ -58,6 +64,10 @@ export class ToolArtifactManagementService {
     this.discoveryService = options.discoveryService ?? toolArtifactDiscoveryService
     this.codecService = options.codecService ?? toolArtifactCodecService
     this.backupDirectory = options.backupDirectory ?? pathManager.toolArtifactBackupDir
+    this.maxBackupsPerArtifact = options.maxBackupsPerArtifact ?? DEFAULT_MAX_BACKUPS_PER_ARTIFACT
+    if (!Number.isInteger(this.maxBackupsPerArtifact) || this.maxBackupsPerArtifact < 1) {
+      throw new Error('maxBackupsPerArtifact 必须是正整数')
+    }
   }
 
   /**
@@ -128,6 +138,21 @@ export class ToolArtifactManagementService {
     artifactId: string,
     requestedPath: string
   ): Promise<ConfigArtifactBackup> {
+    return this.enqueueBackupMutation(() => this.createBackupInternal(toolId, artifactId, requestedPath))
+  }
+
+  /**
+   * 创建备份并执行 retention cleanup。
+   * @param toolId stable tool identifier
+   * @param artifactId stable artifact identifier
+   * @param requestedPath registry candidate path
+   * @returns backup metadata
+   */
+  private async createBackupInternal(
+    toolId: string,
+    artifactId: string,
+    requestedPath: string
+  ): Promise<ConfigArtifactBackup> {
     const { resolvedPath } = await this.discoveryService.authorizeArtifact(
       toolId,
       artifactId,
@@ -149,7 +174,7 @@ export class ToolArtifactManagementService {
       artifactId,
       originalPath: resolvedPath,
       size: sourceMetadata.size,
-      createdAt: new Date().toISOString(),
+      createdAt: this.createMonotonicBackupTimestamp(),
       contentFileName
     }
     await copyFile(resolvedPath, contentPath, fsConstants.COPYFILE_EXCL)
@@ -159,6 +184,7 @@ export class ToolArtifactManagementService {
       await rm(contentPath, { force: true })
       throw error
     }
+    await this.pruneBackups(backup)
     return this.toPublicBackup(backup)
   }
 
@@ -281,6 +307,51 @@ export class ToolArtifactManagementService {
     } catch {
       return undefined
     }
+  }
+
+  /**
+   * 串行执行 backup create/prune，避免并发请求突破 retention 上限。
+   * @param operation backup mutation
+   * @returns operation result
+   */
+  private enqueueBackupMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.backupMutationQueue.then(operation)
+    this.backupMutationQueue = result.then(() => undefined, () => undefined)
+    return result
+  }
+
+  /**
+   * 创建 service instance 内严格递增的 ISO timestamp。
+   * @returns ISO-8601 timestamp
+   */
+  private createMonotonicBackupTimestamp(): string {
+    const timestamp = Math.max(Date.now(), this.lastBackupCreatedAtMs + 1)
+    this.lastBackupCreatedAtMs = timestamp
+    return new Date(timestamp).toISOString()
+  }
+
+  /**
+   * 清理同一 artifact/path 超出上限的最旧备份。
+   * @param currentBackup 刚创建并校验通过的 backup
+   */
+  private async pruneBackups(currentBackup: StoredArtifactBackup): Promise<void> {
+    const fileNames = await readdir(this.backupDirectory)
+    const backups = await Promise.all(fileNames
+      .filter((fileName) => /^[0-9a-f-]{36}\.json$/i.test(fileName))
+      .map((fileName) => this.readStoredBackup(path.join(this.backupDirectory, fileName))))
+    const matchingBackups = backups
+      .filter((backup): backup is StoredArtifactBackup => Boolean(
+        backup
+        && backup.toolId === currentBackup.toolId
+        && backup.artifactId === currentBackup.artifactId
+        && backup.originalPath === currentBackup.originalPath
+      ))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    const expiredBackups = matchingBackups.slice(this.maxBackupsPerArtifact)
+    await Promise.all(expiredBackups.flatMap((backup) => [
+      rm(path.join(this.backupDirectory, `${backup.backupId}.json`), { force: true }),
+      rm(path.join(this.backupDirectory, backup.contentFileName), { force: true })
+    ]))
   }
 
   /**

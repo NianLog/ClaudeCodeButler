@@ -35,6 +35,8 @@
 - 主应用 package version 升级为 `1.5.0`；独立 proxy package、appId、`.ccb` 与 repository identity 保持兼容。
 - Effective registry 增加 single-flight snapshot cache，并根据 installed/last-known-good storage fingerprint 自动失效。
 - 全局 Card/List 布局增加 flex shrink、单行 ellipsis 与固定 actions 规则，避免长文本把 list item 撑成异常高度；需多行的内容显式 opt-in。
+- 修订全局 List 策略：普通 description 最多两行，结构化 path/tags 由页面专属布局管理，移动端 actions 独占下一行，避免标签遮挡主内容。
+- 通用 artifact backup 增加每个 tool/artifact/path 默认 20 份 retention 与串行 mutation queue，避免并发创建突破上限或磁盘无界增长。
 
 ### Fixed
 
@@ -51,7 +53,7 @@
 - 新增 registry validator、registry storage/rollback、manifest-only update、explicit install 与 performance snapshot 单元测试。
 - 新增 detector/path resolver 与 artifact discovery/read 安全边界单元测试。
 - 新增 codec 与 capability-driven edit/backup/restore 回归测试。
-- Full Vitest 当前为 18 个测试文件、115 项测试全部通过。
+- Full Vitest 当前为 18 个测试文件、116 项测试全部通过。
 
 ## [1.4.0] - 2026-06-15
 

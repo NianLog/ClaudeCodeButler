@@ -143,7 +143,8 @@ html, body {
 /*
  * Card 内标准 List 的全局紧凑布局。
  * Ant Design flex children 默认 min-width:auto，长文本会撑开 meta 并导致 item 巨高；
- * 这里建立单行 ellipsis 默认值，需要多行语义时由组件添加 .ccb-list-item-multiline。
+ * 全局层只建立可靠的 flex 收缩、有限行数和 action 边界；组件专属 secondary content
+ * 必须收进 Meta.description，而不是作为额外 flex sibling 与 meta/actions 竞争宽度。
  */
 .ant-card-body .ant-list-item {
   min-width: 0;
@@ -162,11 +163,19 @@ html, body {
   min-width: 0;
 }
 
-.ant-card-body .ant-list-item-meta-title,
-.ant-card-body .ant-list-item-meta-description {
+.ant-card-body .ant-list-item-meta-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ant-card-body .ant-list-item-meta-description {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .ant-card-body .ant-list-item-action {
@@ -179,9 +188,18 @@ html, body {
   white-space: nowrap;
 }
 
-.ant-card-body .ant-list-item.ccb-list-item-multiline,
 .ant-card-body .ccb-list-item-multiline .ant-list-item-meta-description {
-  white-space: normal;
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.ant-card-body .ccb-list-item-structured .ant-list-item-meta-description {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
 }
 
 .ant-card-body .ant-list-item.ccb-list-item-multiline {
@@ -190,11 +208,14 @@ html, body {
 
 @media (max-width: 768px) {
   .ant-card-body .ant-list-item {
-    align-items: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .ant-card-body .ant-list-item-action {
-    margin-inline-start: var(--space-sm);
+    width: 100%;
+    margin-inline-start: 0;
+    text-align: end;
   }
 }
 .ant-card-meta-title,

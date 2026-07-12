@@ -46,7 +46,7 @@ function createTool(capabilities: ToolDefinition['artifacts'][number]['capabilit
  * @param tool registry 工具定义
  * @returns 通用 artifact management service
  */
-function createService(tool: ToolDefinition): ToolArtifactManagementService {
+function createService(tool: ToolDefinition, maxBackupsPerArtifact?: number): ToolArtifactManagementService {
   const snapshot: ToolRegistrySnapshot = {
     embeddedVersion: '1.0.0',
     tools: [tool],
@@ -63,7 +63,7 @@ function createService(tool: ToolDefinition): ToolArtifactManagementService {
       pathVariables: { HOME: tempDirectory }
     })
   })
-  return new ToolArtifactManagementService({ discoveryService, backupDirectory })
+  return new ToolArtifactManagementService({ discoveryService, backupDirectory, maxBackupsPerArtifact })
 }
 
 beforeEach(async () => {
@@ -134,5 +134,21 @@ describe('ToolArtifactManagementService', () => {
     await writeFile(metadataPath, JSON.stringify(metadata), 'utf8')
 
     await expect(service.restoreBackup(backup.backupId)).rejects.toThrow('未声明')
+  })
+
+  it('应串行创建并清理超出 retention 的旧备份', async () => {
+    const service = createService(createTool(['READ', 'BACKUP', 'RESTORE']), 2)
+
+    await Promise.all([
+      service.createBackup('example-tool', 'settings', configPath),
+      service.createBackup('example-tool', 'settings', configPath),
+      service.createBackup('example-tool', 'settings', configPath)
+    ])
+    const backups = await service.listBackups('example-tool', 'settings', configPath)
+    const files = await import('fs/promises').then(({ readdir }) => readdir(backupDirectory))
+
+    expect(backups).toHaveLength(2)
+    expect(files.filter((file) => file.endsWith('.json'))).toHaveLength(2)
+    expect(files.filter((file) => file.endsWith('.backup'))).toHaveLength(2)
   })
 })
