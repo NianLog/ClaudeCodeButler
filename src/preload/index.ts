@@ -45,6 +45,12 @@ import type {
   TerminalExecutionConfig,
   TerminalType
 } from '@shared/types/terminal'
+import type {
+  ToolDefinition,
+  ToolRegistrySnapshot,
+  ToolRegistryUpdateStatus
+} from '@shared/tool-registry'
+import type { PerformanceSnapshot } from '@shared/performance'
 
 /**
  * 配置管理 API
@@ -202,6 +208,33 @@ interface SystemAPI {
   getProcessInfo: () => Promise<any>
   // 获取平台信息
   getPlatform: () => Promise<string>
+}
+
+/**
+ * 工具规则库 API
+ * @description 规则下载地址与 hash 只在 main process 内部流转。
+ */
+interface ToolRegistryAPI {
+  /** 获取 effective registry 摘要 */
+  getSnapshot: () => Promise<{ success: boolean; data?: ToolRegistrySnapshot; error?: string }>
+  /** 按 toolId 获取 definition */
+  getTool: (toolId: string) => Promise<{ success: boolean; data?: ToolDefinition; error?: string }>
+  /** 获取当前 update 状态 */
+  getUpdateStatus: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
+  /** 只检查 manifest，不下载 bundle */
+  checkForUpdates: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
+  /** 安装 main process 最近验证的 manifest 对应 bundle */
+  installAvailableUpdate: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
+  /** 显式回滚 last-known-good */
+  rollback: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
+}
+
+/** 按需性能采集 API */
+interface PerformanceAPI {
+  /** 采集内存、CPU 与 process metrics，不写文件 */
+  capture: () => Promise<{ success: boolean; data?: PerformanceSnapshot; error?: string }>
+  /** 导出 snapshot 到本地 .ccb/performance */
+  exportSnapshot: () => Promise<{ success: boolean; data?: string; error?: string }>
 }
 
 /**
@@ -677,6 +710,8 @@ export interface ElectronAPI {
   skills: SkillsAPI
   environment: EnvironmentAPI
   terminal: TerminalAPI
+  toolRegistry: ToolRegistryAPI
+  performance: PerformanceAPI
   // 移除安全API
 }
 
@@ -761,6 +796,22 @@ const systemAPI: SystemAPI = {
   getInfo: () => ipcRenderer.invoke('system:getInfo'),
   getProcessInfo: () => ipcRenderer.invoke('system:getProcessInfo'),
   getPlatform: () => ipcRenderer.invoke('system:getPlatform')
+}
+
+/** 工具规则库 IPC facade */
+const toolRegistryAPI: ToolRegistryAPI = {
+  getSnapshot: () => ipcRenderer.invoke('toolRegistry:getSnapshot'),
+  getTool: (toolId: string) => ipcRenderer.invoke('toolRegistry:getTool', toolId),
+  getUpdateStatus: () => ipcRenderer.invoke('toolRegistry:getUpdateStatus'),
+  checkForUpdates: () => ipcRenderer.invoke('toolRegistry:checkForUpdates'),
+  installAvailableUpdate: () => ipcRenderer.invoke('toolRegistry:installAvailableUpdate'),
+  rollback: () => ipcRenderer.invoke('toolRegistry:rollback')
+}
+
+/** 按需性能采集 IPC facade */
+const performanceAPI: PerformanceAPI = {
+  capture: () => ipcRenderer.invoke('performance:capture'),
+  exportSnapshot: () => ipcRenderer.invoke('performance:exportSnapshot')
 }
 
 // 创建窗口 API 对象
@@ -1023,7 +1074,9 @@ const electronAPI: ElectronAPI = {
   agents: agentsAPI,
   skills: skillsAPI,
   environment: environmentAPI,
-  terminal: terminalAPI
+  terminal: terminalAPI,
+  toolRegistry: toolRegistryAPI,
+  performance: performanceAPI
   // 移除安全API
 }
 

@@ -9,6 +9,36 @@
 
 ---
 
+## [Unreleased] - 1.5.0 开发中
+
+### Added
+
+- 建立规则驱动多 AI 工具配置平台基础：`ToolDefinition -> ConfigArtifactDefinition -> Capability` 共享 domain contract。
+- 新增 bounded JSON registry validator，限制 bundle/manifest 大小、JSON 深度/节点数、路径变量、detector、handler 与 capability allowlist。
+- 新增内置 Claude Code registry adapter，声明用户 settings、MCP registry 与全局 instructions 三类配置资产。
+- 新增 installed/last-known-good registry 原子存储、SHA-256 integrity、app compatibility、downgrade protection、merge 与显式 rollback。
+- 新增 main-process registry manifest 检查；启动时只检查小型 manifest，不自动下载完整 bundle。
+- Settings/About 新增规则库版本、检查、用户确认安装与 rollback 控件。
+- 新增按需 performance snapshot/export API，记录 Electron per-process CPU/working set，不自动采样或上传。
+- 新增 v1.5.0 PRD、架构、安全协议、性能路线与品牌语义 ADR。
+
+### Changed
+
+- 应用版本检查与 registry manifest 检查并发执行，避免两个网络 timeout 串行叠加。
+- CCB 品牌全称建议升级为 `Cognitive Configuration Bridge`；当前为 provisional decision，等待产品所有者确认后再更新 UI/installer identity。
+- package version 暂时保持 `1.4.0`，直到 v1.5.0 范围与发布验收完成。
+
+### Security
+
+- 远程 registry 禁止携带 JS、shell、动态 module、任意 executable arguments 或未知 capability。
+- Manifest/bundle URL 固定为 main-process pinned HTTPS origin；renderer 无法注入下载 URL 或 hash。
+- Registry 更新需 SHA-256、size、schema、SemVer、minimum app version 全部通过后原子安装。
+
+### Tests
+
+- 新增 registry validator、registry storage/rollback、manifest-only update、explicit install 与 performance snapshot 单元测试。
+- Full Vitest 当前为 14 个测试文件、84 项测试全部通过。
+
 ## [1.4.0] - 2026-06-15
 
 基于 v1.3.2 全量审计（4 维度：安全/架构/性能/功能）的系统性重做。规划详见 [`docs/1.4.0/`](./docs/1.4.0/)。

@@ -22,11 +22,13 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 ### Project Status
 
 - **Current release baseline**: `1.4.0`
-- **Next milestone**: `1.5.0` planning and development preparation
+- **Next milestone**: `1.5.0` foundation development in progress
 - **Security baseline (2026-07-12)**: Semgrep `0 findings / 0 scan errors`, root and proxy-server npm audits `0 vulnerabilities`
-- **Verification baseline**: 65 tests across 10 test files, TypeScript checks, root production build, and proxy-server build passing
+- **Verification baseline**: 84 tests across 14 test files, TypeScript checks, root production build, and proxy-server build passing
 
 The package version remains `1.4.0` until the `1.5.0` scope, acceptance criteria, and release plan are finalized. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
+
+The proposed new meaning of CCB is **Cognitive Configuration Bridge**, reflecting the transition from a Claude Code-only manager to a rule-driven multi-AI-tool configuration platform. This name is provisional until the product naming decision is confirmed.
 
 ### ✨ Key Features
 
@@ -362,6 +364,13 @@ The three excluded registry rules require the Semgrep Pro engine. Their correspo
 - Migrated scheduling to node-cron 4 `createTask` semantics and added regression coverage for enabled/disabled rules.
 - Restored component CSS imports to the production bundle and removed invalid orphaned style fragments exposed by PostCSS validation.
 - Added a reproducible Semgrep environment, raw JSON/SARIF output workflow, and a maintained security audit report.
+
+### v1.5.0 foundation in progress
+
+- Added a declarative JSON tool registry model with bounded validation and an embedded Claude Code compatibility adapter.
+- Added explicit, integrity-checked registry installation and last-known-good rollback; automatic checks fetch only the small manifest.
+- Added registry controls under Settings/About and a main-process-only on-demand performance snapshot exporter.
+- Architecture, security protocol, performance budgets, migration phases, and provisional brand naming are documented in [`docs/1.5.0`](./docs/1.5.0/README.md).
 
 ### Product experience updates
 

@@ -4,7 +4,7 @@
  */
 
 import React, { Suspense, useEffect, useState, useRef } from 'react'
-import { Card, Form, Switch, Input, InputNumber, Select, Button, Space, Typography, Tabs, Row, Col, Alert, Descriptions, Tag, Divider, Modal } from 'antd'
+import { Card, Form, Switch, Input, InputNumber, Select, Button, Space, Typography, Tabs, Row, Col, Alert, Descriptions, Tag, Divider, Modal, Popconfirm } from 'antd'
 import {
   SaveOutlined,
   ReloadOutlined,
@@ -30,6 +30,7 @@ import UpdateModal from '../Common/UpdateModal'
 import TerminalManagement from './TerminalManagement'
 import type { VersionInfo } from '../../services/version-service'
 import type { SettingsTab } from '@shared/types/settings'
+import type { ToolRegistryUpdateStatus } from '@shared/tool-registry'
 import {
   normalizeNewConfigTemplate,
   validateNewConfigTemplate
@@ -186,6 +187,10 @@ const SettingsPanel: React.FC = () => {
   const [changelogStatus, setChangelogStatus] = useState<'idle' | 'loading' | 'ready' | 'offline'>('idle')
   const [changelogLines, setChangelogLines] = useState<string[]>([])
   const [templatePreviewVisible, setTemplatePreviewVisible] = useState(false)
+  const [registryStatus, setRegistryStatus] = useState<ToolRegistryUpdateStatus | null>(null)
+  const [checkingRegistryUpdate, setCheckingRegistryUpdate] = useState(false)
+  const [installingRegistryUpdate, setInstallingRegistryUpdate] = useState(false)
+  const [rollingBackRegistry, setRollingBackRegistry] = useState(false)
   const [updateInfo, setUpdateInfo] = useState<{
     currentVersion: string
     latestVersion: string
@@ -210,6 +215,18 @@ const SettingsPanel: React.FC = () => {
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  useEffect(() => {
+    if (activeTab !== 'about') {
+      return
+    }
+
+    void window.electronAPI.toolRegistry.getUpdateStatus().then((result) => {
+      if (result.success && result.data) {
+        setRegistryStatus(result.data)
+      }
+    })
+  }, [activeTab])
 
   const hydratedSettingsSnapshotRef = useRef<string | null>(null)
 
@@ -541,6 +558,69 @@ const SettingsPanel: React.FC = () => {
       message.success(t('update.openDownloadSuccess'))
     } catch (error) {
       message.error(t('update.openDownloadFailed'))
+    }
+  }
+
+  /**
+   * 只检查 registry manifest，不下载完整规则包
+   */
+  const handleCheckRegistryUpdate = async () => {
+    setCheckingRegistryUpdate(true)
+    try {
+      const result = await window.electronAPI.toolRegistry.checkForUpdates()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || t('registry.messages.checkFailed'))
+      }
+      setRegistryStatus(result.data)
+      if (result.data.state === 'UPDATE_AVAILABLE') {
+        message.success(t('registry.messages.updateAvailable'))
+      } else if (result.data.state === 'UP_TO_DATE') {
+        message.success(t('registry.messages.upToDate'))
+      } else if (result.data.state === 'CHECK_FAILED') {
+        message.warning(result.data.error || t('registry.messages.checkFailed'))
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('registry.messages.checkFailed'))
+    } finally {
+      setCheckingRegistryUpdate(false)
+    }
+  }
+
+  /**
+   * 安装 main process 最近验证的 registry update
+   */
+  const handleInstallRegistryUpdate = async () => {
+    setInstallingRegistryUpdate(true)
+    try {
+      const result = await window.electronAPI.toolRegistry.installAvailableUpdate()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || t('registry.messages.installFailed'))
+      }
+      setRegistryStatus(result.data)
+      message.success(t('registry.messages.installed'))
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('registry.messages.installFailed'))
+    } finally {
+      setInstallingRegistryUpdate(false)
+    }
+  }
+
+  /**
+   * 显式回滚到 last-known-good registry
+   */
+  const handleRollbackRegistry = async () => {
+    setRollingBackRegistry(true)
+    try {
+      const result = await window.electronAPI.toolRegistry.rollback()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || t('registry.messages.rollbackFailed'))
+      }
+      setRegistryStatus(result.data)
+      message.success(t('registry.messages.rolledBack'))
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('registry.messages.rollbackFailed'))
+    } finally {
+      setRollingBackRegistry(false)
     }
   }
 
@@ -993,6 +1073,78 @@ const SettingsPanel: React.FC = () => {
             <Tag color="default">{t('about.latestVersion.offline')}</Tag>
           )}
         </div>
+      </Card>
+
+      <Card title={t('registry.title')} style={{ borderRadius: '12px' }}>
+        <Alert
+          type="info"
+          showIcon
+          message={t('registry.manualUpdateNotice')}
+          style={{ marginBottom: '16px' }}
+        />
+        <Descriptions bordered column={1} size="small">
+          <Descriptions.Item label={t('registry.embeddedVersion')}>
+            <Tag>{registryStatus?.embeddedVersion || '-'}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('registry.installedVersion')}>
+            <Tag color="blue">{registryStatus?.installedVersion || t('registry.embeddedOnly')}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('registry.availableVersion')}>
+            <Tag color={registryStatus?.state === 'UPDATE_AVAILABLE' ? 'orange' : 'default'}>
+              {registryStatus?.availableVersion || '-'}
+            </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('registry.status')}>
+            {registryStatus?.state || 'IDLE'}
+          </Descriptions.Item>
+        </Descriptions>
+        {registryStatus?.error && (
+          <Alert
+            type="warning"
+            showIcon
+            message={registryStatus.error}
+            style={{ marginTop: '16px' }}
+          />
+        )}
+        <Space wrap style={{ marginTop: '16px' }}>
+          <Button
+            icon={<ReloadOutlined />}
+            loading={checkingRegistryUpdate}
+            onClick={handleCheckRegistryUpdate}
+          >
+            {t('registry.check')}
+          </Button>
+          {registryStatus?.state === 'UPDATE_AVAILABLE' && (
+            <Popconfirm
+              title={t('registry.installConfirmTitle')}
+              description={t('registry.installConfirmDescription')}
+              okText={t('registry.install')}
+              cancelText={t('common.cancel')}
+              onConfirm={handleInstallRegistryUpdate}
+            >
+              <Button
+                type="primary"
+                icon={<CloudDownloadOutlined />}
+                loading={installingRegistryUpdate}
+              >
+                {t('registry.install')}
+              </Button>
+            </Popconfirm>
+          )}
+          {registryStatus?.installedVersion && (
+            <Popconfirm
+              title={t('registry.rollbackConfirmTitle')}
+              description={t('registry.rollbackConfirmDescription')}
+              okText={t('registry.rollback')}
+              cancelText={t('common.cancel')}
+              onConfirm={handleRollbackRegistry}
+            >
+              <Button danger loading={rollingBackRegistry}>
+                {t('registry.rollback')}
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
       </Card>
 
       <Card title={t('changelog.title')} style={{ borderRadius: '12px' }}>

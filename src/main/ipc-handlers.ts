@@ -24,6 +24,9 @@ import { agentsManagementService } from './services/agents-management-service'
 import { skillsManagementService } from './services/skills-management-service'
 import { environmentCheckService } from './services/environment-check-service'
 import { terminalManagementService } from './services/terminal-management-service'
+import { toolRegistryService } from './services/tool-registry-service'
+import { registryUpdateService } from './services/registry-update-service'
+import { performanceSnapshotService } from './services/performance-snapshot-service'
 import {
   ensureAllowedUrl,
   ensurePathWithinBase,
@@ -98,8 +101,26 @@ export function setupIpcHandlers(): void {
   setupSkillsHandlers()
   setupEnvironmentHandlers()
   setupTerminalHandlers()
+  setupToolRegistryHandlers()
 
   logger.info('IPC 处理器设置完成')
+}
+
+/**
+ * 工具规则库 IPC handlers
+ * @description renderer 不能提供 URL/hash；install 只消费 main 缓存的 verified manifest。
+ */
+function setupToolRegistryHandlers(): void {
+  ipcMain.handle('toolRegistry:getSnapshot', createSimpleHandler(() => toolRegistryService.getSnapshot()))
+  ipcMain.handle('toolRegistry:getTool', createSimpleHandler((toolId: string) => toolRegistryService.getTool(toolId)))
+  ipcMain.handle('toolRegistry:getUpdateStatus', createSimpleHandler(() => registryUpdateService.getStatus()))
+  ipcMain.handle('toolRegistry:checkForUpdates', createSimpleHandler(() => registryUpdateService.checkForUpdates(app.getVersion())))
+  ipcMain.handle('toolRegistry:installAvailableUpdate', createSimpleHandler(() =>
+    registryUpdateService.installAvailableUpdate(app.getVersion())
+  ))
+  ipcMain.handle('toolRegistry:rollback', createSimpleHandler(() => registryUpdateService.rollback()))
+  ipcMain.handle('performance:capture', createSimpleHandler(() => performanceSnapshotService.capture()))
+  ipcMain.handle('performance:exportSnapshot', createSimpleHandler(() => performanceSnapshotService.exportSnapshot()))
 }
 
 /**

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "registryVersion": "1.0.0",
+  "minimumAppVersion": "1.4.0",
+  "tools": [
+    {
+      "toolId": "claude-code",
+      "definitionVersion": "1.0.0",
+      "displayName": {
+        "zh-CN": "Claude Code",
+        "en-US": "Claude Code"
+      },
+      "platforms": ["WINDOWS", "MACOS", "LINUX"],
+      "detectors": [
+        {
+          "type": "COMMAND_EXISTS",
+          "command": "claude"
+        },
+        {
+          "type": "PATH_EXISTS",
+          "path": "${HOME}/.claude"
+        }
+      ],
+      "artifacts": [
+        {
+          "artifactId": "user-settings",
+          "displayName": {
+            "zh-CN": "用户设置",
+            "en-US": "User Settings"
+          },
+          "format": "JSON",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": ["${HOME}/.claude/settings.json"],
+            "MACOS": ["${HOME}/.claude/settings.json"],
+            "LINUX": ["${HOME}/.claude/settings.json"]
+          },
+          "capabilities": ["DISCOVER", "READ", "VALIDATE", "EDIT", "BACKUP", "RESTORE"],
+          "handler": "JSON_FILE_V1",
+          "defaultTemplate": "{\n  \"env\": {\n    \"ANTHROPIC_BASE_URL\": \"https://api.anthropic.com\",\n    \"ANTHROPIC_AUTH_TOKEN\": \"\"\n  },\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}"
+        },
+        {
+          "artifactId": "mcp-registry",
+          "displayName": {
+            "zh-CN": "MCP 服务器注册表",
+            "en-US": "MCP Server Registry"
+          },
+          "format": "JSON",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": ["${HOME}/.claude.json"],
+            "MACOS": ["${HOME}/.claude.json"],
+            "LINUX": ["${HOME}/.claude.json"]
+          },
+          "capabilities": ["DISCOVER", "READ", "VALIDATE", "BACKUP", "RESTORE"],
+          "handler": "JSON_FILE_V1"
+        },
+        {
+          "artifactId": "instructions",
+          "displayName": {
+            "zh-CN": "全局指令",
+            "en-US": "Global Instructions"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": ["${HOME}/.claude/CLAUDE.md"],
+            "MACOS": ["${HOME}/.claude/CLAUDE.md"],
+            "LINUX": ["${HOME}/.claude/CLAUDE.md"]
+          },
+          "capabilities": ["DISCOVER", "READ", "EDIT", "BACKUP", "RESTORE"],
+          "handler": "MARKDOWN_FILE_V1",
+          "defaultTemplate": "# Global Instructions\n"
+        }
+      ]
+    }
+  ]
+}

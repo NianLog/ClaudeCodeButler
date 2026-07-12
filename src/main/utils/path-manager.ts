@@ -34,6 +34,7 @@ export const pathManager = {
   logDir: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.LOG_DIR),
   cacheDir: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.CACHE_DIR),
   configDir: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.CONFIG_DIR),
+  registryDir: path.join(APP_DATA_BASE_DIR, 'registry'),
 
   // Claude 配置目录 (用户目录/.ccb/claude-configs)
   claudeConfigsDir: CLAUDE_CONFIGS_DIR,
@@ -42,6 +43,9 @@ export const pathManager = {
   rulesFile: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.DATA_DIR, CONFIG_FILES.RULES_FILE),
   ruleExecutionsLogFile: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.DATA_DIR, 'rule-executions.json'),
   settingsFile: path.join(APP_DATA_BASE_DIR, PATH_CONSTANTS.CONFIG_DIR, CONFIG_FILES.SETTINGS),
+  installedRegistryFile: path.join(APP_DATA_BASE_DIR, 'registry', 'installed.json'),
+  installedRegistryMetadataFile: path.join(APP_DATA_BASE_DIR, 'registry', 'installed.meta.json'),
+  lastKnownGoodRegistryFile: path.join(APP_DATA_BASE_DIR, 'registry', 'last-known-good.json'),
 
   // Claude 用户目录相关路径（~/.claude）—— v1.4.0 新增，消除全代码库 os.homedir()+'.claude' 散落拼接
   claudeDir: path.join(HOME_DIR, '.claude'),

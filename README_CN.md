@@ -22,11 +22,13 @@ CCB (Claude Code Butler) 是一个基于 Electron、React 和 TypeScript 构建�
 ### 项目状态
 
 - **当前发布基线**：`1.4.0`
-- **下一里程碑**：`1.5.0` 规划与开发准备阶段
+- **下一里程碑**：`1.5.0` 基础设施开发中
 - **安全基线（2026-07-12）**：Semgrep `0 findings / 0 scan errors`，root 与 proxy-server npm audit 均为 `0 vulnerabilities`
-- **验证基线**：10 个测试文件共 65 项测试、TypeScript 检查、root production build 与 proxy-server build 全部通过
+- **验证基线**：14 个测试文件共 84 项测试、TypeScript 检查、root production build 与 proxy-server build 全部通过
 
 在 `1.5.0` 的范围、验收标准与发布计划确认前，package version 继续保持 `1.4.0`，避免把开发目标误标为已发布版本。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
+
+CCB 的新全称建议为 **Cognitive Configuration Bridge（智能配置桥）**，用于表达从 Claude Code 专用管理器向规则驱动的多 AI 工具配置平台演进。该名称在产品命名决策确认前保持 provisional 状态。
 
 ### ✨ 核心功能
 
@@ -362,6 +364,13 @@ semgrep scan \
 - 迁移至 node-cron 4 的 `createTask` 语义，并补充 enabled/disabled rule 回归测试。
 - 恢复 production bundle 中的组件 CSS imports，并清理 PostCSS 检查发现的残缺无效样式片段。
 - 增加可复现的 Semgrep 虚拟环境、JSON/SARIF 原始结果流程与持续维护的安全审计报告。
+
+### v1.5.0 基础设施开发中
+
+- 新增声明式 JSON 工具规则库模型、bounded validation 与内置 Claude Code 兼容 adapter。
+- 新增需用户明确确认、具备 integrity 校验的规则库安装和 last-known-good rollback；自动检查只获取小型 manifest。
+- Settings/About 已加入规则库操作入口，main process 新增完全按需的 performance snapshot exporter。
+- 架构、安全协议、性能预算、迁移阶段与 provisional 品牌方案见 [`docs/1.5.0`](./docs/1.5.0/README.md)。
 
 ### 产品体验更新
 

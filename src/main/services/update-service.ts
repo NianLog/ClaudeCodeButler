@@ -9,11 +9,17 @@ import { join } from 'path';
 import fs from 'fs';
 import { logger } from '../utils/logger';
 import { APP_INFO } from '@shared/constants';
+import { registryUpdateService } from './registry-update-service';
 
 const VERSION_URL = 'https://dev.niansir.com/software/ccb/version.txt';
 
 class UpdateService {
   public async checkForUpdates(): Promise<void> {
+    const registryCheck = registryUpdateService.checkForUpdates(app.getVersion()).catch((error) => ({
+      state: 'CHECK_FAILED' as const,
+      embeddedVersion: '0.0.0',
+      error: error instanceof Error ? error.message : String(error)
+    }));
     logger.info('正在检查更新...');
     try {
       const response = await axios.get(VERSION_URL, { timeout: 15000 });
@@ -35,6 +41,13 @@ class UpdateService {
       }
     } catch (error) {
       logger.error('检查更新失败:', error);
+    }
+
+    const registryStatus = await registryCheck;
+    if (registryStatus.state === 'UPDATE_AVAILABLE') {
+      logger.info(`发现规则库更新: ${registryStatus.availableVersion}`);
+    } else if (registryStatus.state === 'CHECK_FAILED') {
+      logger.warn(`规则库版本检查失败: ${registryStatus.error}`);
     }
   }
 
