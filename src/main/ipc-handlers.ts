@@ -29,6 +29,7 @@ import { registryUpdateService } from './services/registry-update-service'
 import { performanceSnapshotService } from './services/performance-snapshot-service'
 import { toolArtifactDiscoveryService } from './services/tool-artifact-discovery-service'
 import { toolArtifactManagementService } from './services/tool-artifact-management-service'
+import { createArtifactTemplateService } from './services/artifact-template-service'
 import {
   ensureAllowedUrl,
   ensurePathWithinBase,
@@ -40,6 +41,7 @@ import { ensureExternalUrl } from './utils/ssrf-guard'
 // 服务实例
 const configService = new ConfigService()
 const settingsService = new SettingsService()
+const artifactTemplateService = createArtifactTemplateService(settingsService)
 
 // 导出 configService 供其他模块使用
 export { configService, settingsService, managedModeService }
@@ -115,6 +117,21 @@ export function setupIpcHandlers(): void {
 function setupToolRegistryHandlers(): void {
   ipcMain.handle('toolRegistry:getSnapshot', createSimpleHandler(() => toolRegistryService.getSnapshot()))
   ipcMain.handle('toolRegistry:getTool', createSimpleHandler((toolId: string) => toolRegistryService.getTool(toolId)))
+  ipcMain.handle('toolRegistry:listArtifactTemplates', createSimpleHandler(() =>
+    artifactTemplateService.listArtifactTemplates()
+  ))
+  ipcMain.handle('toolRegistry:resolveArtifactTemplate', createSimpleHandler((toolId: string, artifactId: string) =>
+    artifactTemplateService.resolveArtifactTemplate(toolId, artifactId)
+  ))
+  ipcMain.handle('toolRegistry:saveArtifactTemplateOverride', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    content: string
+  ) => artifactTemplateService.saveArtifactTemplateOverride(toolId, artifactId, content)))
+  ipcMain.handle('toolRegistry:removeArtifactTemplateOverride', createSimpleHandler((
+    toolId: string,
+    artifactId: string
+  ) => artifactTemplateService.removeArtifactTemplateOverride(toolId, artifactId)))
   ipcMain.handle('toolRegistry:detectTools', createSimpleHandler(() => toolArtifactDiscoveryService.detectTools()))
   ipcMain.handle('toolRegistry:discoverArtifacts', createSimpleHandler((toolId: string) =>
     toolArtifactDiscoveryService.discoverArtifacts(toolId)
@@ -156,7 +173,9 @@ function setupToolRegistryHandlers(): void {
   ))
   ipcMain.handle('toolRegistry:rollback', createSimpleHandler(() => registryUpdateService.rollback()))
   ipcMain.handle('performance:capture', createSimpleHandler(() => performanceSnapshotService.capture()))
-  ipcMain.handle('performance:exportSnapshot', createSimpleHandler(() => performanceSnapshotService.exportSnapshot()))
+  ipcMain.handle('performance:exportSnapshot', createSimpleHandler((rendererTimings?: unknown) =>
+    performanceSnapshotService.exportSnapshot(rendererTimings)
+  ))
 }
 
 /**

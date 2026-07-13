@@ -1,0 +1,80 @@
+/** Artifact-specific template settings styles. */
+
+.artifact-template-loading {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+}
+
+.artifact-template-settings .ant-alert {
+  margin-bottom: 16px;
+}
+
+.artifact-template-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.artifact-template-toolbar .ant-select {
+  min-width: min(100%, 360px);
+}
+
+.artifact-template-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.artifact-template-diff {
+  max-height: 55vh;
+  margin: 16px 0;
+  overflow: auto;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.artifact-template-diff-error {
+  margin: 16px 0;
+}
+
+.artifact-template-diff-line {
+  display: flex;
+  min-height: 22px;
+  white-space: pre-wrap;
+}
+
+.artifact-template-diff-line.is-added {
+  background: color-mix(in srgb, var(--success-color) 14%, transparent);
+}
+
+.artifact-template-diff-line.is-removed {
+  background: color-mix(in srgb, var(--error-color) 14%, transparent);
+}
+
+.artifact-template-diff-marker {
+  width: 28px;
+  flex: 0 0 28px;
+  padding-left: 8px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .artifact-template-toolbar,
+  .artifact-template-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .artifact-template-toolbar .ant-select {
+    width: 100%;
+    min-width: 0;
+  }
+}

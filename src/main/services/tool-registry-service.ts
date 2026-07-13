@@ -181,6 +181,16 @@ export class ToolRegistryService {
   }
 
   /**
+   * 获取应用随包发布的工具定义 baseline。
+   * @description 该接口只用于区分 embedded 与 effective registry ownership，绝不读取远程 storage。
+   * @param toolId 稳定 tool identifier
+   * @returns 内置工具定义，不存在时返回 undefined
+   */
+  public getEmbeddedTool(toolId: string): ToolDefinition | undefined {
+    return this.embedded.tools.find((tool) => tool.toolId === toolId)
+  }
+
+  /**
    * 安装用户明确批准下载的规则 bundle
    * @param input 原始 bundle 与 manifest integrity 信息
    * @returns 新安装的 registry version

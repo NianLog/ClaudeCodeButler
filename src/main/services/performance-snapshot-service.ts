@@ -8,7 +8,14 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { writeJsonAtomic } from '../utils/atomic-json-writer'
 import { pathManager } from '../utils/path-manager'
-import type { PerformanceSnapshot } from '@shared/performance'
+import {
+  validateRendererPerformanceTimings,
+  type PerformanceSnapshot
+} from '@shared/performance'
+import {
+  RuntimePerformanceTelemetry,
+  runtimePerformanceTelemetry
+} from './runtime-performance-telemetry'
 
 /**
  * Performance snapshot service
@@ -16,10 +23,20 @@ import type { PerformanceSnapshot } from '@shared/performance'
  */
 export class PerformanceSnapshotService {
   /**
+   * 创建 performance snapshot service。
+   * @param performanceTelemetry 被动维护的 main runtime metrics provider
+   */
+  constructor(
+    private readonly performanceTelemetry: RuntimePerformanceTelemetry = runtimePerformanceTelemetry
+  ) {}
+
+  /**
    * 采集当前 Electron process snapshot
+   * @param rendererTimingsInput 可选且不可信的 renderer timing summary；进入 snapshot 前强制校验
    * @returns 可序列化性能数据
    */
-  public capture(): PerformanceSnapshot {
+  public capture(rendererTimingsInput?: unknown): PerformanceSnapshot {
+    const rendererTimings = validateRendererPerformanceTimings(rendererTimingsInput)
     const processes = app.getAppMetrics().map((metric) => ({
       type: metric.type,
       pid: metric.pid,
@@ -29,7 +46,7 @@ export class PerformanceSnapshotService {
       privateBytesKb: metric.memory.privateBytes
     }))
 
-    return {
+    const snapshot: PerformanceSnapshot = {
       schemaVersion: 1,
       capturedAt: new Date().toISOString(),
       appVersion: app.getVersion(),
@@ -38,16 +55,24 @@ export class PerformanceSnapshotService {
       uptimeSeconds: process.uptime(),
       mainMemoryUsage: process.memoryUsage(),
       processes,
-      totalWorkingSetKb: processes.reduce((total, metric) => total + metric.workingSetKb, 0)
+      totalWorkingSetKb: processes.reduce((total, metric) => total + metric.workingSetKb, 0),
+      runtimeMetrics: this.performanceTelemetry.getSnapshot()
     }
+
+    if (rendererTimings !== undefined) {
+      snapshot.rendererTimings = rendererTimings
+    }
+
+    return snapshot
   }
 
   /**
    * 导出当前 snapshot 到 .ccb/performance
+   * @param rendererTimingsInput 可选且不可信的 renderer timing summary
    * @returns 导出文件绝对路径
    */
-  public async exportSnapshot(): Promise<string> {
-    const snapshot = this.capture()
+  public async exportSnapshot(rendererTimingsInput?: unknown): Promise<string> {
+    const snapshot = this.capture(rendererTimingsInput)
     const safeTimestamp = snapshot.capturedAt.replace(/[:.]/g, '-')
     const outputDirectory = path.join(pathManager.appDataDir, 'performance')
     const outputPath = path.join(outputDirectory, `performance-${safeTimestamp}.json`)

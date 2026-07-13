@@ -82,6 +82,12 @@ web_modules/
 .env.production.local
 .env.local
 
+# Offline publisher/private keys（public verification keys must be reviewed explicitly before tracking）
+.keys/
+*.private.pem
+registry-private-key*.pem
+secrets/
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

@@ -261,3 +261,38 @@ export interface ConfigArtifactBackup {
   /** ISO-8601 创建时间 */
   createdAt: string
 }
+
+/** Artifact template 生效来源枚举值。 */
+export const ARTIFACT_TEMPLATE_SOURCES = ['USER_OVERRIDE', 'REGISTRY', 'EMBEDDED'] as const
+
+/** Artifact template 生效来源。 */
+export type ArtifactTemplateSource = typeof ARTIFACT_TEMPLATE_SOURCES[number]
+
+/** Artifact-specific template catalog entry。 */
+export interface ArtifactTemplateEntry {
+  /** Stable template key，格式为 toolId/artifactId。 */
+  key: string
+  toolId: string
+  artifactId: string
+  toolDisplayName: LocalizedText
+  artifactDisplayName: LocalizedText
+  format: ArtifactFormat
+  /** 内置 application baseline。 */
+  embeddedTemplate?: string
+  /** Effective registry 声明；rollback 后自动变化。 */
+  registryTemplate?: string
+  /** 用户本地 override。 */
+  userOverride?: string
+  /** 当前创建流程使用的内容。 */
+  effectiveTemplate: string
+  source: ArtifactTemplateSource
+}
+
+/** Template line diff 类型枚举值。 */
+export const TEMPLATE_DIFF_LINE_TYPES = ['UNCHANGED', 'ADDED', 'REMOVED'] as const
+
+/** Template line diff entry。 */
+export interface TemplateDiffLine {
+  type: typeof TEMPLATE_DIFF_LINE_TYPES[number]
+  content: string
+}

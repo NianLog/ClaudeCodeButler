@@ -24,6 +24,10 @@ import {
   ensurePathWithinBase,
   normalizePathForComparison
 } from '../utils/path-security'
+import {
+  RuntimePerformanceTelemetry,
+  runtimePerformanceTelemetry
+} from './runtime-performance-telemetry'
 
 /**
  * 备份元数据
@@ -57,7 +61,13 @@ export class ConfigService {
     return pathManager.claudeConfigsDir
   }
 
-  constructor() {
+  /**
+   * 创建配置服务。
+   * @param performanceTelemetry main runtime metrics provider
+   */
+  constructor(
+    private readonly performanceTelemetry: RuntimePerformanceTelemetry = runtimePerformanceTelemetry
+  ) {
     // 不再在构造函数中设置,使用 getter
   }
 
@@ -165,6 +175,8 @@ export class ConfigService {
   async scanConfigs(): Promise<ConfigFile[]> {
     const startTime = Date.now()
     const configs: ConfigFile[] = []
+    let filesVisited = 0
+    let success = false
 
     try {
       // 确保 .claude 目录存在
@@ -172,6 +184,7 @@ export class ConfigService {
 
       // 扫描所有配置文件
       const files = await this.getAllConfigFiles()
+      filesVisited = files.length
       logger.info(`扫描到 ${files.length} 个配置文件:`, files)
 
       for (const filePath of files) {
@@ -186,11 +199,24 @@ export class ConfigService {
 
       logger.info(`最终返回 ${configs.length} 个配置文件`)
       logger.performance('扫描配置文件', startTime)
+      success = true
       return configs
 
     } catch (error) {
       logger.error('扫描配置文件失败:', error)
       throw error
+    } finally {
+      try {
+        this.performanceTelemetry.recordConfigScan({
+          completedAt: new Date().toISOString(),
+          durationMs: Math.max(0, Date.now() - startTime),
+          filesVisited,
+          configsLoaded: configs.length,
+          success
+        })
+      } catch (telemetryError) {
+        logger.warn('记录配置扫描性能指标失败，不影响扫描结果:', telemetryError)
+      }
     }
   }
 

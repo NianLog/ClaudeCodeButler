@@ -25,9 +25,11 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 - **Release baseline**: `1.4.0`
 - **v1.5.0 implemented scope**: Claude Code and Codex CLI registry adapters, generic detection, and registry-allowlisted read-only artifact discovery
 - **v1.5.0 implemented scope**: generic codecs, validation, atomic edit, backup/restore, secure IPC, management UI, and the first lifecycle performance pass
-- **v1.5.0 remaining scope**: compatibility migration, release hardening, and user-run runtime startup/memory acceptance measurements
-- **Security baseline (2026-07-13)**: Semgrep `0 findings / 0 scan errors`, root and proxy-server npm audits `0 vulnerabilities`
-- **Verification baseline**: 129 tests across 21 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
+- **v1.5.0 completed engineering scope**: compatibility facade, artifact-specific template ownership, signed registry verification, release preflight, and Electron navigation hardening
+- **v1.5.0 remaining release scope**: production publisher public-key injection, Windows package generation after enterprise CA configuration, and user-run runtime/business acceptance
+- **Security baseline (2026-07-13)**: Semgrep full scan `198 targets / 369 rules / 0 findings / 0 structured errors`; explicit-path scan `35 targets / 336 rules / 0 findings / 0 structured errors`; OSS fixpoint warnings and compensating review are disclosed in the audit report; root and proxy-server npm audits report `0 vulnerabilities`
+- **Verification baseline**: 188 tests across 30 test files, TypeScript and ESLint checks, root production build, and proxy-server build passing
+- **Static bundle baseline**: main `288.87 KB`, preload `12.93 KB`, renderer entry `199.70 KB`, Settings JS/CSS `34.96 KB / 2.67 KB`
 
 The package version is now `1.5.0`; this marks an active development version rather than a completed public release. See [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for the latest audit evidence and accepted trust boundaries.
 
@@ -39,7 +41,7 @@ The product name remains **Claude Code Butler**. The name records the project's 
   - Manage Claude Code configs, project configs, MCP configs, and user preference files from one place
   - Create, edit, copy, import, export, backup, restore, and switch configurations
   - Support both `JSON` and `Markdown`-based config types with matching validation rules
-  - Preload new configs from a customizable default template configured in `Settings -> Editor Settings`
+  - Preload new configs from artifact-specific templates resolved with `USER_OVERRIDE > REGISTRY > EMBEDDED` precedence
 
 - 🔌 **MCP Server Management**
   - Manage global and project-scoped MCP servers in one panel
@@ -50,7 +52,7 @@ The product name remains **Claude Code Butler**. The name records the project's 
 - 🧠 **Editor & Settings Experience**
   - Monaco-based editor with on-demand runtime loading to keep the initial renderer lighter
   - Built-in formatting, syntax validation, and modal preview using the same editor component
-  - Default new-config template editing, saving, and previewing in editor settings
+  - Artifact selector, effective-source indicator, bounded diff preview, and per-artifact template override controls
   - Terminal presets, theme/language preferences, and editor behavior settings
 
 - 🤖 **Automation & Managed Mode**
@@ -171,6 +173,9 @@ npm run pack:zip
 
 # Unpacked directory for fast smoke checks
 npm run pack:dir
+
+# Build Portable, NSIS, and ZIP in one release pass
+npm run pack:win:all
 ```
 
 Artifacts are emitted to `release/` by default:
@@ -179,6 +184,8 @@ Artifacts are emitted to `release/` by default:
 - `CCB-Setup-{version}.exe` - Assisted installer with custom install directory and shortcut options
 - `CCB-{version}-win.zip` - ZIP package
 - `win-unpacked/` - Unpacked directory build
+
+Before packaging, run `npm run release:preflight:preview` during development and `npm run release:preflight` for a production release. The production preflight intentionally fails closed while `REGISTRY_TRUSTED_PUBLIC_KEYS` is empty. On the current Windows enterprise/proxy environment, Electron distribution download is also blocked by an untrusted certificate chain; configure the trusted root through `NODE_EXTRA_CA_CERTS` or npm `cafile` instead of disabling TLS verification.
 
 ### Distribution notes
 
@@ -253,7 +260,7 @@ ClaudeCodeButler/
 │   ├── main/                # Electron main process, IPC handlers, services, logging
 │   ├── preload/             # Secure bridge exposed to renderer
 │   ├── renderer/            # React UI, Zustand stores, pages, components, locales
-│   ├── shared/              # Shared types, constants, config-template helpers
+│   ├── shared/              # Shared types, constants, registry and artifact-template helpers
 │   └── proxy-server/        # Managed-mode proxy service and related assets
 ├── scripts/                 # Dev/build helper scripts
 ├── resources/               # Icons, screenshots, packaged resources
@@ -276,7 +283,7 @@ ClaudeCodeButler/
 - **Shared contract layer**
   - Cross-process types in `src/shared/types`
   - IPC constants and app metadata in `src/shared/constants`
-  - Default new-config template helpers in `src/shared/config-template`
+  - Artifact-template ownership, migration, bounded diff, and async resolution helpers in `src/shared/config-template`
 
 ### IPC Communication Pattern
 
@@ -308,6 +315,7 @@ npm run lint
 npm run test -- --run
 npm audit --audit-level=low
 npm audit --audit-level=low --prefix src/proxy-server
+npm run release:preflight:preview
 
 # Packaging
 npm run pack
@@ -315,6 +323,7 @@ npm run pack:portable
 npm run pack:installer
 npm run pack:zip
 npm run pack:dir
+npm run pack:win:all
 ```
 
 ### Path Aliases
@@ -368,7 +377,7 @@ The three excluded registry rules require the Semgrep Pro engine. Their correspo
 - Restored component CSS imports to the production bundle and removed invalid orphaned style fragments exposed by PostCSS validation.
 - Added a reproducible Semgrep environment, raw JSON/SARIF output workflow, and a maintained security audit report.
 
-### v1.5.0 foundation in progress
+### v1.5.0 release candidate engineering complete
 
 - Added a declarative JSON tool registry model with bounded validation and an embedded Claude Code compatibility adapter.
 - Added a read-only Codex CLI adapter plus generic `PATH_EXISTS` / `COMMAND_EXISTS` detection and registry-allowlisted artifact discovery.
@@ -377,17 +386,20 @@ The three excluded registry rules require the Semgrep Pro engine. Their correspo
 - Refined list rows into bounded text, structured metadata, and independent action regions; generic backups now retain at most 20 versions per artifact path.
 - Added explicit, integrity-checked registry installation and last-known-good rollback; automatic checks fetch only the small manifest.
 - Added Ed25519 raw-bundle signature verification and a key-rotation contract; remote registry remains fail-closed preview until the production publisher public key is injected.
-- Added registry controls under Settings/About and a main-process-only on-demand performance snapshot exporter.
+- Added artifact-specific template ownership with `USER_OVERRIDE > REGISTRY > EMBEDDED` precedence, legacy customized-template migration, bounded diff preview, and registry update/rollback isolation.
+- Added registry controls under Settings/About and an on-demand local performance snapshot exporter. Its JSON includes Electron process metrics, bounded renderer timings, passive watcher counts, and the latest config-scan summary; it adds no sampling timer or upload.
 - Non-critical data now loads in idle batches after critical first-render initialization; resolved initialization timeouts release their timers and unmount cancels pending batches.
 - StatisticsService auto-save is serialized and its interval is `unref()`'d; app exit now waits for idempotent cleanup before allowing quit, preventing persistence races.
 - Claude configuration workspace paths now use a compatibility facade; `1.5.0` keeps reading `.ccb/claude-configs` and never silently creates or migrates to a new location.
+- Added release preflight and a combined Windows Portable/NSIS/ZIP command; production preflight remains intentionally blocked until the publisher public key is injected.
+- Hardened Electron windows with sandboxing plus fail-closed new-window and external-navigation policies.
 - This pass verifies scheduling logic, static bundles, and resource lifecycle only; runtime startup/memory improvements remain subject to the user's later on-device acceptance run.
 - Architecture, security protocol, performance budgets, migration phases, and the accepted brand decision are documented in [`docs/1.5.0`](./docs/1.5.0/README.md).
 
 ### Product experience updates
 
-- Added a customizable default template for new configs in `Settings -> Editor Settings`.
-- Reworked template preview so it opens in a modal and reuses the same editor capabilities for validation and formatting.
+- The former global customizable default template is now **outdated** and has been replaced by per-artifact template ownership in `Settings -> Editor Settings`.
+- Reworked template preview into an artifact-aware bounded diff while the editor continues to provide validation and formatting.
 - Fixed config copy behavior to open an editor with a localized copy suffix and defer file creation until explicit save.
 - Improved config-type aware validation so Markdown-based preference files are no longer forced through JSON parsing in preview flows.
 - Added NSIS installer packaging as a lower-latency alternative to the single-file Portable build.

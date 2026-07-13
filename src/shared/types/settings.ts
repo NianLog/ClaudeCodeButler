@@ -19,6 +19,8 @@ export interface EditorSettings {
   minimap: boolean
   lineNumbers: boolean
   defaultConfigTemplate: string
+  /** 按 toolId/artifactId 隔离的用户模板覆盖；legacy global field 仅用于迁移兼容。 */
+  artifactTemplateOverrides: Record<string, string>
 }
 
 // 通知设置类型

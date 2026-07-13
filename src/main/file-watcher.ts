@@ -9,13 +9,27 @@ import { join, basename, extname } from 'path'
 import { ConfigChangeEvent, ConfigType } from '@shared/types'
 import { CONFIG_FILES } from '@shared/constants'
 import { logger } from './utils/logger'
+import {
+  RuntimePerformanceTelemetry,
+  runtimePerformanceTelemetry
+} from './services/runtime-performance-telemetry'
 
+/** 配置文件 watcher，并被动上报当前 topology 计数。 */
 export class FileWatcher extends EventEmitter {
   private watcher: chokidar.FSWatcher | null = null
   private watchPath: string
   private isRunning = false
+  private readonly telemetryId = Symbol('file-watcher')
 
-  constructor(watchPath: string) {
+  /**
+   * 创建配置文件 watcher。
+   * @param watchPath 根监控目录
+   * @param performanceTelemetry main runtime metrics provider
+   */
+  constructor(
+    watchPath: string,
+    private readonly performanceTelemetry: RuntimePerformanceTelemetry = runtimePerformanceTelemetry
+  ) {
     super()
     this.watchPath = watchPath
   }
@@ -24,8 +38,8 @@ export class FileWatcher extends EventEmitter {
    * 启动文件监控
    */
   start(): void {
-    if (this.isRunning) {
-      logger.warn('文件监控已在运行')
+    if (this.watcher) {
+      logger.warn('文件监控已在启动或运行')
       return
     }
 
@@ -46,16 +60,26 @@ export class FileWatcher extends EventEmitter {
         }
       })
 
+      const activeWatcher = this.watcher
+
       // 设置事件监听器
-      this.setupEventListeners()
+      this.setupEventListeners(activeWatcher)
 
       // 启动监控
-      this.watcher.on('ready', () => {
+      activeWatcher.on('ready', () => {
+        if (this.watcher !== activeWatcher) {
+          return
+        }
         this.isRunning = true
+        this.performanceTelemetry.markFileWatcherActive(this.telemetryId)
+        this.refreshRuntimeMetrics()
         logger.info(`文件监控已启动: ${this.watchPath}`)
       })
 
-      this.watcher.on('error', (error) => {
+      activeWatcher.on('error', (error) => {
+        if (this.watcher !== activeWatcher) {
+          return
+        }
         logger.error('文件监控错误:', error)
         this.emit('error', error)
       })
@@ -69,11 +93,10 @@ export class FileWatcher extends EventEmitter {
   /**
    * 设置事件监听器
    */
-  private setupEventListeners(): void {
-    if (!this.watcher) return
-
+  private setupEventListeners(watcher: chokidar.FSWatcher): void {
     // 文件添加
-    this.watcher.on('add', (path) => {
+    watcher.on('add', (path) => {
+      if (this.watcher !== watcher) return
       if (this.isConfigFile(path)) {
         const event: ConfigChangeEvent = {
           type: 'added',
@@ -86,7 +109,8 @@ export class FileWatcher extends EventEmitter {
     })
 
     // 文件修改
-    this.watcher.on('change', (path) => {
+    watcher.on('change', (path) => {
+      if (this.watcher !== watcher) return
       if (this.isConfigFile(path)) {
         const event: ConfigChangeEvent = {
           type: 'changed',
@@ -99,7 +123,8 @@ export class FileWatcher extends EventEmitter {
     })
 
     // 文件删除
-    this.watcher.on('unlink', (path) => {
+    watcher.on('unlink', (path) => {
+      if (this.watcher !== watcher) return
       if (this.isConfigFile(path)) {
         const event: ConfigChangeEvent = {
           type: 'deleted',
@@ -112,16 +137,46 @@ export class FileWatcher extends EventEmitter {
     })
 
     // 目录添加
-    this.watcher.on('addDir', (path) => {
+    watcher.on('addDir', (path) => {
+      if (this.watcher !== watcher) return
       logger.debug('目录已添加:', path)
       this.emit('directory-added', path)
+      this.refreshRuntimeMetrics()
     })
 
     // 目录删除
-    this.watcher.on('unlinkDir', (path) => {
+    watcher.on('unlinkDir', (path) => {
+      if (this.watcher !== watcher) return
       logger.debug('目录已删除:', path)
       this.emit('directory-deleted', path)
+      this.refreshRuntimeMetrics()
     })
+  }
+
+  /**
+   * 从 chokidar `getWatched()` 刷新 watcher topology 指标。
+   * @description 采集失败只记录 warning 并保留上次值，绝不影响 watcher 事件语义。
+   */
+  private refreshRuntimeMetrics(): void {
+    if (!this.watcher || !this.isRunning) {
+      return
+    }
+
+    try {
+      const watched = this.watcher.getWatched()
+      const watchedDirectories = Object.keys(watched)
+      const watchedEntryCount = watchedDirectories.reduce(
+        (total, directory) => total + (Array.isArray(watched[directory]) ? watched[directory].length : 0),
+        0
+      )
+      this.performanceTelemetry.updateFileWatcher(
+        this.telemetryId,
+        watchedDirectories.length,
+        watchedEntryCount
+      )
+    } catch (error) {
+      logger.warn('读取文件监控性能指标失败，保留上次采样值:', error)
+    }
   }
 
   /**
@@ -171,14 +226,19 @@ export class FileWatcher extends EventEmitter {
    * 停止文件监控
    */
   stop(): void {
-    if (!this.isRunning || !this.watcher) {
+    const watcher = this.watcher
+    this.watcher = null
+    this.isRunning = false
+    this.performanceTelemetry.removeFileWatcher(this.telemetryId)
+
+    if (!watcher) {
       return
     }
 
     try {
-      this.watcher.close()
-      this.watcher = null
-      this.isRunning = false
+      void watcher.close().catch((error) => {
+        logger.error('异步停止文件监控失败:', error)
+      })
       logger.info('文件监控已停止')
     } catch (error) {
       logger.error('停止文件监控失败:', error)

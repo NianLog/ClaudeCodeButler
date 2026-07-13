@@ -1272,6 +1272,15 @@ const zhCN: TranslationDict = {
   'about.latestVersion': '最新版本信息',
   'about.latestVersion.loading': '获取中...',
   'about.latestVersion.offline': '无网络',
+  'performanceSnapshot.title': '性能快照',
+  'performanceSnapshot.description': '导出 Electron 进程资源、renderer 启动、watcher 与最近配置扫描指标',
+  'performanceSnapshot.privacyNotice': '仅在点击按钮时采集并保存到本地 .ccb/performance，不会自动上传。',
+  'performanceSnapshot.export': '导出性能快照',
+  'performanceSnapshot.exportSuccess': '性能快照导出成功',
+  'performanceSnapshot.exportFailed': '性能快照导出失败',
+  'performanceSnapshot.savedPath': '快照已保存',
+  'performanceSnapshot.reveal': '在文件管理器中显示',
+  'performanceSnapshot.revealFailed': '无法在文件管理器中定位快照',
 
   // 更新相关
   'update.check': '检查更新',
@@ -2567,6 +2576,15 @@ const enUS: TranslationDict = {
   'about.latestVersion': 'Latest Version',
   'about.latestVersion.loading': 'Loading...',
   'about.latestVersion.offline': 'Offline',
+  'performanceSnapshot.title': 'Performance Snapshot',
+  'performanceSnapshot.description': 'Export Electron process, renderer startup, watcher, and latest config scan metrics',
+  'performanceSnapshot.privacyNotice': 'Metrics are collected only when you click the button, saved locally under .ccb/performance, and never uploaded automatically.',
+  'performanceSnapshot.export': 'Export Performance Snapshot',
+  'performanceSnapshot.exportSuccess': 'Performance snapshot exported successfully',
+  'performanceSnapshot.exportFailed': 'Failed to export performance snapshot',
+  'performanceSnapshot.savedPath': 'Snapshot saved',
+  'performanceSnapshot.reveal': 'Show in File Explorer',
+  'performanceSnapshot.revealFailed': 'Unable to reveal the snapshot in File Explorer',
 
   // 更新相关
   'update.check': 'Check for Updates',

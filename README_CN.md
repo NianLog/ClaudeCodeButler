@@ -25,9 +25,11 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 - **发布基线**：`1.4.0`
 - **v1.5.0 已实施范围**：Claude Code 与 Codex CLI registry adapter、通用检测、registry allowlist 约束的只读 artifact discovery
 - **v1.5.0 已实施范围**：通用 codecs、validation、atomic edit、backup/restore、安全 IPC、管理 UI 与首轮 lifecycle performance 优化
-- **v1.5.0 待实施范围**：兼容迁移、release 收尾，以及由用户执行的 runtime startup/memory 实机验收
-- **安全基线（2026-07-13）**：Semgrep `0 findings / 0 scan errors`，root 与 proxy-server npm audit 均为 `0 vulnerabilities`
-- **验证基线**：21 个测试文件共 129 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
+- **v1.5.0 已完成工程范围**：compatibility facade、artifact-specific template ownership、signed registry verification、release preflight 与 Electron navigation hardening
+- **v1.5.0 剩余发布范围**：注入 production publisher public key、配置企业 CA 后生成 Windows 安装包，以及由用户执行 runtime/业务实机验收
+- **安全基线（2026-07-13）**：Semgrep full scan `198 targets / 369 rules / 0 findings / 0 structured errors`；explicit-path scan `35 targets / 336 rules / 0 findings / 0 structured errors`；OSS fixpoint warnings 与补偿审查详见安全报告；root 与 proxy-server npm audit 均为 `0 vulnerabilities`
+- **验证基线**：30 个测试文件共 188 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
+- **静态包体基线**：main `288.87 KB`、preload `12.93 KB`、renderer entry `199.70 KB`、Settings JS/CSS `34.96 KB / 2.67 KB`
 
 package version 已升级为 `1.5.0`，它表示当前开发版本，不代表公共 release 已完成。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
@@ -39,7 +41,7 @@ package version 已升级为 `1.5.0`，它表示当前开发版本，不代表�
   - 统一管理 Claude Code 配置、项目配置、MCP 配置和用户偏好文件
   - 支持创建、编辑、复制、导入、导出、备份、恢复与一键切换
   - 同时支持 `JSON` 与 `Markdown` 类型配置，并按真实文件类型做校验
-  - 支持在 `设置 -> 编辑器设置` 中配置“新建配置默认模板”，创建时自动预填
+  - 新建配置按 artifact 解析模板，优先级为 `USER_OVERRIDE > REGISTRY > EMBEDDED`
 
 - 🔌 **MCP 服务器管理**
   - 在同一个面板中管理全局与项目级 MCP 服务器
@@ -50,7 +52,7 @@ package version 已升级为 `1.5.0`，它表示当前开发版本，不代表�
 - 🧠 **编辑器与设置体验**
   - 基于 Monaco 的编辑器，并采用按需加载运行时以减轻首屏压力
   - 内置格式化、语法校验与弹窗预览，预览和编辑复用同一套编辑器能力
-  - 支持默认模板编辑、保存与预览
+  - 支持 artifact selector、生效来源标识、bounded diff preview 与逐 artifact override 管理
   - 支持终端预设、主题语言、编辑器行为等偏好设置
 
 - 🤖 **自动化与托管模式**
@@ -171,6 +173,9 @@ npm run pack:zip
 
 # 目录版，适合快速冒烟验证
 npm run pack:dir
+
+# 一次生成 Portable、NSIS 与 ZIP
+npm run pack:win:all
 ```
 
 默认输出到 `release/`：
@@ -179,6 +184,8 @@ npm run pack:dir
 - `CCB-Setup-{version}.exe` - 支持自定义安装目录和快捷方式选项的安装版
 - `CCB-{version}-win.zip` - ZIP 压缩包
 - `win-unpacked/` - 目录版构建产物
+
+打包前，开发阶段运行 `npm run release:preflight:preview`，正式发布运行 `npm run release:preflight`。当 `REGISTRY_TRUSTED_PUBLIC_KEYS` 为空时 production preflight 会按设计 fail-closed。当前 Windows 企业/代理环境还会因证书链不受信任而阻塞 Electron distribution 下载；应通过 `NODE_EXTRA_CA_CERTS` 或 npm `cafile` 配置可信根证书，禁止关闭 TLS verification 绕过。
 
 ### 分发说明
 
@@ -253,7 +260,7 @@ ClaudeCodeButler/
 │   ├── main/                # Electron 主进程、IPC、服务、日志
 │   ├── preload/             # 暴露给渲染层的安全桥接
 │   ├── renderer/            # React UI、Zustand store、页面、组件、多语言
-│   ├── shared/              # 共享类型、常量、默认模板辅助工具
+│   ├── shared/              # 共享类型、常量、registry 与 artifact-template 辅助工具
 │   └── proxy-server/        # 托管模式代理服务及相关资源
 ├── scripts/                 # 开发 / 打包辅助脚本
 ├── resources/               # 图标、截图、打包资源
@@ -276,7 +283,7 @@ ClaudeCodeButler/
 - **共享契约层**
   - `src/shared/types` 存放跨进程类型
   - `src/shared/constants` 存放 IPC 常量与应用元信息
-  - `src/shared/config-template` 存放新建配置默认模板相关辅助逻辑
+  - `src/shared/config-template` 存放 artifact template ownership、migration、bounded diff 与异步解析辅助逻辑
 
 ### IPC 通信模式
 
@@ -308,6 +315,7 @@ npm run lint
 npm run test -- --run
 npm audit --audit-level=low
 npm audit --audit-level=low --prefix src/proxy-server
+npm run release:preflight:preview
 
 # 打包
 npm run pack
@@ -315,6 +323,7 @@ npm run pack:portable
 npm run pack:installer
 npm run pack:zip
 npm run pack:dir
+npm run pack:win:all
 ```
 
 ### 路径别名
@@ -368,7 +377,7 @@ semgrep scan \
 - 恢复 production bundle 中的组件 CSS imports，并清理 PostCSS 检查发现的残缺无效样式片段。
 - 增加可复现的 Semgrep 虚拟环境、JSON/SARIF 原始结果流程与持续维护的安全审计报告。
 
-### v1.5.0 基础设施开发中
+### v1.5.0 release candidate 工程实现完成
 
 - 新增声明式 JSON 工具规则库模型、bounded validation 与内置 Claude Code 兼容 adapter。
 - 新增只读 Codex CLI adapter、通用 `PATH_EXISTS` / `COMMAND_EXISTS` 检测与 registry allowlist 约束的 artifact discovery。
@@ -377,17 +386,20 @@ semgrep scan \
 - 将列表行细分为有限文本、结构化 metadata 与独立 actions 区域；通用备份默认每个 artifact path 最多保留 20 份。
 - 新增需用户明确确认、具备 integrity 校验的规则库安装和 last-known-good rollback；自动检查只获取小型 manifest。
 - Remote registry 已加入 Ed25519 raw-bundle signature verification 与 key rotation contract；正式 publisher public key 注入前保持 fail-closed preview。
-- Settings/About 已加入规则库操作入口，main process 新增完全按需的 performance snapshot exporter。
+- 新增 artifact-specific template ownership，采用 `USER_OVERRIDE > REGISTRY > EMBEDDED` 优先级，支持旧自定义模板迁移、bounded diff preview，并确保 registry update/rollback 不覆盖用户 override。
+- Settings/About 已加入规则库操作入口，并提供完全按需的本地 performance snapshot exporter；导出 JSON 包含 Electron process metrics、bounded renderer timings、被动维护的 watcher 计数与最近一次 config scan 摘要，不增加采样 timer 或上传。
 - 首屏 critical 初始化完成后才按 idle batch 加载非关键数据；初始化 timeout 会及时释放 timer，卸载会取消尚未启动的批次。
 - StatisticsService auto-save 已串行化且 interval `unref()`；退出流程会等待幂等 cleanup 完成后再放行，避免落盘竞态。
 - Claude 配置工作区路径已集中到 compatibility facade；`1.5.0` 继续读取原 `.ccb/claude-configs`，不会静默创建或迁移到新目录。
+- 新增 release preflight 与 Windows Portable/NSIS/ZIP 聚合打包命令；正式 publisher public key 注入前 production preflight 会保持阻断。
+- Electron window 已启用 sandbox，并以 fail-closed 策略拒绝新窗口与外部 navigation。
 - 本轮只验证逻辑调度、静态 bundle 与资源生命周期；runtime startup/memory 改善需由用户后续启动应用实机验收。
 - 架构、安全协议、性能预算、迁移阶段与已接受的品牌决策见 [`docs/1.5.0`](./docs/1.5.0/README.md)。
 
 ### 产品体验更新
 
-- 新增“新建配置默认模板”，可在 `设置 -> 编辑器设置` 中编辑、保存和弹窗预览。
-- 模板预览改为弹窗方式，并复用同一套编辑器能力进行格式化与校验。
+- 原“全局新建配置默认模板”设计现已**过时**，由 `设置 -> 编辑器设置` 中的逐 artifact template ownership 取代。
+- 模板预览改为 artifact-aware bounded diff；实际编辑器继续提供校验与格式化能力。
 - 修复了复制配置逻辑，现在会先打开预填编辑器并添加国际化副本后缀，仅在显式保存后才创建新文件。
 - 修复了基于 `Markdown` 的偏好配置在预览流程中被错误按 `JSON` 解析的问题。
 - 新增 NSIS 安装版打包命令，作为 Portable 单文件方案之外的低等待分发选择。

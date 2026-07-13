@@ -26,7 +26,11 @@
 - 新增 installed/last-known-good registry 原子存储、SHA-256 integrity、app compatibility、downgrade protection、merge 与显式 rollback。
 - 新增 main-process registry manifest 检查；启动时只检查小型 manifest，不自动下载完整 bundle。
 - Settings/About 新增规则库版本、检查、用户确认安装与 rollback 控件。
-- 新增按需 performance snapshot/export API，记录 Electron per-process CPU/working set，不自动采样或上传。
+- 新增按需 performance snapshot/export API，记录 Electron per-process CPU/working set、bounded renderer timings，以及 `runtimeMetrics` 中的 active watcher/监控目录/目录项计数与最近一次 config scan 摘要；指标由现有 watcher/scan 生命周期被动更新，不新增 timer 或上传。
+- 新增 artifact-specific template service 与 Settings 管理界面，按 `USER_OVERRIDE > REGISTRY > EMBEDDED` 解析模板并提供 bounded diff preview。
+- 新增 legacy customized global template 到 `claude-code/user-settings` override 的兼容迁移；旧内置默认值不会被误迁移。
+- 新增 release preflight，校验版本、双语文档、installer identity、private key marker、registry trust map 与 Electron security contract。
+- 新增 `pack:win:all`，一次生成 Windows Portable、NSIS 与 ZIP 三类 release artifacts。
 - 新增 v1.5.0 PRD、架构、安全协议、性能路线与品牌语义 ADR。
 
 ### Changed
@@ -42,6 +46,7 @@
 - 全局 Card/List 布局增加 flex shrink、单行 ellipsis 与固定 actions 规则，避免长文本把 list item 撑成异常高度；需多行的内容显式 opt-in。
 - 修订全局 List 策略：普通 description 最多两行，结构化 path/tags 由页面专属布局管理，移动端 actions 独占下一行，避免标签遮挡主内容。
 - 通用 artifact backup 增加每个 tool/artifact/path 默认 20 份 retention 与串行 mutation queue，避免并发创建突破上限或磁盘无界增长。
+- 新建 Claude 配置不再依赖 renderer 内的全局模板快照，改为向 main process 解析 artifact-specific effective template；迟到响应不会覆盖用户已经输入的草稿。
 
 ### Fixed
 
@@ -49,6 +54,10 @@
 - 修复初始化 Promise 提前完成后 timeout timer 仍存活 15 秒的问题，并在 renderer 卸载时取消未启动的后台批次。
 - 修复 statistics 磁盘历史覆盖初始化期间新事件、auto-save 重叠写入、重复 shutdown 写入多个关闭事件的问题。
 - 修复 Electron 不等待 async `before-quit` listener 导致退出清理可能未完成的问题；改为单次 guard 阻止退出，cleanup 完成后再放行。
+- 修复 registry 移除 `defaultTemplate` 后 user override 被错误视为孤立数据的问题，embedded fallback 与用户覆盖均保持可用。
+- 修复保存 template override 后 renderer Settings store 过期，随后保存其他设置可能反向覆盖 override 的问题。
+- 修复删除 legacy migration 后的 override 会被旧字段再次迁移复活的问题。
+- 修复超过 1000 行的模板 diff 可能阻塞 Settings render，以及异步模板解析响应覆盖用户草稿的问题。
 
 ### Security
 
@@ -57,6 +66,8 @@
 - 远程 registry 禁止携带 JS、shell、动态 module、任意 executable arguments 或未知 capability。
 - Manifest/bundle URL 固定为 main-process pinned HTTPS origin；renderer 无法注入下载 URL 或 hash。
 - Registry 更新需 SHA-256、size、schema、SemVer、minimum app version 全部通过后原子安装。
+- Electron renderer 启用 `sandbox: true`，拒绝所有新窗口，并仅允许同 document hash navigation；release preflight 锁定该 contract。
+- `.keys/`、private PEM 与 secrets 路径加入 ignore policy；production private key 必须始终位于 repository、CI 与 application package 之外。
 
 ### Tests
 
@@ -64,7 +75,16 @@
 - 新增 detector/path resolver 与 artifact discovery/read 安全边界单元测试。
 - 新增 codec 与 capability-driven edit/backup/restore 回归测试。
 - 新增 renderer startup scheduler 与 StatisticsService lifecycle 回归测试。
-- Full Vitest 当前为 21 个测试文件、129 项测试全部通过。
+- 新增 artifact template ownership、legacy migration、window security 与 release preflight 回归测试。
+- Full Vitest 当前为 30 个测试文件、188 项测试全部通过。
+- Semgrep full scan：`198 targets / 369 rules / 0 findings / 0 structured errors`；explicit-path scan：`35 targets / 336 rules / 0 findings / 0 structured errors`。OSS engine 另报告 41/8 条 fixpoint timeout warnings，已在安全报告中披露并执行补偿审查。
+- Root/proxy npm audit 均为 `0 vulnerabilities`，TypeScript、ESLint、root production build 与 proxy-server build 全部通过。
+
+### Release blockers
+
+- `REGISTRY_TRUSTED_PUBLIC_KEYS` 当前为空，production `release:preflight` 按设计 fail-closed；维护者完成 offline Ed25519 key ceremony 并只注入 SPKI public key 后方可发布。
+- 当前 Windows 企业/代理环境无法验证 Electron distribution 下载证书链，`pack:win:all` 因 `unable to verify the first certificate` 停止。必须配置 `NODE_EXTRA_CA_CERTS` 或 npm `cafile`，不得关闭 TLS verification。
+- 当前静态包体记录为 main `288.87 KB`、preload `12.93 KB`、renderer entry `199.70 KB`、Settings JS/CSS `34.96 KB / 2.67 KB`；runtime 性能和三类包 smoke test 留待人工验收。
 
 ## [1.4.0] - 2026-06-15
 

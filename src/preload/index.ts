@@ -46,6 +46,7 @@ import type {
   TerminalType
 } from '@shared/types/terminal'
 import type {
+  ArtifactTemplateEntry,
   ConfigArtifactContent,
   ConfigArtifactBackup,
   ConfigArtifactValidationResult,
@@ -55,7 +56,7 @@ import type {
   ToolRegistrySnapshot,
   ToolRegistryUpdateStatus
 } from '@shared/tool-registry'
-import type { PerformanceSnapshot } from '@shared/performance'
+import type { PerformanceSnapshot, RendererPerformanceTiming } from '@shared/performance'
 
 /**
  * 配置管理 API
@@ -224,6 +225,30 @@ interface ToolRegistryAPI {
   getSnapshot: () => Promise<{ success: boolean; data?: ToolRegistrySnapshot; error?: string }>
   /** 按 toolId 获取 definition */
   getTool: (toolId: string) => Promise<{ success: boolean; data?: ToolDefinition; error?: string }>
+  /** 列出 effective registry 中可管理的 artifact-specific templates */
+  listArtifactTemplates: () => Promise<{
+    success: boolean
+    data?: ArtifactTemplateEntry[]
+    error?: string
+  }>
+  /** 解析单个 artifact 当前 template ownership */
+  resolveArtifactTemplate: (toolId: string, artifactId: string) => Promise<{
+    success: boolean
+    data?: ArtifactTemplateEntry
+    error?: string
+  }>
+  /** 保存本地 user override；renderer 不提供任何文件路径 */
+  saveArtifactTemplateOverride: (toolId: string, artifactId: string, content: string) => Promise<{
+    success: boolean
+    data?: ArtifactTemplateEntry
+    error?: string
+  }>
+  /** 删除本地 user override 并恢复 registry/embedded template */
+  removeArtifactTemplateOverride: (toolId: string, artifactId: string) => Promise<{
+    success: boolean
+    data?: ArtifactTemplateEntry
+    error?: string
+  }>
   /** 检测 effective registry 中的工具 */
   detectTools: () => Promise<{ success: boolean; data?: ToolDetectionResult[]; error?: string }>
   /** 发现指定工具在当前平台存在的配置资产 */
@@ -283,7 +308,11 @@ interface PerformanceAPI {
   /** 采集内存、CPU 与 process metrics，不写文件 */
   capture: () => Promise<{ success: boolean; data?: PerformanceSnapshot; error?: string }>
   /** 导出 snapshot 到本地 .ccb/performance */
-  exportSnapshot: () => Promise<{ success: boolean; data?: string; error?: string }>
+  exportSnapshot: (rendererTimings?: RendererPerformanceTiming[]) => Promise<{
+    success: boolean
+    data?: string
+    error?: string
+  }>
 }
 
 /**
@@ -851,6 +880,13 @@ const systemAPI: SystemAPI = {
 const toolRegistryAPI: ToolRegistryAPI = {
   getSnapshot: () => ipcRenderer.invoke('toolRegistry:getSnapshot'),
   getTool: (toolId: string) => ipcRenderer.invoke('toolRegistry:getTool', toolId),
+  listArtifactTemplates: () => ipcRenderer.invoke('toolRegistry:listArtifactTemplates'),
+  resolveArtifactTemplate: (toolId: string, artifactId: string) =>
+    ipcRenderer.invoke('toolRegistry:resolveArtifactTemplate', toolId, artifactId),
+  saveArtifactTemplateOverride: (toolId: string, artifactId: string, content: string) =>
+    ipcRenderer.invoke('toolRegistry:saveArtifactTemplateOverride', toolId, artifactId, content),
+  removeArtifactTemplateOverride: (toolId: string, artifactId: string) =>
+    ipcRenderer.invoke('toolRegistry:removeArtifactTemplateOverride', toolId, artifactId),
   detectTools: () => ipcRenderer.invoke('toolRegistry:detectTools'),
   discoverArtifacts: (toolId: string) => ipcRenderer.invoke('toolRegistry:discoverArtifacts', toolId),
   readArtifact: (toolId: string, artifactId: string, path: string) =>
@@ -874,7 +910,8 @@ const toolRegistryAPI: ToolRegistryAPI = {
 /** 按需性能采集 IPC facade */
 const performanceAPI: PerformanceAPI = {
   capture: () => ipcRenderer.invoke('performance:capture'),
-  exportSnapshot: () => ipcRenderer.invoke('performance:exportSnapshot')
+  exportSnapshot: (rendererTimings?: RendererPerformanceTiming[]) =>
+    ipcRenderer.invoke('performance:exportSnapshot', rendererTimings)
 }
 
 // 创建窗口 API 对象

@@ -26,7 +26,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     wordWrap: false,
     minimap: true,
     lineNumbers: true,
-    defaultConfigTemplate: DEFAULT_NEW_CONFIG_TEMPLATE
+    defaultConfigTemplate: DEFAULT_NEW_CONFIG_TEMPLATE,
+    artifactTemplateOverrides: {}
   },
   notifications: {
     enabled: true,

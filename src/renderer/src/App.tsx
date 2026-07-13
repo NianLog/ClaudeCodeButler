@@ -11,6 +11,10 @@ import { useConfigListStore } from './store/config-list-store'
 import { useRuleStore } from './store/rule-store'
 import { useTranslation } from './locales/useTranslation'
 import { scheduleStartupBatches, withTimeout } from './utils/startup-scheduler'
+import {
+  markRendererInitializationStart,
+  measureRendererInitialization
+} from './utils/renderer-performance'
 import ModernLayout from './components/Layout/ModernLayout'
 const ModernConfigPanel = React.lazy(() => import('./components/Config/ModernConfigPanel'))
 const AutomationPanel = React.lazy(() => import('./components/Automation/AutomationPanel'))
@@ -69,6 +73,26 @@ const AppContent: React.FC = () => {
   
   // 全局加载状态
   const [isAppLoading, setIsAppLoading] = useState(true)
+
+  // 首次 mount 时记录关键初始化起点；helper 会在 StrictMode/hot reload 下避免重复 mark。
+  useEffect(() => {
+    markRendererInitializationStart()
+  }, [])
+
+  // LoadingScreen 关闭后的下一帧代表首屏已提交，可用于稳定衡量 renderer 可交互耗时。
+  useEffect(() => {
+    if (isAppLoading) {
+      return
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      measureRendererInitialization()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId)
+    }
+  }, [isAppLoading])
 
   // 权限警告监听
   useEffect(() => {

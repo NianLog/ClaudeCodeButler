@@ -163,3 +163,34 @@ Registry 中以下规则使用 `metavariable-name:module`，Semgrep OSS CLI `1.1
 - Semgrep full scan 覆盖 188 个 Git tracked targets、执行 369 条规则，结果为 `0 findings / 0 errors`；对 facade/path manager/Managed Mode/spec 等 5 paths 显式补扫 332 条适用规则，结果同为 `0 findings / 0 errors`。
 
 该 facade 不等同于物理 migration 完成。旧目录业务回归仍需用户后续启动应用验收；future workspace 只有在具备 backup、journal、idempotency 与 rollback rehearsal 后才能显式启用。
+
+### 2026-07-13：v1.5.0 release hardening 终态自动化复审
+
+#### 审计与构建证据
+
+- Full Vitest：`30 files / 188 tests` 全部通过；TypeScript、ESLint、root production build 与 proxy-server build 全部通过。
+- Semgrep full scan：`198 targets / 369 rules / 0 findings / 0 structured errors`。
+- Semgrep explicit-path scan：`35 targets / 336 rules / 0 findings / 0 structured errors`，覆盖本次 staged implementation/spec/script paths。
+- Root 与独立 proxy package 的 `npm audit --audit-level=low` 均为 `0 vulnerabilities`。
+- 最终静态包体记录：main `288.87 KB`、preload `12.93 KB`、renderer entry `199.70 KB`、Settings JS/CSS `34.96 KB / 2.67 KB`。这些数字仅用于追踪静态成本，不替代 runtime memory/CPU/startup 验收。
+
+#### Semgrep OSS coverage disclosure
+
+Semgrep `1.169.0` 的 JSON `errors` 均为 0，但 `time.fixpoint_timeouts` 在 full/explicit scan 中分别记录 41/8 条 warning。它们主要来自 Koa/NestJS/Express 等跨 framework taint rules 对 Electron/React 或无关 service 的分析，并不等价于 finding；但对应单条 taint fixpoint 也不能视为完整证明。补偿措施包括：对全部 35 个 staged code paths 显式复扫、对 IPC/path/template/renderer payload 边界进行人工审查，以及 188 项回归测试、两套 dependency audit 和 Electron release preflight。最终结论应表述为“0 unsuppressed findings、0 structured errors，存在已披露的 OSS fixpoint coverage limitation”，不能宣称静态分析覆盖绝对完整。
+
+#### 本阶段安全改进
+
+1. Artifact-specific template 只允许内置 codec，限制单模板 `64 KiB`、拒绝 NUL，并以 `USER_OVERRIDE > REGISTRY > EMBEDDED` 决定生效来源；remote registry 仍不能注入 executable code。
+2. Settings 中 legacy customized global template 只迁移到明确的 `claude-code/user-settings` override，内置旧默认不迁移；migration 完成后旧字段被归一化，避免删除 override 后复活。
+3. Template mutation 使用串行 queue；registry update、removal 与 rollback 不得覆盖 user override，且 removal 始终保留 embedded fallback。
+4. Electron `BrowserWindow` 启用 `sandbox: true`，`setWindowOpenHandler` 全部 deny，`will-navigate` 仅允许当前 document 的 hash navigation；相关配置由 unit contract 与 release preflight 同时锁定。
+5. Release preflight 检查 package/package-lock/APP_INFO 版本绑定、双语 README/CHANGELOG、installer identity、artifact naming、tracked private-key markers、production registry trust map 与 Electron security contract。
+6. `.keys/`、`*.private.pem`、`registry-private-key*.pem` 与 `secrets/` 已加入 ignore policy；private key 禁止进入 repository、CI 或 application package。
+7. Performance snapshot 接收的 renderer timings 视为不可信 IPC 输入；main process 只接受 3 个固定 entry、最多 3 项、正确的 `MARK`/`MEASURE` 类型和有限非负数值，导出时丢弃额外字段。
+8. `runtimeMetrics` 仅由 main process 现有 watcher/config scan 生命周期被动更新并在用户点击导出时读取；renderer 不能提交或篡改这些计数，不新增后台采样 timer、网络请求或 telemetry 上传。
+
+#### 仍然 fail-closed 的发布边界
+
+- `REGISTRY_TRUSTED_PUBLIC_KEYS` 当前为空。`npm.cmd run release:preflight:preview` 可用于开发检查并输出 warning；production `npm.cmd run release:preflight` 会按设计失败，直到维护者执行 offline Ed25519 key ceremony 并只注入对应 SPKI public key。
+- 当前 Windows 企业/代理环境在 electron-builder 下载 Electron `40.10.6` distribution 时报告 `unable to verify the first certificate`。这是证书信任链阻塞，不允许用 `NODE_TLS_REJECT_UNAUTHORIZED=0` 绕过；应通过 `NODE_EXTRA_CA_CERTS` 或 npm `cafile` 配置组织可信根 CA 后重新执行 `npm.cmd run pack:win:all`。
+- 本轮未启动应用。Electron runtime navigation、新窗口策略、installer/portable/zip smoke test、registry release-candidate 对抗用例与业务兼容性必须按 [`docs/1.5.0/09-手动验收清单.md`](./docs/1.5.0/09-手动验收清单.md) 实机验收。

@@ -37,7 +37,10 @@ import { useConfigValidationStore } from '../../store/config-validation-store'
 import { useEditorSettings } from '../../store/settings-store'
 import { useMessage } from '../../hooks/useMessage'
 import type { ConfigFile } from '@shared/types'
-import { normalizeNewConfigTemplate } from '@shared/config-template'
+import {
+  applyResolvedTemplateIfUntouched,
+  normalizeNewConfigTemplate
+} from '@shared/config-template'
 import {
   type EditorLanguage,
   resolveConfigEditorLanguage
@@ -140,6 +143,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
 
   // 初始化表单数据
   useEffect(() => {
+    let cancelled = false
     if (visible) {
       if (config) {
         // 编辑模式 - 设置表单字段
@@ -181,16 +185,37 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         setEditorLanguage(language)
       } else {
         // 新建模式
-        const defaultContent = normalizeNewConfigTemplate(editorSettings.defaultConfigTemplate)
+        const fallbackContent = normalizeNewConfigTemplate(editorSettings.defaultConfigTemplate)
         form.setFieldsValue({
           name: '',
           description: '',
           type: 'claude-code',
           isActive: false
         })
-        setContent(defaultContent)
+        setContent(fallbackContent)
         setEditorLanguage('json')
+
+        // v1.5.0：由 main process 统一解析 USER_OVERRIDE > REGISTRY > EMBEDDED ownership。
+        void window.electronAPI.toolRegistry.resolveArtifactTemplate('claude-code', 'user-settings')
+          .then((response) => {
+            if (!cancelled && response.success && response.data) {
+              setContent((currentContent) =>
+                applyResolvedTemplateIfUntouched(
+                  currentContent,
+                  fallbackContent,
+                  response.data?.effectiveTemplate ?? currentContent
+                )
+              )
+            }
+          })
+          .catch((error) => {
+            console.warn('加载 artifact-specific template 失败，使用 legacy fallback:', error)
+          })
       }
+    }
+
+    return () => {
+      cancelled = true
     }
   }, [visible, config, initialDraft, form, loadConfigContent, editorSettings.defaultConfigTemplate])
 
