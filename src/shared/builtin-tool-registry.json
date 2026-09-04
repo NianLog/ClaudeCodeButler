@@ -1,0 +1,440 @@
+{
+  "schemaVersion": 1,
+  "registryVersion": "1.2.0",
+  "minimumAppVersion": "1.5.0",
+  "tools": [
+    {
+      "toolId": "claude-code",
+      "definitionVersion": "1.0.0",
+      "displayName": {
+        "zh-CN": "Claude Code",
+        "en-US": "Claude Code"
+      },
+      "platforms": [
+        "WINDOWS",
+        "MACOS",
+        "LINUX"
+      ],
+      "detectors": [
+        {
+          "type": "COMMAND_EXISTS",
+          "command": "claude"
+        },
+        {
+          "type": "PATH_EXISTS",
+          "path": "${HOME}/.claude"
+        }
+      ],
+      "artifacts": [
+        {
+          "artifactId": "user-settings",
+          "displayName": {
+            "zh-CN": "用户设置",
+            "en-US": "User Settings"
+          },
+          "format": "JSON",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.claude/settings.json"
+            ],
+            "MACOS": [
+              "${HOME}/.claude/settings.json"
+            ],
+            "LINUX": [
+              "${HOME}/.claude/settings.json"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "VALIDATE",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "JSON_FILE_V1",
+          "defaultTemplate": "{\n  \"env\": {\n    \"ANTHROPIC_BASE_URL\": \"https://api.anthropic.com\",\n    \"ANTHROPIC_AUTH_TOKEN\": \"\"\n  },\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}"
+        },
+        {
+          "artifactId": "mcp-registry",
+          "displayName": {
+            "zh-CN": "MCP 服务器注册表",
+            "en-US": "MCP Server Registry"
+          },
+          "format": "JSON",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.claude.json"
+            ],
+            "MACOS": [
+              "${HOME}/.claude.json"
+            ],
+            "LINUX": [
+              "${HOME}/.claude.json"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "VALIDATE",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "JSON_FILE_V1"
+        },
+        {
+          "artifactId": "instructions",
+          "displayName": {
+            "zh-CN": "全局指令",
+            "en-US": "Global Instructions"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.claude/CLAUDE.md"
+            ],
+            "MACOS": [
+              "${HOME}/.claude/CLAUDE.md"
+            ],
+            "LINUX": [
+              "${HOME}/.claude/CLAUDE.md"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "MARKDOWN_FILE_V1",
+          "defaultTemplate": "# Global Instructions\n"
+        }
+      ]
+    },
+    {
+      "toolId": "codex-cli",
+      "definitionVersion": "1.2.0",
+      "displayName": {
+        "zh-CN": "Codex CLI",
+        "en-US": "Codex CLI"
+      },
+      "platforms": [
+        "WINDOWS",
+        "MACOS",
+        "LINUX"
+      ],
+      "detectors": [
+        {
+          "type": "COMMAND_EXISTS",
+          "command": "codex"
+        },
+        {
+          "type": "PATH_EXISTS",
+          "path": "${HOME}/.codex/config.toml"
+        }
+      ],
+      "artifacts": [
+        {
+          "artifactId": "user-config",
+          "displayName": {
+            "zh-CN": "用户配置",
+            "en-US": "User Configuration"
+          },
+          "format": "TOML",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.codex/config.toml"
+            ],
+            "MACOS": [
+              "${HOME}/.codex/config.toml"
+            ],
+            "LINUX": [
+              "${HOME}/.codex/config.toml"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "VALIDATE",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "TOML_FILE_V1",
+          "defaultTemplate": "# Codex CLI 用户配置（TOML；保存前会做语法校验）\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\n",
+          "editGroup": "core",
+          "configSet": "core"
+        },
+        {
+          "artifactId": "auth",
+          "displayName": {
+            "zh-CN": "认证凭据",
+            "en-US": "Authentication"
+          },
+          "format": "JSON",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.codex/auth.json"
+            ],
+            "MACOS": [
+              "${HOME}/.codex/auth.json"
+            ],
+            "LINUX": [
+              "${HOME}/.codex/auth.json"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "VALIDATE",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "JSON_FILE_V1",
+          "defaultTemplate": "{\n  \"OPENAI_API_KEY\": \"\"\n}",
+          "editGroup": "core",
+          "configSet": "core"
+        },
+        {
+          "artifactId": "agents-instructions",
+          "displayName": {
+            "zh-CN": "全局指令（AGENTS.md）",
+            "en-US": "Global Instructions (AGENTS.md)"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.codex/AGENTS.md"
+            ],
+            "MACOS": [
+              "${HOME}/.codex/AGENTS.md"
+            ],
+            "LINUX": [
+              "${HOME}/.codex/AGENTS.md"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "MARKDOWN_FILE_V1",
+          "defaultTemplate": "# Codex Global Instructions\n"
+        }
+      ]
+    },
+    {
+      "toolId": "gemini-cli",
+      "definitionVersion": "1.1.0",
+      "displayName": {
+        "zh-CN": "Gemini CLI",
+        "en-US": "Gemini CLI"
+      },
+      "platforms": [
+        "WINDOWS",
+        "MACOS",
+        "LINUX"
+      ],
+      "detectors": [
+        {
+          "type": "COMMAND_EXISTS",
+          "command": "gemini"
+        },
+        {
+          "type": "PATH_EXISTS",
+          "path": "${HOME}/.gemini/settings.json"
+        }
+      ],
+      "artifacts": [
+        {
+          "artifactId": "user-settings",
+          "displayName": {
+            "zh-CN": "用户设置",
+            "en-US": "User Settings"
+          },
+          "format": "JSON",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/settings.json"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/settings.json"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/settings.json"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "VALIDATE",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "JSON_FILE_V1",
+          "defaultTemplate": "{\n  \"security\": {\n    \"auth\": {\n      \"selectedType\": \"gemini-api-key\"\n    }\n  }\n}",
+          "editGroup": "core",
+          "configSet": "core"
+        },
+        {
+          "artifactId": "env",
+          "displayName": {
+            "zh-CN": "环境变量（.env）",
+            "en-US": "Environment (.env)"
+          },
+          "format": "TEXT",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/.env"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/.env"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/.env"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "TEXT_FILE_V1",
+          "defaultTemplate": "GEMINI_API_KEY=\n",
+          "editGroup": "core",
+          "configSet": "core"
+        },
+        {
+          "artifactId": "instructions",
+          "displayName": {
+            "zh-CN": "全局指令（GEMINI.md）",
+            "en-US": "Global Instructions (GEMINI.md)"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/GEMINI.md"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/GEMINI.md"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/GEMINI.md"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "MARKDOWN_FILE_V1",
+          "defaultTemplate": "# Gemini Global Instructions\n"
+        }
+      ]
+    },
+    {
+      "toolId": "antigravity",
+      "definitionVersion": "1.1.0",
+      "displayName": {
+        "zh-CN": "Antigravity",
+        "en-US": "Antigravity"
+      },
+      "platforms": [
+        "WINDOWS",
+        "MACOS",
+        "LINUX"
+      ],
+      "detectors": [
+        {
+          "type": "COMMAND_EXISTS",
+          "command": "agy"
+        },
+        {
+          "type": "PATH_EXISTS",
+          "path": "${HOME}/.gemini/config/mcp_config.json"
+        }
+      ],
+      "artifacts": [
+        {
+          "artifactId": "global-mcp",
+          "displayName": {
+            "zh-CN": "全局 MCP 配置",
+            "en-US": "Global MCP Configuration"
+          },
+          "format": "JSON",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/config/mcp_config.json"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/config/mcp_config.json"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/config/mcp_config.json"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "VALIDATE",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "JSON_FILE_V1",
+          "defaultTemplate": "{\n  \"mcpServers\": {}\n}"
+        },
+        {
+          "artifactId": "cli-settings",
+          "displayName": {
+            "zh-CN": "CLI 设置",
+            "en-US": "CLI Settings"
+          },
+          "format": "JSON",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/antigravity/settings.json"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/antigravity/settings.json"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/antigravity/settings.json"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "VALIDATE",
+            "EDIT",
+            "BACKUP",
+            "RESTORE"
+          ],
+          "handler": "JSON_FILE_V1",
+          "configSet": "core",
+          "defaultTemplate": "{}"
+        }
+      ]
+    }
+  ]
+}

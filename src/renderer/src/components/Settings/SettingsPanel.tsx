@@ -3,8 +3,8 @@
  * 提供应用设置和偏好配置功能
  */
 
-import React, { Suspense, useEffect, useState, useRef } from 'react'
-import { Card, Form, Switch, Input, InputNumber, Select, Button, Space, Typography, Tabs, Row, Col, Alert, Descriptions, Tag, Divider, Modal } from 'antd'
+import React, { useEffect, useState, useRef } from 'react'
+import { Card, Form, Switch, Input, InputNumber, Select, Button, Space, Typography, Tabs, Row, Col, Alert, Descriptions, Tag, Divider, Popconfirm } from 'antd'
 import {
   SaveOutlined,
   ReloadOutlined,
@@ -19,8 +19,8 @@ import {
   GlobalOutlined,
   GithubOutlined,
   DesktopOutlined,
-  EyeOutlined,
-  CheckOutlined
+  CheckOutlined,
+  FolderOpenOutlined
 } from '@ant-design/icons'
 import { useSettingsStore, useBasicSettings, useEditorSettings, useNotificationSettings, useAdvancedSettings, useWindowSettings, useSettingsActions, useUnsavedChanges } from '../../store/settings-store'
 import { useAppStore } from '../../store/app-store'
@@ -30,16 +30,31 @@ import UpdateModal from '../Common/UpdateModal'
 import TerminalManagement from './TerminalManagement'
 import type { VersionInfo } from '../../services/version-service'
 import type { SettingsTab } from '@shared/types/settings'
-import {
-  normalizeNewConfigTemplate,
-  validateNewConfigTemplate
-} from '@shared/config-template'
+import type { ToolRegistryUpdateStatus, RegistryUpdateState } from '@shared/tool-registry'
 import { useMessage } from '../../hooks/useMessage'
 import { useTheme } from '../../hooks/useTheme'
-const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
+import ArtifactTemplateSettings from './ArtifactTemplateSettings'
+import { collectRendererPerformanceTimings } from '../../utils/renderer-performance'
 
 const { Title, Text } = Typography
 const { Option } = Select
+
+/** 规则库更新状态的 Tag 颜色（文案走 registry.states.* locale 键） */
+const REGISTRY_STATE_TAG_COLORS: Record<RegistryUpdateState, string> = {
+  IDLE: 'default',
+  CHECKING_MANIFEST: 'processing',
+  UP_TO_DATE: 'green',
+  UPDATE_AVAILABLE: 'orange',
+  CHECK_FAILED: 'red',
+  DOWNLOADING: 'processing',
+  VERIFYING_SIGNATURE: 'processing',
+  VERIFYING_HASH: 'processing',
+  VALIDATING_SCHEMA: 'processing',
+  CHECKING_COMPATIBILITY: 'processing',
+  STAGING: 'processing',
+  INSTALLED: 'green',
+  ROLLED_BACK: 'purple'
+}
 
 /**
  * 主题选择器组件
@@ -135,46 +150,6 @@ const ThemeSelector: React.FC = () => {
   )
 }
 
-interface LazyCodeEditorFieldProps {
-  value?: string
-  onChange?: (value: string) => void
-  language: 'json' | 'markdown' | 'plaintext'
-  height: number
-  placeholder: string
-  showPreview?: boolean
-  readOnly?: boolean
-}
-
-/**
- * 懒加载代码编辑器表单字段
- * @description 作为 `Form.Item` 的直接子节点转发受控属性，避免 Ant Design 将 `value/onChange` 注入到 `Suspense` 后丢失。
- */
-const LazyCodeEditorField: React.FC<LazyCodeEditorFieldProps> = ({
-  value,
-  onChange,
-  language,
-  height,
-  placeholder,
-  showPreview = false,
-  readOnly = false
-}) => {
-  const { t } = useTranslation()
-
-  return (
-    <Suspense fallback={<div>{t('codeEditor.loading')}</div>}>
-      <CodeEditor
-        value={value}
-        onChange={onChange}
-        language={language}
-        height={height}
-        placeholder={placeholder}
-        showPreview={showPreview}
-        readOnly={readOnly}
-      />
-    </Suspense>
-  )
-}
-
 const SettingsPanel: React.FC = () => {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -185,7 +160,12 @@ const SettingsPanel: React.FC = () => {
   const [latestVersionStatus, setLatestVersionStatus] = useState<'idle' | 'loading' | 'ready' | 'offline'>('idle')
   const [changelogStatus, setChangelogStatus] = useState<'idle' | 'loading' | 'ready' | 'offline'>('idle')
   const [changelogLines, setChangelogLines] = useState<string[]>([])
-  const [templatePreviewVisible, setTemplatePreviewVisible] = useState(false)
+  const [registryStatus, setRegistryStatus] = useState<ToolRegistryUpdateStatus | null>(null)
+  const [checkingRegistryUpdate, setCheckingRegistryUpdate] = useState(false)
+  const [installingRegistryUpdate, setInstallingRegistryUpdate] = useState(false)
+  const [rollingBackRegistry, setRollingBackRegistry] = useState(false)
+  const [exportingPerformanceSnapshot, setExportingPerformanceSnapshot] = useState(false)
+  const [performanceSnapshotPath, setPerformanceSnapshotPath] = useState<string | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{
     currentVersion: string
     latestVersion: string
@@ -205,11 +185,22 @@ const SettingsPanel: React.FC = () => {
   const { version } = useAppStore()
   const { t, setLanguage, availableLanguages } = useTranslation()
   const message = useMessage()
-  const defaultConfigTemplate = Form.useWatch(['editor', 'defaultConfigTemplate'], form) as string | undefined
 
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  useEffect(() => {
+    if (activeTab !== 'about') {
+      return
+    }
+
+    void window.electronAPI.toolRegistry.getUpdateStatus().then((result) => {
+      if (result.success && result.data) {
+        setRegistryStatus(result.data)
+      }
+    })
+  }, [activeTab])
 
   const hydratedSettingsSnapshotRef = useRef<string | null>(null)
 
@@ -234,18 +225,6 @@ const SettingsPanel: React.FC = () => {
       return
     }
 
-    // 默认模板编辑器是懒加载组件，字段为空时单独补写模板值，防止 UI 显示空白。
-    const currentTemplateValue = form.getFieldValue(['editor', 'defaultConfigTemplate'])
-    if (
-      (typeof currentTemplateValue !== 'string' || currentTemplateValue.trim() === '') &&
-      typeof editorSettings.defaultConfigTemplate === 'string' &&
-      editorSettings.defaultConfigTemplate.trim() !== ''
-    ) {
-      form.setFieldValue(
-        ['editor', 'defaultConfigTemplate'],
-        normalizeNewConfigTemplate(editorSettings.defaultConfigTemplate)
-      )
-    }
   }, [
     settingsInitialized,
     basicSettings,
@@ -312,7 +291,7 @@ const SettingsPanel: React.FC = () => {
       setLoading(true)
       const values = await form.validateFields() as {
         basic?: Record<string, unknown>
-        editor?: { defaultConfigTemplate?: string } & Record<string, unknown>
+        editor?: Record<string, unknown>
         window?: {
           width?: number
           height?: number
@@ -321,12 +300,6 @@ const SettingsPanel: React.FC = () => {
           rememberPosition?: boolean
         }
         [key: string]: unknown
-      }
-
-      if (tab === 'editor' && typeof values.editor?.defaultConfigTemplate === 'string') {
-        const normalizedTemplate = normalizeNewConfigTemplate(values.editor.defaultConfigTemplate)
-        values.editor.defaultConfigTemplate = normalizedTemplate
-        form.setFieldValue(['editor', 'defaultConfigTemplate'], normalizedTemplate)
       }
 
       const tabKey = tab as SettingsTab
@@ -466,40 +439,6 @@ const SettingsPanel: React.FC = () => {
     }
   }
 
-  /**
-   * 校验设置页中的默认模板输入
-   * @description 在表单层提前阻止非法 JSON 模板保存，保持 UI 与主进程验证规则一致
-   */
-  const validateDefaultConfigTemplateField = async (_: unknown, value: string) => {
-    const validationResult = validateNewConfigTemplate(value || '')
-    if (validationResult === true) {
-      return
-    }
-
-    throw new Error(validationResult)
-  }
-
-  const effectiveDefaultConfigTemplate = typeof defaultConfigTemplate === 'string'
-    ? defaultConfigTemplate
-    : editorSettings.defaultConfigTemplate
-  const defaultTemplateValidation = validateNewConfigTemplate(effectiveDefaultConfigTemplate || '')
-  const defaultTemplatePreviewContent = defaultTemplateValidation === true
-    ? normalizeNewConfigTemplate(effectiveDefaultConfigTemplate)
-    : ''
-
-  /**
-   * 打开默认模板预览弹窗
-   * @description 仅在模板通过业务校验时打开预览，避免弹窗中展示无效内容
-   */
-  const handleOpenTemplatePreview = () => {
-    if (defaultTemplateValidation !== true) {
-      message.error(`${t('settings.editor.defaultConfigTemplate.invalid')}: ${defaultTemplateValidation}`)
-      return
-    }
-
-    setTemplatePreviewVisible(true)
-  }
-
   // 检查更新
   const handleCheckUpdate = async () => {
     try {
@@ -541,6 +480,106 @@ const SettingsPanel: React.FC = () => {
       message.success(t('update.openDownloadSuccess'))
     } catch (error) {
       message.error(t('update.openDownloadFailed'))
+    }
+  }
+
+  /**
+   * 按用户操作导出当前 Electron process 性能 snapshot。
+   * @description snapshot 仅写入本地 .ccb/performance，不触发上传或后台定时采样。
+   */
+  const handleExportPerformanceSnapshot = async () => {
+    setExportingPerformanceSnapshot(true)
+    try {
+      const rendererTimings = collectRendererPerformanceTimings()
+      const result = await window.electronAPI.performance.exportSnapshot(rendererTimings)
+      if (!result.success || !result.data) {
+        throw new Error(result.error || t('performanceSnapshot.exportFailed'))
+      }
+
+      setPerformanceSnapshotPath(result.data)
+      message.success(t('performanceSnapshot.exportSuccess'))
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('performanceSnapshot.exportFailed'))
+    } finally {
+      setExportingPerformanceSnapshot(false)
+    }
+  }
+
+  /**
+   * 在系统文件管理器中定位最近导出的 snapshot。
+   */
+  const handleRevealPerformanceSnapshot = async () => {
+    if (!performanceSnapshotPath) {
+      return
+    }
+
+    try {
+      await window.electronAPI.system.showItemInFolder(performanceSnapshotPath)
+    } catch (error) {
+      message.error(t('performanceSnapshot.revealFailed'))
+    }
+  }
+
+  /**
+   * 只检查 registry manifest，不下载完整规则包
+   */
+  const handleCheckRegistryUpdate = async () => {
+    setCheckingRegistryUpdate(true)
+    try {
+      const result = await window.electronAPI.toolRegistry.checkForUpdates()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || t('registry.messages.checkFailed'))
+      }
+      setRegistryStatus(result.data)
+      if (result.data.state === 'UPDATE_AVAILABLE') {
+        message.success(t('registry.messages.updateAvailable'))
+      } else if (result.data.state === 'UP_TO_DATE') {
+        message.success(t('registry.messages.upToDate'))
+      } else if (result.data.state === 'CHECK_FAILED') {
+        message.warning(result.data.error || t('registry.messages.checkFailed'))
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('registry.messages.checkFailed'))
+    } finally {
+      setCheckingRegistryUpdate(false)
+    }
+  }
+
+  /**
+   * 安装 main process 最近验证的 registry update
+   */
+  const handleInstallRegistryUpdate = async () => {
+    setInstallingRegistryUpdate(true)
+    try {
+      const result = await window.electronAPI.toolRegistry.installAvailableUpdate()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || t('registry.messages.installFailed'))
+      }
+      setRegistryStatus(result.data)
+      message.success(t('registry.messages.installed'))
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('registry.messages.installFailed'))
+    } finally {
+      setInstallingRegistryUpdate(false)
+    }
+  }
+
+  /**
+   * 显式回滚到 last-known-good registry
+   */
+  const handleRollbackRegistry = async () => {
+    setRollingBackRegistry(true)
+    try {
+      const result = await window.electronAPI.toolRegistry.rollback()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || t('registry.messages.rollbackFailed'))
+      }
+      setRegistryStatus(result.data)
+      message.success(t('registry.messages.rolledBack'))
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('registry.messages.rollbackFailed'))
+    } finally {
+      setRollingBackRegistry(false)
     }
   }
 
@@ -771,49 +810,7 @@ const SettingsPanel: React.FC = () => {
 
       <Divider />
 
-      <Form.Item
-        name={['editor', 'defaultConfigTemplate']}
-        label={t('settings.editor.defaultConfigTemplate')}
-        tooltip={t('settings.editor.defaultConfigTemplate.tooltip')}
-        rules={[
-          { required: true, message: t('settings.editor.defaultConfigTemplate.required') },
-          { validator: validateDefaultConfigTemplateField }
-        ]}
-      >
-        <LazyCodeEditorField
-          language="json"
-          height={360}
-          placeholder={t('settings.editor.defaultConfigTemplate.placeholder')}
-          showPreview={false}
-        />
-      </Form.Item>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-        <Button
-          icon={<EyeOutlined />}
-          onClick={handleOpenTemplatePreview}
-          disabled={defaultTemplateValidation !== true}
-        >
-          {t('settings.editor.defaultConfigTemplate.preview')}
-        </Button>
-      </div>
-
-      <Alert
-        type={defaultTemplateValidation === true ? 'success' : 'warning'}
-        showIcon
-        message={
-          defaultTemplateValidation === true
-            ? t('settings.editor.defaultConfigTemplate.previewReady')
-            : t('settings.editor.defaultConfigTemplate.previewInvalid')
-        }
-        description={
-          defaultTemplateValidation === true
-            ? t('settings.editor.defaultConfigTemplate.help')
-            : `${t('settings.editor.defaultConfigTemplate.invalid')}: ${defaultTemplateValidation}`
-        }
-        style={{ marginBottom: 0 }}
-      >
-      </Alert>
+      <ArtifactTemplateSettings />
     </Card>
   )
 
@@ -995,6 +992,119 @@ const SettingsPanel: React.FC = () => {
         </div>
       </Card>
 
+      <Card title={t('performanceSnapshot.title')} style={{ borderRadius: '12px' }}>
+        <Alert
+          type="info"
+          showIcon
+          message={t('performanceSnapshot.description')}
+          description={t('performanceSnapshot.privacyNotice')}
+          style={{ marginBottom: '16px' }}
+        />
+        <Button
+          icon={<ExportOutlined />}
+          loading={exportingPerformanceSnapshot}
+          onClick={handleExportPerformanceSnapshot}
+        >
+          {t('performanceSnapshot.export')}
+        </Button>
+        {performanceSnapshotPath && (
+          <Alert
+            type="success"
+            showIcon
+            message={t('performanceSnapshot.savedPath')}
+            description={(
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Text copyable style={{ wordBreak: 'break-all' }}>
+                  {performanceSnapshotPath}
+                </Text>
+                <Button
+                  size="small"
+                  icon={<FolderOpenOutlined />}
+                  onClick={handleRevealPerformanceSnapshot}
+                >
+                  {t('performanceSnapshot.reveal')}
+                </Button>
+              </Space>
+            )}
+            style={{ marginTop: '16px' }}
+          />
+        )}
+      </Card>
+
+      <Card title={t('registry.title')} style={{ borderRadius: '12px' }}>
+        <Alert
+          type="info"
+          showIcon
+          message={t('registry.manualUpdateNotice')}
+          style={{ marginBottom: '16px' }}
+        />
+        <Descriptions bordered column={1} size="small">
+          <Descriptions.Item label={t('registry.embeddedVersion')}>
+            <Tag>{registryStatus?.embeddedVersion || '-'}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('registry.installedVersion')}>
+            <Tag color="blue">{registryStatus?.installedVersion || t('registry.embeddedOnly')}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('registry.availableVersion')}>
+            <Tag color={registryStatus?.state === 'UPDATE_AVAILABLE' ? 'orange' : 'default'}>
+              {registryStatus?.availableVersion || '-'}
+            </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('registry.status')}>
+            <Tag color={REGISTRY_STATE_TAG_COLORS[registryStatus?.state ?? 'IDLE']}>
+              {t(`registry.states.${registryStatus?.state ?? 'IDLE'}`)}
+            </Tag>
+          </Descriptions.Item>
+        </Descriptions>
+        {registryStatus?.error && (
+          <Alert
+            type="warning"
+            showIcon
+            message={registryStatus.error}
+            style={{ marginTop: '16px' }}
+          />
+        )}
+        <Space wrap style={{ marginTop: '16px' }}>
+          <Button
+            icon={<ReloadOutlined />}
+            loading={checkingRegistryUpdate}
+            onClick={handleCheckRegistryUpdate}
+          >
+            {t('registry.check')}
+          </Button>
+          {registryStatus?.state === 'UPDATE_AVAILABLE' && (
+            <Popconfirm
+              title={t('registry.installConfirmTitle')}
+              description={t('registry.installConfirmDescription')}
+              okText={t('registry.install')}
+              cancelText={t('common.cancel')}
+              onConfirm={handleInstallRegistryUpdate}
+            >
+              <Button
+                type="primary"
+                icon={<CloudDownloadOutlined />}
+                loading={installingRegistryUpdate}
+              >
+                {t('registry.install')}
+              </Button>
+            </Popconfirm>
+          )}
+          {registryStatus?.installedVersion && (
+            <Popconfirm
+              title={t('registry.rollbackConfirmTitle')}
+              description={t('registry.rollbackConfirmDescription')}
+              okText={t('registry.rollback')}
+              cancelText={t('common.cancel')}
+              onConfirm={handleRollbackRegistry}
+            >
+              <Button danger loading={rollingBackRegistry}>
+                {t('registry.rollback')}
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
+      </Card>
+
       <Card title={t('changelog.title')} style={{ borderRadius: '12px' }}>
         {changelogStatus === 'loading' && (
           <Alert
@@ -1136,27 +1246,6 @@ const SettingsPanel: React.FC = () => {
         />
       )}
 
-      <Modal
-        title={t('settings.editor.defaultConfigTemplate.preview')}
-        open={templatePreviewVisible}
-        onCancel={() => setTemplatePreviewVisible(false)}
-        footer={[
-          <Button key="close" onClick={() => setTemplatePreviewVisible(false)}>
-            {t('common.close')}
-          </Button>
-        ]}
-        width={900}
-      >
-        <Suspense fallback={<div>{t('codeEditor.loading')}</div>}>
-          <CodeEditor
-            value={defaultTemplatePreviewContent}
-            language="json"
-            height={420}
-            readOnly
-            showPreview={false}
-          />
-        </Suspense>
-      </Modal>
     </div>
   )
 }

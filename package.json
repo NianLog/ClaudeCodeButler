@@ -1,7 +1,7 @@
 {
   "name": "ccb",
-  "version": "1.4.0",
-  "description": "Claude Code Butler - 配置管理工具",
+  "version": "1.5.0",
+  "description": "Claude Code Butler - 多 AI Agent 配置管理工具",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "node scripts/dev-runner.cjs dev",
@@ -9,14 +9,19 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "clean:release": "node scripts/clean-release.cjs",
+    "registry:sign": "node scripts/sign-registry-bundle.cjs",
+    "release:preflight": "node scripts/release-preflight.cjs",
+    "release:preflight:preview": "node scripts/release-preflight.cjs --allow-preview-registry",
     "pack": "npm run clean:release && electron-builder",
     "pack:dir": "npm run clean:release && electron-builder --dir",
     "pack:portable": "npm run clean:release && electron-builder --win portable",
     "pack:installer": "npm run clean:release && electron-builder --win nsis",
     "pack:zip": "npm run clean:release && electron-builder --win zip",
+    "pack:win:all": "npm run clean:release && electron-builder --win portable nsis zip --publish=never",
     "dist": "npm run clean:release && electron-builder --publish=never",
     "test": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
+    "lint:changed": "node scripts/lint-changed.cjs",
     "type-check": "tsc --noEmit",
     "start": "npm run build && electron out/main/index.js",
     "start:admin": "npm run build && node scripts/start-admin.js",
@@ -34,6 +39,9 @@
   },
   "keywords": [
     "claude-code",
+    "ai-agent",
+    "codex-cli",
+    "local-first",
     "configuration-manager",
     "electron",
     "typescript",
@@ -50,26 +58,22 @@
     "url": "https://github.com/NianLog/ClaudeCodeButler/issues"
   },
   "dependencies": {
-    "axios": "^1.13.0",
     "chokidar": "^3.5.3",
-    "cors": "^2.8.5",
     "express": "^5.1.0",
+    "https-proxy-agent": "^7.0.6",
     "js-yaml": "^4.1.1",
-    "node-cron": "^3.0.3",
-    "uuid": "^9.0.0"
+    "node-cron": "^4.6.0",
+    "smol-toml": "^1.8.0"
   },
   "devDependencies": {
     "@monaco-editor/react": "^4.7.0",
-    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.0",
-    "@types/node-cron": "^3.0.11",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/react-window": "^1.8.8",
-    "@types/uuid": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",
     "@vitejs/plugin-react": "^4.2.0",
@@ -102,12 +106,15 @@
     "zustand": "^4.4.0"
   },
   "overrides": {
-    "@electron/rebuild": "^4.0.2"
+    "@electron/rebuild": "^4.0.2",
+    "brace-expansion@^1.1.7": "1.1.18",
+    "brace-expansion@^2.0.1": "2.1.4",
+    "dompurify": "3.4.14"
   },
   "build": {
     "appId": "com.claudecode.butler",
     "productName": "CCB",
-    "compression": "normal",
+    "compression": "maximum",
     "electronLanguages": [
       "zh-CN",
       "en-US"
@@ -187,6 +194,7 @@
     },
     "files": [
       "out/**/*",
+      "!**/*.map",
       "resources/**/*",
       "!resources/icons/README.md"
     ],

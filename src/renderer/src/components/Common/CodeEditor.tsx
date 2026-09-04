@@ -19,15 +19,15 @@ import MarkdownRenderer from '@/components/Common/MarkdownRenderer'
 import type * as monaco from 'monaco-editor'
 // Monaco 语言 worker（Vite ?worker 导入）。修复原空 blob worker 导致语法诊断/tokenization
 // 退回主线程执行造成的内存与 CPU 开销（v1.4.0 性能根因之一）。
+// 语言服务按需：编辑器只处理 json/markdown/plaintext，不引入 ts/css/html worker。
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
-import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { useTranslation } from '../../locales/useTranslation'
 import { useTheme } from '../../hooks/useTheme'
 
 const { Text } = Typography
 const { Option } = Select
-type MonacoRuntime = typeof import('monaco-editor')
+type MonacoRuntime = typeof import('@/monaco-runtime')['default']
 type MonacoEditorComponent = typeof import('@monaco-editor/react')['default']
 
 /**
@@ -48,9 +48,6 @@ const ensureMonacoEnvironment = (): void => {
       switch (label) {
         case 'json':
           return new jsonWorker()
-        case 'typescript':
-        case 'javascript':
-          return new tsWorker()
         default:
           return new editorWorker()
       }
@@ -115,10 +112,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
      */
     const loadMonacoRuntime = async () => {
       try {
-        const [{ default: MonacoEditor, loader }, monacoRuntime] = await Promise.all([
+        const [{ default: MonacoEditor, loader }, monacoRuntimeModule] = await Promise.all([
           import('@monaco-editor/react'),
-          import('monaco-editor')
+          import('@/monaco-runtime')
         ])
+        const monacoRuntime = monacoRuntimeModule.default
 
         ensureMonacoEnvironment()
         loader.config({ monaco: monacoRuntime })

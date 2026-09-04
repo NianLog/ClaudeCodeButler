@@ -18,14 +18,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* 窄窗口时标题与按钮组换行而非相互挤压 */
+  flex-wrap: wrap;
+  gap: var(--space-sm);
   padding: 0;
   /* 移除 margin，使用父容器的 gap */
 }
 
 .header-left {
+  /* 标题与副标题上下排布，长副标题不再被挤成竖排换行 */
   display: flex;
-  align-items: center;
-  gap: var(--space-md);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
 }
 
 .panel-title {
@@ -37,6 +43,9 @@
 .header-right {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-xs);
 }
 
 /* 工具栏 */
@@ -57,6 +66,9 @@
   align-items: center;
   gap: var(--space-md);
   flex: 1;
+  /* 允许筛选控件换行，避免固定宽度在窄窗口互相挤压 */
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .toolbar-right {
@@ -187,6 +199,11 @@
   color: var(--text-primary);
   font-weight: var(--font-semibold);
   line-height: 1.3;
+  /* 名称过长时省略号截断，而不是把行内按钮挤到换行 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list-item-actions {
@@ -195,6 +212,12 @@
   gap: var(--space-xs);
   opacity: 0;
   transition: opacity var(--transition-fast);
+  /* 行内按钮不参与收缩，配合名称省略号避免中文按钮文字被挤成两行 */
+  flex-shrink: 0;
+}
+
+.list-item-actions .ant-btn {
+  white-space: nowrap;
 }
 
 .config-list-item:hover .list-item-actions {
@@ -269,7 +292,10 @@
   }
 
   .toolbar-left .ant-input-search,
-  .toolbar-left .ant-select {
+  .toolbar-left .ant-select,
+  .toolbar-left .ant-input-affix-wrapper {
+    /* 中和桌面端的 flex-basis（列方向下 flex-basis 作用于高度），恢复整行占满 */
+    flex: none;
     width: 100% !important;
   }
 

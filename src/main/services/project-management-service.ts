@@ -916,6 +916,7 @@ class ProjectManagementService {
    */
   private async launchTerminalProcess(spec: TerminalLaunchSpec): Promise<void> {
     await new Promise<void>((resolve, reject) => {
+      // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process - spec 仅由私有平台构造器生成，参数数组不会经过 shell。
       const child = spawn(spec.filePath, spec.args, {
         cwd: spec.workingDirectory,
         detached: true,

@@ -330,7 +330,7 @@ const PrivilegeWarningModal: React.FC<PrivilegeWarningModalProps> = ({
         <List
           dataSource={recommendations}
           renderItem={(item, index) => (
-            <List.Item>
+            <List.Item className="ccb-list-item-multiline">
               <Space>
                 <Text strong>{index + 1}.</Text>
                 <Text>{item}</Text>

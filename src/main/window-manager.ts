@@ -9,6 +9,7 @@ import * as fs from 'fs'
 import { DEFAULT_SETTINGS, APP_INFO } from '@shared/constants'
 import { logger } from './utils/logger'
 import { SettingsService } from './services/settings-service'
+import { isAllowedRendererNavigation } from './utils/window-security'
 
 export class WindowManager {
   private mainWindow: BrowserWindow | null = null
@@ -79,6 +80,7 @@ export class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,
         preload: join(__dirname, '../preload/index.js'),
         webSecurity: true,
         allowRunningInsecureContent: false,
@@ -208,6 +210,21 @@ export class WindowManager {
     this.mainWindow.webContents.on('did-stop-loading', () => {
       logger.info('主窗口停止加载')
       clearShowFallbackTimer()
+    })
+
+    // Renderer 不允许创建新窗口；所有外链必须经 main-process allowlisted IPC 打开。
+    this.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+      logger.warn(`阻止 renderer 创建新窗口: ${url}`)
+      return { action: 'deny' }
+    })
+
+    // 拒绝离开当前 document 的页面导航，允许同文档 hash 变化。
+    this.mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
+      const currentUrl = this.mainWindow?.webContents.getURL() ?? ''
+      if (!isAllowedRendererNavigation(currentUrl, targetUrl)) {
+        event.preventDefault()
+        logger.warn(`阻止 renderer 页面导航: ${targetUrl}`)
+      }
     })
 
     // 页面加载失败时

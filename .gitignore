@@ -39,6 +39,12 @@ build/Release
 node_modules/
 jspm_packages/
 
+# Local Python tooling environments
+.venv/
+
+# Local Semgrep audit artifacts (the reviewed report remains tracked)
+.semgrep/
+
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 
@@ -75,6 +81,12 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+
+# Offline publisher/private keys（public verification keys must be reviewed explicitly before tracking）
+.keys/
+*.private.pem
+registry-private-key*.pem
+secrets/
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -130,6 +142,8 @@ dist
 dist-electron/
 release/
 out/
+coverage/
+.mimosa/
 
 # IDE
 .vscode/
@@ -170,10 +184,12 @@ tools/
 web/
 
 # 项目内部文档资料（仅本地维护，不上传仓库）
-# 保留根目录 README.md / README_CN.md（项目介绍）与 CHANGELOG.md（版本记录）对外公开
+# 保留根目录 README.md / README_CN.md（项目介绍）、CHANGELOG.md（版本记录）、
+# ARCHITECTURE.md / CAPABILITIES.md（对外架构与能力说明）与 SECURITY_AUDIT_REPORT.md（审计证据）
 docs/
 **/README.md
 !/README.md
+DEVELOPMENT.md
 
 # 备份文件（防止误提交）
 *.bak

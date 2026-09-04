@@ -5,8 +5,23 @@
 
 import { createWithEqualityFn } from 'zustand/traditional'
 import { shallow } from 'zustand/shallow'
+import { APP_INFO } from '@shared/constants'
 
-const FALLBACK_APP_VERSION = '1.3.2'
+const FALLBACK_APP_VERSION = APP_INFO.VERSION
+
+/** 应用主导航 tab identifier */
+export type MainTab =
+  | 'configs'
+  | 'ai-tools'
+  | 'automation'
+  | 'statistics'
+  | 'projects'
+  | 'mcp-management'
+  | 'agents-management'
+  | 'skills-management'
+  | 'environment-check'
+  | 'managed-mode'
+  | 'settings'
 
 interface AppStore {
   // 应用信息
@@ -14,7 +29,7 @@ interface AppStore {
   platform: string
 
   // UI 状态
-  activeMainTab: 'configs' | 'automation' | 'statistics' | 'projects' | 'mcp-management' | 'agents-management' | 'skills-management' | 'environment-check' | 'managed-mode' | 'settings'
+  activeMainTab: MainTab
   sidebarCollapsed: boolean
   theme: 'light' | 'dark' | 'auto'
   language: 'zh-CN' | 'en-US'
@@ -32,7 +47,7 @@ interface AppStore {
   }>
 
   // 操作
-  setActiveMainTab: (tab: 'configs' | 'automation' | 'statistics' | 'projects' | 'mcp-management' | 'agents-management' | 'skills-management' | 'environment-check' | 'managed-mode' | 'settings') => void
+  setActiveMainTab: (tab: MainTab) => void
   toggleSidebar: () => void
   toggleMenuGroup: (group: 'advanced') => void
   setTheme: (theme: 'light' | 'dark' | 'auto') => void

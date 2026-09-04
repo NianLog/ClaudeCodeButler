@@ -3,13 +3,13 @@
  * @description 负责管理代理服务的生命周期，包括启动、停止、配置管理等
  */
 
-import { app } from 'electron'
+import { app, net } from 'electron'
 import { ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs/promises'
 import os from 'os'
-import axios, { type AxiosRequestConfig } from 'axios'
 import { EventEmitter } from 'events'
+import { ensurePathWithinBase } from '../utils/path-security'
 import type { Request, Response, NextFunction } from 'express'
 import type {
   ManagedModeConfig,
@@ -17,11 +17,23 @@ import type {
   ApiProvider,
   EnvCommand
 } from '@shared/types/managed-mode'
+import {
+  postUpstream,
+  readBodyStream,
+  UpstreamHttpError,
+  type UpstreamResponse
+} from '../utils/upstream-http-client'
 import { managedModeLogRotationService } from './managed-mode-log-rotation.service'
 import { ManagedModeConfigStore } from './managed-mode-config-store'
 import { logger } from '../utils/logger'
+import { pathManager } from '../utils/path-manager'
 
 const managedModeLogger = logger.child('ManagedModeService')
+
+/** 上游非 2xx 错误体读取上限（防护恶意/异常上游返回超大错误响应占满内存） */
+const UPSTREAM_ERROR_BODY_MAX_BYTES = 1024 * 1024
+/** 上游非流式响应体读取上限（请求体上限为 50MB，响应上限取 64MB 冗余） */
+const UPSTREAM_RESPONSE_MAX_BYTES = 64 * 1024 * 1024
 
 /**
  * 集成模式下代理进程的实际形态
@@ -733,7 +745,11 @@ export class ManagedModeService extends EventEmitter {
       const backupDir = path.join(os.homedir(), '.ccb', 'backup')
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const backupFileName = `settings.json.${timestamp}.backup`
-      const backupPath = path.join(backupDir, backupFileName)
+      const backupPath = ensurePathWithinBase(
+        path.join(backupDir, backupFileName),
+        backupDir,
+        '系统设置备份文件'
+      )
 
       // 确保备份目录存在
       await fs.mkdir(backupDir, { recursive: true })
@@ -773,7 +789,7 @@ export class ManagedModeService extends EventEmitter {
       // 查找最新的备份文件
       const files = await fs.readdir(backupDir)
       const backupFiles = files
-        .filter(file => file.startsWith('settings.json.') && file.endsWith('.backup'))
+        .filter(file => file.startsWith('settings.json.') && file.endsWith('.backup') && !file.includes('..'))
         .sort((a, b) => b.localeCompare(a)) // 按时间倒序排列，最新的在前
 
       if (backupFiles.length === 0) {
@@ -782,7 +798,11 @@ export class ManagedModeService extends EventEmitter {
       }
 
       const latestBackup = backupFiles[0]
-      const backupPath = path.join(backupDir, latestBackup)
+      const backupPath = ensurePathWithinBase(
+        path.join(backupDir, latestBackup),
+        backupDir,
+        '系统设置备份文件'
+      )
 
       // 读取备份内容
       const backupContent = await fs.readFile(backupPath, 'utf8')
@@ -919,7 +939,7 @@ export class ManagedModeService extends EventEmitter {
       if (!this.config) return
       const managedConfig = this.config
 
-      const configDir = path.join(os.homedir(), '.ccb', 'claude-configs')
+      const configDir = pathManager.claudeConfigsDir
 
       // 检查目录是否存在
       try {
@@ -931,14 +951,18 @@ export class ManagedModeService extends EventEmitter {
 
       // 读取配置目录中的所有文件
       const files = await fs.readdir(configDir)
-      const configFiles = files.filter(file => file.endsWith('.json') && file !== 'settings.json')
+      const configFiles = files.filter(file => file.endsWith('.json') && file !== 'settings.json' && !file.includes('..'))
 
       const newProviders: ApiProvider[] = []
       const currentProviderId = managedConfig.currentProvider
 
       for (const file of configFiles) {
         try {
-          const configPath = path.join(configDir, file)
+          const configPath = ensurePathWithinBase(
+            path.join(configDir, file),
+            configDir,
+            '配置文件路径'
+          )
           const content = await fs.readFile(configPath, 'utf-8')
           const rawConfig = JSON.parse(content) as Record<string, unknown>
 
@@ -973,7 +997,11 @@ export class ManagedModeService extends EventEmitter {
             // 读取.meta文件获取显示名称
             let displayName = configName // 默认使用文件名
             try {
-              const metaPath = path.join(configDir, `${file}.meta`)
+              const metaPath = ensurePathWithinBase(
+                path.join(configDir, `${file}.meta`),
+                configDir,
+                '配置元数据文件路径'
+              )
               const metaContent = await fs.readFile(metaPath, 'utf-8')
               const metaData = JSON.parse(metaContent) as Record<string, unknown>
               if (typeof metaData.name === 'string') {
@@ -1133,10 +1161,10 @@ export class ManagedModeService extends EventEmitter {
    */
   private async checkPortInUse(port: number): Promise<boolean> {
     try {
-      const response = await axios.get(`http://127.0.0.1:${port}/health`, {
-        timeout: 1000
+      const response = await net.fetch(`http://127.0.0.1:${port}/health`, {
+        signal: AbortSignal.timeout(1000)
       })
-      return response.status === 200
+      return response.ok
     } catch {
       return false
     }
@@ -1221,10 +1249,16 @@ export class ManagedModeService extends EventEmitter {
 
     managedModeLogger.debug(`开始执行健康检查，端口: ${port}`)
 
-    axios.get(`http://127.0.0.1:${port}/health`, {
-      timeout: 3000
+    net.fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(3000)
     })
-    .then(response => {
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`健康检查返回 HTTP ${response.status}`)
+      }
+      return (await response.json()) as { status?: string }
+    })
+    .then((data) => {
       managedModeLogger.debug('健康检查成功，准备调度下次检查')
       // 健康检查成功
       this.consecutiveSuccessCount++
@@ -1247,7 +1281,7 @@ export class ManagedModeService extends EventEmitter {
           message: `健康检查通过 (连续${this.consecutiveSuccessCount}次成功，当前间隔: ${currentLevel.label})`,
           source: 'managed-mode-service',
           data: {
-            status: response.data.status,
+            status: data.status,
             port,
             uptime: this.startTime ? Date.now() - this.startTime : 0,
             consecutiveSuccessCount: this.consecutiveSuccessCount,
@@ -1419,7 +1453,6 @@ export class ManagedModeService extends EventEmitter {
     // 注：不启用 CORS —— 托管代理仅服务本机 Claude CLI，CLI 不走浏览器 CORS；
     // 全开 CORS 反而会让本机恶意网页在 token 泄露后能直接调用上游 API（安全收紧）。
     const express = await import('express')
-    const { HttpsProxyAgent } = await import('https-proxy-agent')
 
     const expressApp = express.default()
     expressApp.use(express.default.json({ limit: '50mb' }))
@@ -1479,7 +1512,7 @@ export class ManagedModeService extends EventEmitter {
       const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`
       const requestBody = (req.body ?? {}) as MessagesRequestBody
       const isStreamRequest = requestBody.stream === true
-      let axiosConfig: AxiosRequestConfig | undefined // 在外部声明，以便在catch块中使用
+      let upstreamUrl = '' // 在外部声明，以便在catch块中使用
 
       try {
         // 获取当前服务提供商配置
@@ -1521,9 +1554,9 @@ export class ManagedModeService extends EventEmitter {
 
         // 2. 移除需要清理的头（避免冲突和安全问题）
         const headersToRemove = [
-          'host',                    // 会被axios根据目标URL自动设置
+          'host',                    // 由上游 HTTP 客户端根据目标 URL 自动设置
           'connection',              // 连接管理头，由HTTP客户端处理
-          'content-length',          // 会被axios根据body自动计算
+          'content-length',          // 由 upstream-http-client 根据序列化 body 自动计算
           'transfer-encoding',       // 传输编码，由HTTP客户端处理
           'authorization'            // 原始授权头（后续会替换为x-api-key）
         ]
@@ -1539,24 +1572,13 @@ export class ManagedModeService extends EventEmitter {
         forwardedHeaders['anthropic-version'] = (Array.isArray(req.headers['anthropic-version']) ? req.headers['anthropic-version'][0] : req.headers['anthropic-version']) || '2023-06-01'
         forwardedHeaders['x-api-key'] = currentProvider.apiKey  // 替换为上游API密钥
 
-        // 构建axios配置
-        axiosConfig = {
-          method: 'POST',
-          url: `${currentProvider.apiBaseUrl}/v1/messages`,
-          headers: forwardedHeaders,
-          data: req.body,
-          timeout: 120000 // 2分钟超时
-        } as AxiosRequestConfig
+        // 构建上游转发配置（Node http/https 原生转发，见 upstream-http-client）
+        upstreamUrl = `${currentProvider.apiBaseUrl}/v1/messages`
+        const proxyUrl = this.config?.networkProxy?.enabled
+          ? `http://${this.config.networkProxy.host}:${this.config.networkProxy.port}`
+          : undefined
 
-        // 如果是流式请求，设置responseType为stream
-        if (isStreamRequest) {
-          axiosConfig.responseType = 'stream'
-        }
-
-        // 如果启用了网络代理
-        if (this.config?.networkProxy?.enabled) {
-          const proxyUrl = `http://${this.config.networkProxy.host}:${this.config.networkProxy.port}`
-          axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl)
+        if (proxyUrl) {
           managedModeLogger.info(`使用网络代理: ${proxyUrl}`)
         }
 
@@ -1576,12 +1598,12 @@ export class ManagedModeService extends EventEmitter {
             message: `请求 ${currentProvider.name}${isStreamRequest ? ' (流式)' : ''}`,
             provider: currentProvider.name,
             model: requestBody.model,
-            url: axiosConfig.url,
+            url: upstreamUrl,
             method: 'POST',
             statusCode: 0,
             data: {
               method: 'POST',
-              url: axiosConfig.url,
+              url: upstreamUrl,
               provider: currentProvider.name,
               stream: isStreamRequest,
               headers: sanitizedHeaders,  // 包含完整的转发请求头（已脱敏）
@@ -1598,7 +1620,7 @@ export class ManagedModeService extends EventEmitter {
           this.emit('log', requestLog)
           managedModeLogger.debug('[托管代理] 转发请求到上游', {
             provider: currentProvider.name,
-            url: axiosConfig.url,
+            url: upstreamUrl,
             model: requestBody.model,
             stream: isStreamRequest,
             forwardedHeadersCount: Object.keys(forwardedHeaders).length
@@ -1606,13 +1628,32 @@ export class ManagedModeService extends EventEmitter {
         }
 
         // 转发请求到上游 API
-        if (!axiosConfig) {
-          throw new Error('请求配置未初始化，无法转发到上游 API')
+        const upstream: UpstreamResponse = await postUpstream({
+          url: upstreamUrl,
+          headers: forwardedHeaders,
+          body: req.body,
+          timeoutMs: 120000, // 2分钟超时（响应头返回前）
+          proxyUrl
+        })
+
+        // 上游非 2xx：读取错误体后抛出，对齐 axios 非 2xx 抛错语义，交由统一 catch 转发
+        if (upstream.status >= 400) {
+          const errorRaw = await readBodyStream(upstream.stream, UPSTREAM_ERROR_BODY_MAX_BYTES)
+          let errorData: unknown = errorRaw.toString('utf8')
+          try {
+            errorData = JSON.parse(errorRaw.toString('utf8'))
+          } catch {
+            // 非 JSON 错误体原样转发
+          }
+          throw new UpstreamHttpError({
+            status: upstream.status,
+            headers: upstream.headers,
+            data: errorData
+          })
         }
-        const response = await axios(axiosConfig)
 
         // 处理流式响应
-        if (isStreamRequest && response.data) {
+        if (isStreamRequest && upstream.stream) {
           // 设置SSE响应头
           res.setHeader('Content-Type', 'text/event-stream')
           res.setHeader('Cache-Control', 'no-cache')
@@ -1620,10 +1661,10 @@ export class ManagedModeService extends EventEmitter {
           res.setHeader('X-Accel-Buffering', 'no') // 禁用nginx缓冲
 
           // 将上游流转发给客户端
-          response.data.pipe(res)
+          upstream.stream.pipe(res)
 
           // 处理流错误
-          response.data.on('error', (error: unknown) => {
+          upstream.stream.on('error', (error: unknown) => {
             managedModeLogger.error('[托管代理] 上游流错误', error)
             if (!res.headersSent) {
               res.status(500).end()
@@ -1633,7 +1674,7 @@ export class ManagedModeService extends EventEmitter {
           })
 
           // 流结束时记录日志
-          response.data.on('end', () => {
+          upstream.stream.on('end', () => {
             if (this.config?.logging?.enabled) {
               const endTime = Date.now()
               const duration = endTime - new Date(requestTime).getTime()
@@ -1643,16 +1684,16 @@ export class ManagedModeService extends EventEmitter {
                 type: 'response' as const,
                 message: '流式响应完成',
                 provider: currentProvider.name,
-                statusCode: response.status,
+                statusCode: upstream.status,
                 data: {
                   method: 'POST',
-                  url: axiosConfig?.url,
-                  statusCode: response.status,
+                  url: upstreamUrl,
+                  statusCode: upstream.status,
                   duration,
                   stream: true,
                   headers: {
-                    'content-type': response.headers['content-type'],
-                    'x-request-id': response.headers['x-request-id']
+                    'content-type': upstream.headers['content-type'],
+                    'x-request-id': upstream.headers['x-request-id']
                   }
                 }
               }
@@ -1664,60 +1705,70 @@ export class ManagedModeService extends EventEmitter {
           return
         }
 
-        // 处理非流式响应
+        // 处理非流式响应：读取并解析上游 JSON 响应体（受大小限制保护）
+        const rawBody = await readBodyStream(upstream.stream, UPSTREAM_RESPONSE_MAX_BYTES)
+        let responseData: unknown
+        try {
+          responseData = JSON.parse(rawBody.toString('utf8'))
+        } catch {
+          // 非 JSON 响应体按字符串转发（与 axios transformResponse 失败时的行为一致）
+          responseData = rawBody.toString('utf8')
+        }
+
         if (this.config?.logging?.enabled) {
           const endTime = Date.now()
           const duration = endTime - new Date(requestTime).getTime()
-          const responseData = response.data as UpstreamResponseData
+          const typedResponseData = responseData as UpstreamResponseData
           const responseLog = {
             id: requestId,
             timestamp: new Date().toISOString(),
             type: 'response' as const,
-            message: `响应成功 (${response.status})`,
+            message: `响应成功 (${upstream.status})`,
             provider: currentProvider.name,
-            statusCode: response.status,
-            hasContent: !!response.data,
+            statusCode: upstream.status,
+            hasContent: !!responseData,
             data: {
               method: 'POST',
-              url: axiosConfig.url,
-              statusCode: response.status,
+              url: upstreamUrl,
+              statusCode: upstream.status,
               duration,
               stream: false,
               headers: {
-                'content-type': response.headers['content-type'],
-                'x-request-id': response.headers['x-request-id']
+                'content-type': upstream.headers['content-type'],
+                'x-request-id': upstream.headers['x-request-id']
               },
-              body: response.data ? {
-                id: responseData.id,
-                type: responseData.type,
-                role: responseData.role,
-                model: responseData.model,
-                usage: responseData.usage,
-                content: this.truncateContentForLog(responseData.content)  // 截断后广播，避免完整上游响应扩散
+              body: responseData ? {
+                id: typedResponseData.id,
+                type: typedResponseData.type,
+                role: typedResponseData.role,
+                model: typedResponseData.model,
+                usage: typedResponseData.usage,
+                content: this.truncateContentForLog(typedResponseData.content)  // 截断后广播，避免完整上游响应扩散
               } : undefined
             }
           }
           this.emit('log', responseLog)
           managedModeLogger.debug('[托管代理] 收到上游响应', {
-            status: response.status,
-            hasContent: !!response.data
+            status: upstream.status,
+            hasContent: !!responseData
           })
         }
 
         // 返回上游响应
-        res.status(response.status).json(response.data)
+        res.status(upstream.status).json(responseData)
 
       } catch (error: unknown) {
         managedModeLogger.error('[托管代理] 请求失败', error)
 
         // 统一提取错误信息，避免在 catch 中直接访问 any 字段
+        // UpstreamHttpError 携带 response.{status,data,headers}；Node 网络错误携带 code
         const errorMessage = error instanceof Error ? error.message : '请求失败'
-        const axiosError = error as { response?: { status?: number; data?: { error?: { type?: string } }; headers?: Record<string, string> }; code?: string; isAxiosError?: boolean }
-        const statusCode = axiosError?.response?.status || 500
-        const errorCode = axiosError?.code || 'unknown'
-        const errorResponseType = axiosError?.response?.data?.error?.type || 'unknown_error'
-        const errorResponseHeaders = axiosError?.response?.headers
-        const errorResponseData = axiosError?.response?.data
+        const upstreamError = error as { response?: { status?: number; data?: { error?: { type?: string } }; headers?: Record<string, string> }; code?: string }
+        const statusCode = upstreamError?.response?.status || 500
+        const errorCode = upstreamError?.code || 'unknown'
+        const errorResponseType = upstreamError?.response?.data?.error?.type || 'unknown_error'
+        const errorResponseHeaders = upstreamError?.response?.headers
+        const errorResponseData = upstreamError?.response?.data
 
         // 记录错误日志
         const endTime = Date.now()
@@ -1731,7 +1782,7 @@ export class ManagedModeService extends EventEmitter {
           errorType: errorCode,
           data: {
             method: 'POST',
-            url: axiosConfig?.url || '/v1/messages',
+            url: upstreamUrl || '/v1/messages',
             statusCode,
             duration,
             error: errorMessage,
@@ -1746,15 +1797,15 @@ export class ManagedModeService extends EventEmitter {
         }
         this.emit('log', errorLog)
 
-        // 处理axios错误
-        if (axiosError?.response) {
+        // 处理上游 HTTP 错误
+        if (upstreamError?.response) {
           // 上游API返回错误
-          const errorStatus = axiosError.response.status ?? 500
-          if (axiosError.response.data && typeof axiosError.response.data === 'object' && !Buffer.isBuffer(axiosError.response.data)) {
-            return res.status(errorStatus).json(axiosError.response.data)
+          const errorStatus = upstreamError.response.status ?? 500
+          if (upstreamError.response.data && typeof upstreamError.response.data === 'object' && !Buffer.isBuffer(upstreamError.response.data)) {
+            return res.status(errorStatus).json(upstreamError.response.data)
           } else {
             // 流式错误响应
-            return res.status(errorStatus).send(axiosError.response.data)
+            return res.status(errorStatus).send(upstreamError.response.data)
           }
         } else if (errorCode === 'ECONNABORTED') {
           // 超时错误

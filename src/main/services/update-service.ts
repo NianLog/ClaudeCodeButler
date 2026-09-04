@@ -3,21 +3,29 @@
  * @description 负责应用更新检查
  */
 
-import axios from 'axios';
-import { app, Notification, shell } from 'electron';
+import { app, net, Notification, shell } from 'electron';
 import { join } from 'path';
 import fs from 'fs';
 import { logger } from '../utils/logger';
-import { APP_INFO } from '@shared/constants';
+import { registryUpdateService } from './registry-update-service';
 
 const VERSION_URL = 'https://dev.niansir.com/software/ccb/version.txt';
 
 class UpdateService {
   public async checkForUpdates(): Promise<void> {
+    const registryCheck = registryUpdateService.checkForUpdates(app.getVersion()).catch((error) => ({
+      state: 'CHECK_FAILED' as const,
+      embeddedVersion: '0.0.0',
+      error: error instanceof Error ? error.message : String(error)
+    }));
     logger.info('正在检查更新...');
     try {
-      const response = await axios.get(VERSION_URL, { timeout: 15000 });
-      const versionInfo = this.parseVersionInfo(response.data);
+      // net.fetch 走 Chromium 网络栈，遵循系统代理设置（企业环境更友好）
+      const response = await net.fetch(VERSION_URL, { signal: AbortSignal.timeout(15000) });
+      if (!response.ok) {
+        throw new Error(`版本检查请求失败: HTTP ${response.status}`);
+      }
+      const versionInfo = this.parseVersionInfo(await response.text());
 
       if (!versionInfo.version) {
         logger.warn('无法从版本文件中解析出版本号。');
@@ -35,6 +43,13 @@ class UpdateService {
       }
     } catch (error) {
       logger.error('检查更新失败:', error);
+    }
+
+    const registryStatus = await registryCheck;
+    if (registryStatus.state === 'UPDATE_AVAILABLE') {
+      logger.info(`发现规则库更新: ${registryStatus.availableVersion}`);
+    } else if (registryStatus.state === 'CHECK_FAILED') {
+      logger.warn(`规则库版本检查失败: ${registryStatus.error}`);
     }
   }
 
@@ -74,10 +89,7 @@ class UpdateService {
     const notification = new Notification({
       title: `发现新版本 v${versionInfo.version}`,
       body: versionInfo.text || '建议您立即更新以获取最佳体验。',
-      icon: iconPath || undefined,
-      ...(process.platform === 'win32' && {
-        appUserModelId: APP_INFO.FULL_NAME
-      })
+      icon: iconPath || undefined
     });
 
     notification.on('click', () => {

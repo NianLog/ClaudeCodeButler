@@ -45,6 +45,24 @@ import type {
   TerminalExecutionConfig,
   TerminalType
 } from '@shared/types/terminal'
+import type {
+  ArtifactTemplateEntry,
+  ConfigArtifactContent,
+  ConfigArtifactBackup,
+  ConfigArtifactValidationResult,
+  DiscoveredConfigArtifact,
+  ToolConfigSetContent,
+  ToolConfigSetSummary,
+  ToolDefinition,
+  ToolDetectionResult,
+  ToolRegistrySnapshot,
+  ToolRegistryUpdateStatus
+} from '@shared/tool-registry'
+import type {
+  TemplateCloudImportResult,
+  TemplateCloudListResult
+} from '@shared/template-cloud'
+import type { PerformanceSnapshot, RendererPerformanceTiming } from '@shared/performance'
 
 /**
  * 配置管理 API
@@ -205,6 +223,145 @@ interface SystemAPI {
 }
 
 /**
+ * 工具规则库 API
+ * @description 规则下载地址与 hash 只在 main process 内部流转。
+ */
+interface ToolRegistryAPI {
+  /** 获取 effective registry 摘要 */
+  getSnapshot: () => Promise<{ success: boolean; data?: ToolRegistrySnapshot; error?: string }>
+  /** 按 toolId 获取 definition */
+  getTool: (toolId: string) => Promise<{ success: boolean; data?: ToolDefinition; error?: string }>
+  /** 列出 effective registry 中可管理的 artifact-specific templates */
+  listArtifactTemplates: () => Promise<{
+    success: boolean
+    data?: ArtifactTemplateEntry[]
+    error?: string
+  }>
+  /** 解析单个 artifact 当前 template ownership */
+  resolveArtifactTemplate: (toolId: string, artifactId: string) => Promise<{
+    success: boolean
+    data?: ArtifactTemplateEntry
+    error?: string
+  }>
+  /** 保存本地 user override；renderer 不提供任何文件路径 */
+  saveArtifactTemplateOverride: (toolId: string, artifactId: string, content: string) => Promise<{
+    success: boolean
+    data?: ArtifactTemplateEntry
+    error?: string
+  }>
+  /** 删除本地 user override 并恢复 registry/embedded template */
+  removeArtifactTemplateOverride: (toolId: string, artifactId: string) => Promise<{
+    success: boolean
+    data?: ArtifactTemplateEntry
+    error?: string
+  }>
+  /** 检测 effective registry 中的工具 */
+  detectTools: () => Promise<{ success: boolean; data?: ToolDetectionResult[]; error?: string }>
+  /** 发现指定工具在当前平台存在的配置资产 */
+  discoverArtifacts: (toolId: string) => Promise<{
+    success: boolean
+    data?: DiscoveredConfigArtifact[]
+    error?: string
+  }>
+  /** 读取 discovery 返回且 registry 允许的配置资产 */
+  readArtifact: (toolId: string, artifactId: string, path: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactContent
+    error?: string
+  }>
+  /** 使用 registry format codec 校验配置 */
+  validateArtifact: (toolId: string, artifactId: string, path: string, content: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactValidationResult
+    error?: string
+  }>
+  /** 校验并原子更新 registry 授权配置 */
+  editArtifact: (toolId: string, artifactId: string, path: string, content: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactContent
+    error?: string
+  }>
+  /** 创建 registry 授权配置备份 */
+  createArtifactBackup: (toolId: string, artifactId: string, path: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactBackup
+    error?: string
+  }>
+  /** 列出 registry 授权配置的有效备份 */
+  listArtifactBackups: (toolId: string, artifactId: string, path: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactBackup[]
+    error?: string
+  }>
+  /** 恢复受控 backup identifier */
+  restoreArtifactBackup: (backupId: string) => Promise<{
+    success: boolean
+    data?: ConfigArtifactContent
+    error?: string
+  }>
+  /** 列出工具的配置集快照（registry configSet 声明驱动） */
+  listConfigSets: (toolId: string) => Promise<{
+    success: boolean
+    data?: ToolConfigSetSummary[]
+    error?: string
+  }>
+  /** 从当前生效配置创建命名配置集快照 */
+  createConfigSet: (toolId: string, name: string) => Promise<{
+    success: boolean
+    data?: ToolConfigSetSummary
+    error?: string
+  }>
+  /** 读取配置集内容 */
+  readConfigSet: (toolId: string, setId: string) => Promise<{
+    success: boolean
+    data?: ToolConfigSetContent
+    error?: string
+  }>
+  /** 保存配置集内容（仅写快照目录，不触碰生效配置） */
+  saveConfigSetContent: (
+    toolId: string,
+    setId: string,
+    files: Array<{ artifactId: string; content: string }>
+  ) => Promise<{ success: boolean; error?: string }>
+  /** 激活配置集（全组校验后逐文件授权/备份/原子写） */
+  activateConfigSet: (toolId: string, setId: string) => Promise<{ success: boolean; error?: string }>
+  /** 删除配置集 */
+  deleteConfigSet: (toolId: string, setId: string) => Promise<{ success: boolean; error?: string }>
+  /** 获取当前 update 状态 */
+  getUpdateStatus: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
+  /** 只检查 manifest，不下载 bundle */
+  checkForUpdates: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
+  /** 安装 main process 最近验证的 manifest 对应 bundle */
+  installAvailableUpdate: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
+  /** 显式回滚 last-known-good */
+  rollback: () => Promise<{ success: boolean; data?: ToolRegistryUpdateStatus; error?: string }>
+  /** 拉取并验证云模板清单（v2 通道；URL/签名只在 main process 流转） */
+  listCloudTemplates: () => Promise<{
+    success: boolean
+    data?: TemplateCloudListResult
+    error?: string
+  }>
+  /** 下载并导入云模板（CONFIG_SET → 配置集；ARTIFACT → 默认模板 override） */
+  importCloudTemplate: (templateId: string, nameOverride?: string) => Promise<{
+    success: boolean
+    data?: TemplateCloudImportResult
+    error?: string
+  }>
+}
+
+/** 按需性能采集 API */
+interface PerformanceAPI {
+  /** 采集内存、CPU 与 process metrics，不写文件 */
+  capture: () => Promise<{ success: boolean; data?: PerformanceSnapshot; error?: string }>
+  /** 导出 snapshot 到本地 .ccb/performance */
+  exportSnapshot: (rendererTimings?: RendererPerformanceTiming[]) => Promise<{
+    success: boolean
+    data?: string
+    error?: string
+  }>
+}
+
+/**
  * 窗口管理 API
  */
 interface WindowAPI {
@@ -233,9 +390,16 @@ interface MenuAPI {
 /**
  * 托盘事件 API
  */
+/** 托盘配置切换事件 payload（通用配置集切换时 path 为空串、toolId 指明来源工具） */
+export interface TraySwitchConfigPayload {
+  name: string
+  path: string
+  toolId?: string
+}
+
 interface TrayAPI {
   // 监听配置切换请求
-  onSwitchConfig: (callback: (configName: string) => void) => () => void
+  onSwitchConfig: (callback: (payload: TraySwitchConfigPayload) => void) => () => void
   // 更新托盘菜单
   updateMenu: () => Promise<void>
 }
@@ -677,6 +841,8 @@ export interface ElectronAPI {
   skills: SkillsAPI
   environment: EnvironmentAPI
   terminal: TerminalAPI
+  toolRegistry: ToolRegistryAPI
+  performance: PerformanceAPI
   // 移除安全API
 }
 
@@ -763,6 +929,58 @@ const systemAPI: SystemAPI = {
   getPlatform: () => ipcRenderer.invoke('system:getPlatform')
 }
 
+/** 工具规则库 IPC facade */
+const toolRegistryAPI: ToolRegistryAPI = {
+  getSnapshot: () => ipcRenderer.invoke('toolRegistry:getSnapshot'),
+  getTool: (toolId: string) => ipcRenderer.invoke('toolRegistry:getTool', toolId),
+  listArtifactTemplates: () => ipcRenderer.invoke('toolRegistry:listArtifactTemplates'),
+  resolveArtifactTemplate: (toolId: string, artifactId: string) =>
+    ipcRenderer.invoke('toolRegistry:resolveArtifactTemplate', toolId, artifactId),
+  saveArtifactTemplateOverride: (toolId: string, artifactId: string, content: string) =>
+    ipcRenderer.invoke('toolRegistry:saveArtifactTemplateOverride', toolId, artifactId, content),
+  removeArtifactTemplateOverride: (toolId: string, artifactId: string) =>
+    ipcRenderer.invoke('toolRegistry:removeArtifactTemplateOverride', toolId, artifactId),
+  detectTools: () => ipcRenderer.invoke('toolRegistry:detectTools'),
+  discoverArtifacts: (toolId: string) => ipcRenderer.invoke('toolRegistry:discoverArtifacts', toolId),
+  readArtifact: (toolId: string, artifactId: string, path: string) =>
+    ipcRenderer.invoke('toolRegistry:readArtifact', toolId, artifactId, path),
+  validateArtifact: (toolId: string, artifactId: string, path: string, content: string) =>
+    ipcRenderer.invoke('toolRegistry:validateArtifact', toolId, artifactId, path, content),
+  editArtifact: (toolId: string, artifactId: string, path: string, content: string) =>
+    ipcRenderer.invoke('toolRegistry:editArtifact', toolId, artifactId, path, content),
+  createArtifactBackup: (toolId: string, artifactId: string, path: string) =>
+    ipcRenderer.invoke('toolRegistry:createArtifactBackup', toolId, artifactId, path),
+  listArtifactBackups: (toolId: string, artifactId: string, path: string) =>
+    ipcRenderer.invoke('toolRegistry:listArtifactBackups', toolId, artifactId, path),
+  restoreArtifactBackup: (backupId: string) =>
+    ipcRenderer.invoke('toolRegistry:restoreArtifactBackup', backupId),
+  listConfigSets: (toolId: string) => ipcRenderer.invoke('toolRegistry:listConfigSets', toolId),
+  createConfigSet: (toolId: string, name: string) =>
+    ipcRenderer.invoke('toolRegistry:createConfigSet', toolId, name),
+  readConfigSet: (toolId: string, setId: string) =>
+    ipcRenderer.invoke('toolRegistry:readConfigSet', toolId, setId),
+  saveConfigSetContent: (toolId: string, setId: string, files: Array<{ artifactId: string; content: string }>) =>
+    ipcRenderer.invoke('toolRegistry:saveConfigSetContent', toolId, setId, files),
+  activateConfigSet: (toolId: string, setId: string) =>
+    ipcRenderer.invoke('toolRegistry:activateConfigSet', toolId, setId),
+  deleteConfigSet: (toolId: string, setId: string) =>
+    ipcRenderer.invoke('toolRegistry:deleteConfigSet', toolId, setId),
+  getUpdateStatus: () => ipcRenderer.invoke('toolRegistry:getUpdateStatus'),
+  checkForUpdates: () => ipcRenderer.invoke('toolRegistry:checkForUpdates'),
+  installAvailableUpdate: () => ipcRenderer.invoke('toolRegistry:installAvailableUpdate'),
+  rollback: () => ipcRenderer.invoke('toolRegistry:rollback'),
+  listCloudTemplates: () => ipcRenderer.invoke('toolRegistry:listCloudTemplates'),
+  importCloudTemplate: (templateId: string, nameOverride?: string) =>
+    ipcRenderer.invoke('toolRegistry:importCloudTemplate', templateId, nameOverride)
+}
+
+/** 按需性能采集 IPC facade */
+const performanceAPI: PerformanceAPI = {
+  capture: () => ipcRenderer.invoke('performance:capture'),
+  exportSnapshot: (rendererTimings?: RendererPerformanceTiming[]) =>
+    ipcRenderer.invoke('performance:exportSnapshot', rendererTimings)
+}
+
 // 创建窗口 API 对象
 const windowAPI: WindowAPI = {
   minimize: () => ipcRenderer.invoke('window:minimize'),
@@ -791,8 +1009,8 @@ const menuAPI: MenuAPI = {
 
 // 创建托盘 API 对象
 const trayAPI: TrayAPI = {
-  onSwitchConfig: (callback: (configName: string) => void) => {
-    const handler = (_: unknown, configName: string) => callback(configName)
+  onSwitchConfig: (callback: (payload: TraySwitchConfigPayload) => void) => {
+    const handler = (_: unknown, payload: TraySwitchConfigPayload) => callback(payload)
     ipcRenderer.on('tray:switch-config', handler)
     // v1.4.0 修复：返回 unsubscribe 函数，避免监听器在 refreshConfigs 变化时累积（资源泄漏）
     return () => ipcRenderer.off('tray:switch-config', handler)
@@ -1023,7 +1241,9 @@ const electronAPI: ElectronAPI = {
   agents: agentsAPI,
   skills: skillsAPI,
   environment: environmentAPI,
-  terminal: terminalAPI
+  terminal: terminalAPI,
+  toolRegistry: toolRegistryAPI,
+  performance: performanceAPI
   // 移除安全API
 }
 

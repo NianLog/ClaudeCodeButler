@@ -4,7 +4,6 @@
  */
 
 import express from 'express'
-import cors from 'cors'
 import axios, { type AxiosRequestConfig } from 'axios'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -29,7 +28,6 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
   const logger = getLogger()
 
   // 中间件配置
-  app.use(cors())
   app.use(express.json({ limit: '50mb' }))
 
   // 请求日志中间件

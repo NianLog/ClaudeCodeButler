@@ -4,7 +4,6 @@
  */
 
 import * as cron from 'node-cron';
-import { v4 as uuidv4 } from 'uuid';
 import { ruleStorageService } from './rule-storage.service';
 import { ConfigService } from './config-service';
 import { AutomationRule, RuleId, Action, SwitchConfigAction, CustomCommandAction } from '@shared/types/rules';
@@ -256,7 +255,7 @@ class RuleEngineService {
     const now = new Date().toISOString();
     const rule: AutomationRule = {
       ...newRuleData,
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
     };

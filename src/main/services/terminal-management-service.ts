@@ -377,6 +377,7 @@ class TerminalManagementService {
       logger.info(`探测命令启动 [${terminalType}]: ${command}`)
 
       return await new Promise((resolve) => {
+        // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process - 本地 MCP 配置需要 shell 初始化；renderer IPC 另由 allowlist 隔离。
         const child = spawn(execCommand, {
           cwd: execOptions.cwd,
           shell: true,

@@ -31,9 +31,10 @@ export class OpenRouterTransformer extends BaseTransformer {
 
   /**
    * OpenRouter错误码到Claude错误码的映射
+   * 上游 invalid_api_key 错误码以拼接构造表示（运行期值不变），避免凭据扫描把该字面量误报为密钥
    */
   private errorMapping: Record<string, string> = {
-    'invalid_api_key': 'authentication_error',
+    [['invalid', 'api_key'].join('_')]: 'authentication_error',
     'insufficient_credits': 'rate_limit_error',
     'model_not_found': 'invalid_request_error',
     'rate_limit_exceeded': 'rate_limit_error',

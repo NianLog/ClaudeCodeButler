@@ -15,6 +15,8 @@ import {
 } from '@shared/types/settings'
 import {
   DEFAULT_NEW_CONFIG_TEMPLATE,
+  migrateLegacyTemplateOverride,
+  validateArtifactTemplateOverrides,
   validateNewConfigTemplate
 } from '@shared/config-template'
 import { logger } from '../utils/logger'
@@ -49,7 +51,8 @@ export class SettingsService {
         wordWrap: false,
         minimap: true,
         lineNumbers: true,
-        defaultConfigTemplate: DEFAULT_NEW_CONFIG_TEMPLATE
+        defaultConfigTemplate: DEFAULT_NEW_CONFIG_TEMPLATE,
+        artifactTemplateOverrides: {}
       },
       notifications: {
         enabled: true,
@@ -99,6 +102,13 @@ export class SettingsService {
         required: true,
         type: 'string',
         validator: (value: unknown) => validateNewConfigTemplate(typeof value === 'string' ? value : String(value))
+      },
+      {
+        tab: 'editor',
+        key: 'artifactTemplateOverrides',
+        required: true,
+        type: 'object',
+        validator: validateArtifactTemplateOverrides
       },
 
       // 通知设置验证
@@ -175,9 +185,26 @@ export class SettingsService {
    */
   private mergeWithDefaults(loadedSettings: Partial<AppSettings>): AppSettings {
     const defaults = this.getDefaultSettings()
+    const mergedEditor = { ...defaults.editor, ...loadedSettings.editor }
+    const loadedOverrides = loadedSettings.editor?.artifactTemplateOverrides
+    const safeOverrides: Record<string, string> =
+      loadedOverrides !== undefined && validateArtifactTemplateOverrides(loadedOverrides) === true
+      ? loadedOverrides
+      : {}
+    const migratedOverrides = migrateLegacyTemplateOverride(
+      loadedSettings.editor?.defaultConfigTemplate,
+      safeOverrides
+    )
+    const legacyTemplateWasMigrated =
+      safeOverrides['claude-code/user-settings'] === undefined &&
+      migratedOverrides['claude-code/user-settings'] !== undefined
+    mergedEditor.artifactTemplateOverrides = migratedOverrides
+    if (legacyTemplateWasMigrated) {
+      mergedEditor.defaultConfigTemplate = DEFAULT_NEW_CONFIG_TEMPLATE
+    }
     return {
       basic: { ...defaults.basic, ...loadedSettings.basic },
-      editor: { ...defaults.editor, ...loadedSettings.editor },
+      editor: mergedEditor,
       notifications: { ...defaults.notifications, ...loadedSettings.notifications },
       advanced: { ...defaults.advanced, ...loadedSettings.advanced },
       window: { ...defaults.window, ...loadedSettings.window },
@@ -287,6 +314,10 @@ export class SettingsService {
           errors.push(`${rule.key} 必须是字符串`)
         } else if (rule.type === 'boolean' && typeof value !== 'boolean') {
           errors.push(`${rule.key} 必须是布尔值`)
+        } else if (rule.type === 'object' && (typeof value !== 'object' || value === null || Array.isArray(value))) {
+          errors.push(`${rule.key} 必须是对象`)
+        } else if (rule.type === 'array' && !Array.isArray(value)) {
+          errors.push(`${rule.key} 必须是数组`)
         }
 
         // 枚举值验证

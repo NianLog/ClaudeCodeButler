@@ -88,6 +88,7 @@ export async function executeCommand(
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>
     try {
+      // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process - parseCommand 拒绝 shell 元字符，且 shell:false 保持参数边界。
       child = spawn(binary, args, {
         cwd: options.cwd,
         env: options.env,

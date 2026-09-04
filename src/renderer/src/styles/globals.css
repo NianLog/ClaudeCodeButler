@@ -4,6 +4,9 @@
  *       主题定义见 src/renderer/src/themes/index.ts，切换时 :root 变量自动更新。
  */
 
+/* 组件样式引入：CSS 规范要求 @import 位于所有 style rules 之前 */
+@import './components/Config.css';
+
 /* 兜底变量（主题 JS 加载前的默认值，与 CCB Dark Pro 一致） */
 :root {
   --bg-base: #1e1e1e;
@@ -44,11 +47,6 @@
   --sidebar-width: 200px;
   --toolbar-height: 28px;
 }
-
-/* 组件样式引入 */
-@import './components/Header.css';
-@import './components/Sidebar.css';
-@import './components/Config.css';
 
 /* 重置样式 */
 * {
@@ -138,6 +136,85 @@ html, body {
 .ant-card-body {
   color: var(--text-primary) !important;
   background: transparent !important;
+}
+
+/*
+ * Card 内标准 List 的全局紧凑布局。
+ * Ant Design flex children 默认 min-width:auto，长文本会撑开 meta 并导致 item 巨高；
+ * 全局层只建立可靠的 flex 收缩、有限行数和 action 边界；组件专属 secondary content
+ * 必须收进 Meta.description，而不是作为额外 flex sibling 与 meta/actions 竞争宽度。
+ */
+.ant-card-body .ant-list-item {
+  min-width: 0;
+  gap: var(--space-md);
+  padding-block: var(--space-md);
+}
+
+.ant-card-body .ant-list-item > :not(.ant-list-item-action) {
+  min-width: 0;
+}
+
+.ant-card-body .ant-list-item-meta,
+.ant-card-body .ant-list-item-meta-content,
+.ant-card-body .ant-list-item-meta-title,
+.ant-card-body .ant-list-item-meta-description {
+  min-width: 0;
+}
+
+.ant-card-body .ant-list-item-meta-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ant-card-body .ant-list-item-meta-description {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.ant-card-body .ant-list-item-action {
+  flex: 0 0 auto;
+  margin-inline-start: var(--space-md);
+  white-space: nowrap;
+}
+
+.ant-card-body .ant-list-item-action > li {
+  white-space: nowrap;
+}
+
+.ant-card-body .ccb-list-item-multiline .ant-list-item-meta-description {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.ant-card-body .ccb-list-item-structured .ant-list-item-meta-description {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.ant-card-body .ant-list-item.ccb-list-item-multiline {
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .ant-card-body .ant-list-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .ant-card-body .ant-list-item-action {
+    width: 100%;
+    margin-inline-start: 0;
+    text-align: end;
+  }
 }
 .ant-card-meta-title,
 .ant-card-meta-description {

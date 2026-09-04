@@ -24,6 +24,14 @@ import { agentsManagementService } from './services/agents-management-service'
 import { skillsManagementService } from './services/skills-management-service'
 import { environmentCheckService } from './services/environment-check-service'
 import { terminalManagementService } from './services/terminal-management-service'
+import { toolRegistryService } from './services/tool-registry-service'
+import { registryUpdateService } from './services/registry-update-service'
+import { createTemplateCloudService } from './services/template-cloud-service'
+import { performanceSnapshotService } from './services/performance-snapshot-service'
+import { toolArtifactDiscoveryService } from './services/tool-artifact-discovery-service'
+import { toolArtifactManagementService } from './services/tool-artifact-management-service'
+import { toolConfigSetService } from './services/tool-config-set-service'
+import { createArtifactTemplateService } from './services/artifact-template-service'
 import {
   ensureAllowedUrl,
   ensurePathWithinBase,
@@ -35,6 +43,8 @@ import { ensureExternalUrl } from './utils/ssrf-guard'
 // 服务实例
 const configService = new ConfigService()
 const settingsService = new SettingsService()
+const artifactTemplateService = createArtifactTemplateService(settingsService)
+const templateCloudService = createTemplateCloudService(artifactTemplateService)
 
 // 导出 configService 供其他模块使用
 export { configService, settingsService, managedModeService }
@@ -98,8 +108,103 @@ export function setupIpcHandlers(): void {
   setupSkillsHandlers()
   setupEnvironmentHandlers()
   setupTerminalHandlers()
+  setupToolRegistryHandlers()
 
   logger.info('IPC 处理器设置完成')
+}
+
+/**
+ * 工具规则库 IPC handlers
+ * @description renderer 不能提供 URL/hash；install 只消费 main 缓存的 verified manifest。
+ */
+function setupToolRegistryHandlers(): void {
+  ipcMain.handle('toolRegistry:getSnapshot', createSimpleHandler(() => toolRegistryService.getSnapshot()))
+  ipcMain.handle('toolRegistry:getTool', createSimpleHandler((toolId: string) => toolRegistryService.getTool(toolId)))
+  ipcMain.handle('toolRegistry:listArtifactTemplates', createSimpleHandler(() =>
+    artifactTemplateService.listArtifactTemplates()
+  ))
+  ipcMain.handle('toolRegistry:resolveArtifactTemplate', createSimpleHandler((toolId: string, artifactId: string) =>
+    artifactTemplateService.resolveArtifactTemplate(toolId, artifactId)
+  ))
+  ipcMain.handle('toolRegistry:saveArtifactTemplateOverride', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    content: string
+  ) => artifactTemplateService.saveArtifactTemplateOverride(toolId, artifactId, content)))
+  ipcMain.handle('toolRegistry:removeArtifactTemplateOverride', createSimpleHandler((
+    toolId: string,
+    artifactId: string
+  ) => artifactTemplateService.removeArtifactTemplateOverride(toolId, artifactId)))
+  ipcMain.handle('toolRegistry:detectTools', createSimpleHandler(() => toolArtifactDiscoveryService.detectTools()))
+  ipcMain.handle('toolRegistry:discoverArtifacts', createSimpleHandler((toolId: string) =>
+    toolArtifactDiscoveryService.discoverArtifacts(toolId)
+  ))
+  ipcMain.handle('toolRegistry:readArtifact', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string
+  ) => toolArtifactDiscoveryService.readArtifact(toolId, artifactId, requestedPath)))
+  ipcMain.handle('toolRegistry:validateArtifact', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string,
+    content: string
+  ) => toolArtifactManagementService.validateArtifact(toolId, artifactId, requestedPath, content)))
+  ipcMain.handle('toolRegistry:editArtifact', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string,
+    content: string
+  ) => toolArtifactManagementService.editArtifact(toolId, artifactId, requestedPath, content)))
+  ipcMain.handle('toolRegistry:createArtifactBackup', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string
+  ) => toolArtifactManagementService.createBackup(toolId, artifactId, requestedPath)))
+  ipcMain.handle('toolRegistry:listArtifactBackups', createSimpleHandler((
+    toolId: string,
+    artifactId: string,
+    requestedPath: string
+  ) => toolArtifactManagementService.listBackups(toolId, artifactId, requestedPath)))
+  ipcMain.handle('toolRegistry:restoreArtifactBackup', createSimpleHandler((backupId: string) =>
+    toolArtifactManagementService.restoreBackup(backupId)
+  ))
+  ipcMain.handle('toolRegistry:listConfigSets', createSimpleHandler((toolId: string) =>
+    toolConfigSetService.listConfigSets(toolId)
+  ))
+  ipcMain.handle('toolRegistry:createConfigSet', createSimpleHandler((toolId: string, name: string) =>
+    toolConfigSetService.createConfigSet(toolId, name)
+  ))
+  ipcMain.handle('toolRegistry:readConfigSet', createSimpleHandler((toolId: string, setId: string) =>
+    toolConfigSetService.readConfigSet(toolId, setId)
+  ))
+  ipcMain.handle('toolRegistry:saveConfigSetContent', createSimpleHandler((
+    toolId: string,
+    setId: string,
+    files: Array<{ artifactId: string; content: string }>
+  ) => toolConfigSetService.saveConfigSetContent(toolId, setId, files)))
+  ipcMain.handle('toolRegistry:activateConfigSet', createSimpleHandler((toolId: string, setId: string) =>
+    toolConfigSetService.activateConfigSet(toolId, setId)
+  ))
+  ipcMain.handle('toolRegistry:deleteConfigSet', createSimpleHandler((toolId: string, setId: string) =>
+    toolConfigSetService.deleteConfigSet(toolId, setId)
+  ))
+  ipcMain.handle('toolRegistry:getUpdateStatus', createSimpleHandler(() => registryUpdateService.getStatus()))
+  ipcMain.handle('toolRegistry:checkForUpdates', createSimpleHandler(() => registryUpdateService.checkForUpdates(app.getVersion())))
+  ipcMain.handle('toolRegistry:installAvailableUpdate', createSimpleHandler(() =>
+    registryUpdateService.installAvailableUpdate(app.getVersion())
+  ))
+  ipcMain.handle('toolRegistry:rollback', createSimpleHandler(() => registryUpdateService.rollback()))
+  ipcMain.handle('toolRegistry:listCloudTemplates', createSimpleHandler(() =>
+    templateCloudService.listTemplates(app.getVersion())
+  ))
+  ipcMain.handle('toolRegistry:importCloudTemplate', createSimpleHandler((templateId: string, nameOverride?: string) =>
+    templateCloudService.importTemplate(templateId, app.getVersion(), nameOverride ? { name: nameOverride } : undefined)
+  ))
+  ipcMain.handle('performance:capture', createSimpleHandler(() => performanceSnapshotService.capture()))
+  ipcMain.handle('performance:exportSnapshot', createSimpleHandler((rendererTimings?: unknown) =>
+    performanceSnapshotService.exportSnapshot(rendererTimings)
+  ))
 }
 
 /**
