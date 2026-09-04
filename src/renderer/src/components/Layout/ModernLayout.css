@@ -24,7 +24,7 @@
   overflow: hidden;
 }
 
-/* 侧边栏头部 */
+/* 侧边栏头部（容器查询锚点：logo 组随内容宽度按比例整体缩放） */
 .sidebar-header {
   padding: var(--space-lg);
   border-bottom: 1px solid var(--border-light);
@@ -32,6 +32,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  container-type: inline-size;
 }
 
 .sidebar-logo {
@@ -43,9 +44,10 @@
   justify-content: center;
 }
 
+/* logo 与文字一体：尺寸全部以容器宽度（cqw）为基准，空间不足时整组等比缩小 */
 .logo-icon {
-  width: 32px;
-  height: 32px;
+  width: clamp(20px, 18cqw, 32px);
+  height: clamp(20px, 18cqw, 32px);
   border-radius: var(--radius-md);
   flex-shrink: 0;
   object-fit: contain;
@@ -58,9 +60,9 @@
   overflow: hidden;
 }
 
-.logo-title {
-  font-size: var(--text-lg);
-  font-weight: var(--font-bold);
+.logo-text .logo-title {
+  font-size: clamp(11px, 8.5cqw, var(--font-size-lg));
+  font-weight: 600;
   color: var(--text-primary);
   line-height: 1.2;
   white-space: nowrap;
@@ -68,8 +70,8 @@
   text-overflow: ellipsis;
 }
 
-.logo-subtitle {
-  font-size: var(--text-xs);
+.logo-text .logo-subtitle {
+  font-size: clamp(9px, 6.25cqw, var(--font-size-xs));
   color: var(--text-secondary);
   line-height: 1.2;
   white-space: nowrap;

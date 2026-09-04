@@ -82,6 +82,17 @@ function auditReleaseSnapshot(input) {
     else errors.push(message)
   }
 
+  // rehearsal/test 等非 production 命名的 keyId 不得进入正式发布（防止 rehearsal 密钥被误发布）
+  const trustMapKeyIds = Array.from(trustMapBody.matchAll(/['"]([^'"]+)['"]\s*:/g), (match) => match[1])
+  const nonProductionKeyIds = trustMapKeyIds.filter((keyId) =>
+    /rehearsal|test|dev|staging|example|sample|placeholder|dummy/i.test(keyId)
+  )
+  if (nonProductionKeyIds.length > 0) {
+    const message = `REGISTRY_TRUSTED_PUBLIC_KEYS 包含非 production 命名 keyId: ${nonProductionKeyIds.join(', ')}`
+    if (input.allowPreviewRegistry) warnings.push(message)
+    else errors.push(message)
+  }
+
   return { version, errors, warnings }
 }
 

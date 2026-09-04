@@ -112,6 +112,20 @@ describe('ToolArtifactDiscoveryService', () => {
     )).rejects.toThrow('未声明')
   })
 
+  it('应支持空 requestedPath 授权到声明的主候选路径', async () => {
+    const configDirectory = path.join(tempDirectory, '.codex')
+    await mkdir(configDirectory)
+    const configPath = path.join(configDirectory, 'config.toml')
+    const content = 'model = "gpt-5"\n'
+    await writeFile(configPath, content, 'utf8')
+    const service = createService(createTool(['DISCOVER', 'READ']))
+
+    const loaded = await service.readArtifact('codex-cli', 'user-config', '')
+
+    expect(loaded.path).toBe(configPath)
+    expect(loaded.content).toBe(content)
+  })
+
   it('应拒绝未声明 READ capability 的资产', async () => {
     const service = createService(createTool(['DISCOVER']))
     await expect(service.readArtifact(

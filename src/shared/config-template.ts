@@ -17,7 +17,8 @@ const TEMPLATE_IDENTIFIER_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
  */
 export const DEFAULT_NEW_CONFIG_TEMPLATE_OBJECT = {
   env: {
-    ANTHROPIC_AUTH_TOKEN: 'Claude Code TokenKey',
+    // 占位值为空：token 类字段不预填假值，由用户填入真实凭据
+    ANTHROPIC_AUTH_TOKEN: '',
     ANTHROPIC_BASE_URL: 'Claude Code API URL',
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
   },

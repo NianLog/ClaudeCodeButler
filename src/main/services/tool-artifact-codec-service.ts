@@ -4,6 +4,7 @@
  */
 
 import yaml from 'js-yaml'
+import { parse as parseToml } from 'smol-toml'
 import type {
   ArtifactFormat,
   ConfigArtifactValidationResult
@@ -157,7 +158,7 @@ export class ToolArtifactCodecService {
       if (format === 'JSON') parsedValue = JSON.parse(content)
       else if (format === 'JSONC') parsedValue = JSON.parse(stripTrailingCommas(stripJsonComments(content)))
       else if (format === 'YAML') parsedValue = yaml.load(content, { schema: yaml.JSON_SCHEMA })
-      else if (format === 'TOML') throw new Error('当前版本尚未注册可信 TOML validation codec')
+      else if (format === 'TOML') parsedValue = parseToml(content)
       if (parsedValue !== undefined) assertBoundedStructure(parsedValue)
       return { valid: true, format, errors: [] }
     } catch (error) {

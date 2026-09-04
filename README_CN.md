@@ -2,7 +2,7 @@
 
 # ⚡ CCB (Claude Code Butler)
 
-**本地优先的 AI Agent 配置管理桌面工具**
+**本地优先的多 AI CLI 工具配置控制平面**
 
 [English](./README.md) | 简体中文
 
@@ -17,37 +17,30 @@
 
 ## 📖 简介
 
-CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用。`1.5.0` 保留原始产品名称，同时把底层架构演进为规则驱动的 Claude Code 与多 AI Agent 工具配置管理平台。
+CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构建的本地优先桌面应用。`1.5.0` 保留原始产品名称，同时把底层架构演进为规则驱动的配置控制平面：通过声明式 JSON registry 统一管理 Claude Code 与其他 AI CLI 工具（Codex CLI、Gemini CLI、Antigravity）的配置。
 
 ### 项目状态
 
-- **当前开发版本**：`1.5.0`
-- **发布基线**：`1.4.0`
-- **v1.5.0 已实施范围**：Claude Code 与 Codex CLI registry adapter、通用检测、registry allowlist 约束的只读 artifact discovery
-- **v1.5.0 已实施范围**：通用 codecs、validation、atomic edit、backup/restore、安全 IPC、管理 UI 与首轮 lifecycle performance 优化
-- **v1.5.0 已完成工程范围**：compatibility facade、artifact-specific template ownership、signed registry verification、release preflight 与 Electron navigation hardening
-- **v1.5.0 剩余发布范围**：注入 production publisher public key、配置企业 CA 后生成 Windows 安装包，以及由用户执行 runtime/业务实机验收
-- **安全基线（2026-07-13）**：Semgrep full scan `198 targets / 369 rules / 0 findings / 0 structured errors`；explicit-path scan `35 targets / 336 rules / 0 findings / 0 structured errors`；OSS fixpoint warnings 与补偿审查详见安全报告；root 与 proxy-server npm audit 均为 `0 vulnerabilities`
-- **验证基线**：30 个测试文件共 188 项测试、TypeScript 与 ESLint 检查、root production build 与 proxy-server build 全部通过
-- **静态包体基线**：main `288.87 KB`、preload `12.93 KB`、renderer entry `199.70 KB`、Settings JS/CSS `34.96 KB / 2.67 KB`
-
-package version 已升级为 `1.5.0`，它表示当前开发版本，不代表公共 release 已完成。最新审计证据与已接受的信任边界见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
+- **当前版本**：`1.5.0`（开发中）；发布基线 `1.4.0`
+- **v1.5.0 主题**：从 Claude Code 专用管理器演进为规则驱动的多 AI 工具配置控制平面
+- **已支持工具**：Claude Code、Codex CLI、Gemini CLI、Antigravity —— 声明式 JSON registry 接入，覆盖配置发现、校验、原子编辑、备份恢复与配置集快照切换全链路
+- **质量与安全**：自动化测试与双端构建全绿；root 与 proxy-server 生产依赖 audit 均 `0 vulnerabilities`（详见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)）
 
 产品名称继续使用 **Claude Code Butler**。名称用于记录项目起源，不再承担描述全部管理范围的职责；新增工具通过受约束 registry 与内置 capabilities 接入，`CCB`、`.ccb`、应用 identity 和仓库标识保持稳定。
 
 ### ✨ 核心功能
 
-- 🎯 **配置全生命周期管理**
-  - 统一管理 Claude Code 配置、项目配置、MCP 配置和用户偏好文件
+- 🎯 **多工具配置全生命周期管理**
+  - 统一管理 Claude Code、Codex CLI、Gemini CLI 与 Antigravity 的配置
   - 支持创建、编辑、复制、导入、导出、备份、恢复与一键切换
-  - 同时支持 `JSON` 与 `Markdown` 类型配置，并按真实文件类型做校验
-  - 新建配置按 artifact 解析模板，优先级为 `USER_OVERRIDE > REGISTRY > EMBEDDED`
+  - 分离配置工具的多文件联动编辑（如 Codex `config.toml` + `auth.json`）：整组先校验、再顺序写入
+  - 每工具配置集快照：保存当前状态、托盘一键切换、随时恢复
+  - 支持 `JSON`、`TOML`、`Markdown` 类型配置并按真实文件类型校验；缺失文件可按 registry 声明模板创建
 
 - 🔌 **MCP 服务器管理**
   - 在同一个面板中管理全局与项目级 MCP 服务器
   - 支持本地命令型服务器，也支持仅包含 `http` / `url` 等字段的远程服务器
   - 支持启用、禁用、复制、导入、导出、归档与可用性验证
-  - 已启用服务器可通过用户配置的全局终端运行时执行可用性验证
 
 - 🧠 **编辑器与设置体验**
   - 基于 Monaco 的编辑器，并采用按需加载运行时以减轻首屏压力
@@ -68,7 +61,7 @@ package version 已升级为 `1.5.0`，它表示当前开发版本，不代表�
 - 🌐 **面向日常使用**
   - 提供中文与英文界面
   - 提供 Windows Portable、ZIP 与 NSIS 安装版分发方式
-  - 不强制依赖云端服务，适合本地管理场景
+  - 本地优先、不强制依赖云端；远程规则库为可选能力且强制签名校验
 
 ---
 
@@ -185,7 +178,9 @@ npm run pack:win:all
 - `CCB-{version}-win.zip` - ZIP 压缩包
 - `win-unpacked/` - 目录版构建产物
 
-打包前，开发阶段运行 `npm run release:preflight:preview`，正式发布运行 `npm run release:preflight`。当 `REGISTRY_TRUSTED_PUBLIC_KEYS` 为空时 production preflight 会按设计 fail-closed。当前 Windows 企业/代理环境还会因证书链不受信任而阻塞 Electron distribution 下载；应通过 `NODE_EXTRA_CA_CERTS` 或 npm `cafile` 配置可信根证书，禁止关闭 TLS verification 绕过。
+打包前，开发阶段运行 `npm run release:preflight:preview`，正式发布运行 `npm run release:preflight`。当 `REGISTRY_TRUSTED_PUBLIC_KEYS` 为空时 production preflight 会按设计 fail-closed。
+
+若构建机网络存在 TLS 拦截（如企业代理），请一次性配置可信根证书（`NODE_EXTRA_CA_CERTS` 或 npm `cafile`）——本项目任何情况下都不接受关闭 TLS 校验的绕过方式。Electron 发行版下载可用 `ELECTRON_MIRROR` / `ELECTRON_BUILDER_BINARIES_MIRROR` 加速，下载后请对照官方 `SHASUMS256.txt` 核验。
 
 ### 分发说明
 
@@ -220,30 +215,28 @@ npm run dist:all
 - **Vite**: 7.3.6
 - **TypeScript**: 5.9.3
 
-### 渲染层
+### 渲染层（构建期打包，不进运行时 `dependencies`）
 
 - **React**: 18.3.1
 - **Ant Design**: 5.27.6
 - **Zustand**: 4.5.7
-- **Monaco Editor**: 0.55.1，搭配 `@monaco-editor/react` 4.7
+- **Monaco Editor**: 0.55.1，搭配 `@monaco-editor/react` 4.7（按需加载运行时）
 - **Recharts**: 2.15.4
-- **react-markdown**: 9.1
-- **react-syntax-highlighter**: 16.1
-- **remark-gfm**: 4.0.1
+- **react-markdown**: 9.1 / **remark-gfm**: 4.0.1
 
-### 主进程与服务层
+### 主进程与服务层（运行时 `dependencies`，共 6 个包）
 
-- **Express**: 5.1.0
-- **Axios**: 1.18.0
-- **Chokidar**: 3.6.0
-- **node-cron**: 4.6.0
-- **js-yaml**: 4.3.0
-- **uuid**: 14.0.1
+- **chokidar**: 3.6.0 — 文件监听
+- **express**: 5.1.0 — 托管模式 proxy-server 子包
+- **node-cron**: 4.6.0 — 自动化调度
+- **js-yaml**: 4.3.2 — YAML 解析
+- **smol-toml**: 1.8.0 — 零传递依赖的 TOML 校验（Codex 配置）
+- **https-proxy-agent**: 7.x — 托管模式上游代理
 
 ### 工具链与质量保障
 
-- **Vitest**: 4.1.10
-- **ESLint**: 8.57.1
+- **Vitest**: 4.x（33 files / 211 tests，CI 阻塞）
+- **ESLint**: 8.57.1（零错误，CI 阻塞 + 变更文件 ratchet 双保险）
 - **electron-builder**: 26.15.3
 - **patch-package**: 8.0.1
 - **Semgrep CLI**: 1.169.0（隔离安装在 root `.venv`）
@@ -257,33 +250,27 @@ npm run dist:all
 ```text
 ClaudeCodeButler/
 ├── src/
-│   ├── main/                # Electron 主进程、IPC、服务、日志
-│   ├── preload/             # 暴露给渲染层的安全桥接
-│   ├── renderer/            # React UI、Zustand store、页面、组件、多语言
-│   ├── shared/              # 共享类型、常量、registry 与 artifact-template 辅助工具
-│   └── proxy-server/        # 托管模式代理服务及相关资源
-├── scripts/                 # 开发 / 打包辅助脚本
+│   ├── main/                # Electron 主进程：服务、工具、IPC 注册中心
+│   ├── preload/             # 暴露给渲染层的唯一 contextBridge
+│   ├── renderer/            # React UI、Zustand store、功能面板、多语言
+│   ├── shared/              # 跨进程领域契约：工具 registry 模型、validator、
+│   │                        # 内置 registry JSON
+│   └── proxy-server/        # 托管模式代理（独立 npm 包）
+├── scripts/                 # dev-runner、release-preflight、签名辅助脚本
 ├── resources/               # 图标、截图、打包资源
-├── docs/                    # 产品、架构、审计、实现记录文档
-├── tests/                   # 单元 / 集成 / 回归测试
-└── release/                 # 打包输出目录
+├── docs/                    # 版本规划文档
+├── tests/                   # 分层单元测试（main/preload/proxy/renderer/shared）
+└── release/                 # 打包输出（gitignored）
 ```
 
-### 当前模块分层
+### 架构核心不变量
 
-- **主进程模块**
-  - `src/main` 内负责窗口、托盘、调度器、文件监听器与 IPC 启动
-  - 业务服务覆盖 `config`、`mcp-management`、`settings`、`environment-check`、`managed-mode`、`agents-management`、`skills-management`、`statistics`、`terminal-management` 等域
+- 主进程拥有全部文件系统、路径与子进程访问权；渲染层完全沙箱化，仅暴露窄 IPC 面
+- 工具支持以声明式 JSON registry 描述（绝不分发可执行代码）；远程 registry 必须通过 Ed25519 → SHA-256 → size → schema → 版本校验链，任何一环失败即整体拒绝（fail-closed）
+- JSON 持久化全部原子化（temp + rename）；每次 artifact 编辑都先按 registry 推导的 allowlist 授权并备份后再写入
+- 外部命令一律走参数化执行器（`shell: false`）；网络出口统一经过 SSRF 防护客户端
 
-- **渲染层模块**
-  - 提供 Config、MCP、Automation、Managed Mode、Projects、Environment Check、Settings、Agents、Skills 等功能面板
-  - 按业务域拆分 Zustand store，保持界面状态同步可控
-  - `CodeEditor` 采用 Monaco 运行时懒加载，并统一格式检查与预览逻辑
-
-- **共享契约层**
-  - `src/shared/types` 存放跨进程类型
-  - `src/shared/constants` 存放 IPC 常量与应用元信息
-  - `src/shared/config-template` 存放 artifact template ownership、migration、bounded diff 与异步解析辅助逻辑
+模块边界与数据流详见 [ARCHITECTURE.md](./ARCHITECTURE.md)，用户可见能力清单见 [CAPABILITIES.md](./CAPABILITIES.md)。
 
 ### IPC 通信模式
 
@@ -312,13 +299,13 @@ npm run preview
 # 质量检查
 npm run type-check
 npm run lint
+npm run lint:changed
 npm run test -- --run
 npm audit --audit-level=low
 npm audit --audit-level=low --prefix src/proxy-server
 npm run release:preflight:preview
 
 # 打包
-npm run pack
 npm run pack:portable
 npm run pack:installer
 npm run pack:zip
@@ -367,39 +354,41 @@ semgrep scan \
 
 ## 🆕 最近更新
 
+### 2026-09 v1.5.0 多工具与性能批次
+
+- 内置 registry 覆盖四个工具：Claude Code、Codex CLI（全六能力，含经 `TOML_FILE_V1` codec 保注释编辑的 `config.toml` 与 `auth.json` key 管理）、Gemini CLI、Antigravity。
+- 多文件联动编辑（`editGroup`）：分离配置工具整组先校验、再经既有 授权 → 备份 → 原子写链顺序写入。
+- 配置集快照（`configSet`）：配置页每工具下拉框 + 托盘两层快速切换菜单；Claude Code 保留原工作区通道与热重载。
+- 打包体积近乎减半（`app.asar` 23.16 → 11.76 MB）：Monaco 按需运行时、依赖裁剪（移除 axios/uuid）、最大压缩；网络出口切换为原生客户端。
+- 单实例锁、Windows 通知显示应用名、启动非关键工作延迟到空闲批次执行。
+
 ### 2026-07-12 安全与质量基线
 
 - 权限提升改为 `execFile` 参数化执行，增加 executable allowlist 与平台级 escaping；权限确认异常时默认拒绝。
 - GitHub Actions 固定为完整 commit SHA，降低 mutable tag 带来的供应链风险。
 - 移除本地 proxy server 默认全开放的 CORS，并清理不再使用的 CORS dependencies。
 - 更新安全相关 dependencies，root 与 proxy-server npm audit 均降至 0 vulnerabilities。
-- 迁移至 node-cron 4 的 `createTask` 语义，并补充 enabled/disabled rule 回归测试。
-- 恢复 production bundle 中的组件 CSS imports，并清理 PostCSS 检查发现的残缺无效样式片段。
 - 增加可复现的 Semgrep 虚拟环境、JSON/SARIF 原始结果流程与持续维护的安全审计报告。
 
 ### v1.5.0 release candidate 工程实现完成
 
 - 新增声明式 JSON 工具规则库模型、bounded validation 与内置 Claude Code 兼容 adapter。
-- 新增只读 Codex CLI adapter、通用 `PATH_EXISTS` / `COMMAND_EXISTS` 检测与 registry allowlist 约束的 artifact discovery。
+- 新增通用 `PATH_EXISTS` / `COMMAND_EXISTS` 检测与 registry allowlist 约束的 artifact discovery。
 - 新增 lazy-loaded“AI 工具配置”面板，以及具备 storage fingerprint 自动失效能力的 effective-registry snapshot cache。
-- 新增备份历史/恢复流程，并全局修正 Card/List 长路径和长描述导致的异常行高。
-- 将列表行细分为有限文本、结构化 metadata 与独立 actions 区域；通用备份默认每个 artifact path 最多保留 20 份。
+- 新增备份历史/恢复流程；通用备份默认每个 artifact path 最多保留 20 份。
 - 新增需用户明确确认、具备 integrity 校验的规则库安装和 last-known-good rollback；自动检查只获取小型 manifest。
 - Remote registry 已加入 Ed25519 raw-bundle signature verification 与 key rotation contract；正式 publisher public key 注入前保持 fail-closed preview。
-- 新增 artifact-specific template ownership，采用 `USER_OVERRIDE > REGISTRY > EMBEDDED` 优先级，支持旧自定义模板迁移、bounded diff preview，并确保 registry update/rollback 不覆盖用户 override。
-- Settings/About 已加入规则库操作入口，并提供完全按需的本地 performance snapshot exporter；导出 JSON 包含 Electron process metrics、bounded renderer timings、被动维护的 watcher 计数与最近一次 config scan 摘要，不增加采样 timer 或上传。
-- 首屏 critical 初始化完成后才按 idle batch 加载非关键数据；初始化 timeout 会及时释放 timer，卸载会取消尚未启动的批次。
-- StatisticsService auto-save 已串行化且 interval `unref()`；退出流程会等待幂等 cleanup 完成后再放行，避免落盘竞态。
+- 新增 artifact-specific template ownership，采用 `USER_OVERRIDE > REGISTRY > EMBEDDED` 优先级，支持旧自定义模板迁移与 bounded diff preview。
+- Settings/About 已加入规则库操作入口，并提供完全按需的本地 performance snapshot exporter（无采样 timer、无上传）。
+- 首屏 critical 初始化完成后才按 idle batch 加载非关键数据；退出流程会等待幂等 cleanup 完成后再放行。
 - Claude 配置工作区路径已集中到 compatibility facade；`1.5.0` 继续读取原 `.ccb/claude-configs`，不会静默创建或迁移到新目录。
-- 新增 release preflight 与 Windows Portable/NSIS/ZIP 聚合打包命令；正式 publisher public key 注入前 production preflight 会保持阻断。
-- Electron window 已启用 sandbox，并以 fail-closed 策略拒绝新窗口与外部 navigation。
-- 本轮只验证逻辑调度、静态 bundle 与资源生命周期；runtime startup/memory 改善需由用户后续启动应用实机验收。
-- 架构、安全协议、性能预算、迁移阶段与已接受的品牌决策见 [`docs/1.5.0`](./docs/1.5.0/README.md)。
+- 新增 release preflight 与 Windows Portable/NSIS/ZIP 聚合打包命令；Electron window 已启用 sandbox，并以 fail-closed 策略拒绝新窗口与外部 navigation。
+- 架构与能力说明见 [ARCHITECTURE.md](./ARCHITECTURE.md) 与 [CAPABILITIES.md](./CAPABILITIES.md)；审计证据链见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
 ### 产品体验更新
 
 - 原“全局新建配置默认模板”设计现已**过时**，由 `设置 -> 编辑器设置` 中的逐 artifact template ownership 取代。
-- 模板预览改为 artifact-aware bounded diff；实际编辑器继续提供校验与格式化能力。
+- 模板预览改为 artifact-aware bounded diff；实际编辑器继续提供校验和格式化能力。
 - 修复了复制配置逻辑，现在会先打开预填编辑器并添加国际化副本后缀，仅在显式保存后才创建新文件。
 - 修复了基于 `Markdown` 的偏好配置在预览流程中被错误按 `JSON` 解析的问题。
 - 新增 NSIS 安装版打包命令，作为 Portable 单文件方案之外的低等待分发选择。
@@ -420,15 +409,7 @@ semgrep scan \
 
 ### 提交约定
 
-请使用 Conventional Commit 前缀：
-
-- `feat`: 新功能
-- `fix`: Bug 修复
-- `docs`: 文档更新
-- `refactor`: 重构
-- `perf`: 性能优化
-- `test`: 测试
-- `chore`: 工具链 / 构建变更
+请使用 Conventional Commit 前缀：`feat` / `fix` / `docs` / `refactor` / `perf` / `test` / `chore`。
 
 ---
 

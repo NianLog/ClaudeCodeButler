@@ -21,6 +21,7 @@
     "dist": "npm run clean:release && electron-builder --publish=never",
     "test": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
+    "lint:changed": "node scripts/lint-changed.cjs",
     "type-check": "tsc --noEmit",
     "start": "npm run build && electron out/main/index.js",
     "start:admin": "npm run build && node scripts/start-admin.js",
@@ -57,12 +58,12 @@
     "url": "https://github.com/NianLog/ClaudeCodeButler/issues"
   },
   "dependencies": {
-    "axios": "^1.13.0",
     "chokidar": "^3.5.3",
     "express": "^5.1.0",
+    "https-proxy-agent": "^7.0.6",
     "js-yaml": "^4.1.1",
     "node-cron": "^4.6.0",
-    "uuid": "^14.0.1"
+    "smol-toml": "^1.8.0"
   },
   "devDependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -106,13 +107,14 @@
   },
   "overrides": {
     "@electron/rebuild": "^4.0.2",
-    "brace-expansion": "2.0.3",
-    "dompurify": "3.4.12"
+    "brace-expansion@^1.1.7": "1.1.18",
+    "brace-expansion@^2.0.1": "2.1.4",
+    "dompurify": "3.4.14"
   },
   "build": {
     "appId": "com.claudecode.butler",
     "productName": "CCB",
-    "compression": "normal",
+    "compression": "maximum",
     "electronLanguages": [
       "zh-CN",
       "en-US"
@@ -192,6 +194,7 @@
     },
     "files": [
       "out/**/*",
+      "!**/*.map",
       "resources/**/*",
       "!resources/icons/README.md"
     ],

@@ -263,18 +263,23 @@ export class ManagedModeLogRotationService {
     try {
       const files = await fs.readdir(this.config.logDirectory)
 
-      // 过滤出日志文件（排除current文件）
+      // 过滤出日志文件（排除current文件；显式拒绝含 ".." 的条目作边界防御）
       const logFiles = files.filter(file =>
         file.startsWith('managed-mode-') &&
         file.endsWith('.log') &&
-        file !== 'managed-mode-current.log'
+        file !== 'managed-mode-current.log' &&
+        !file.includes('..')
       )
 
       const now = Date.now()
       const retentionMs = this.config.retentionDays * 24 * 60 * 60 * 1000
 
       for (const file of logFiles) {
-        const filepath = path.join(this.config.logDirectory, file)
+        const filepath = ensurePathWithinBase(
+          path.join(this.config.logDirectory, file),
+          this.config.logDirectory,
+          '托管模式日志文件'
+        )
         const stats = await fs.stat(filepath)
 
         // 检查文件修改时间
@@ -322,15 +327,19 @@ export class ManagedModeLogRotationService {
     try {
       const files = await fs.readdir(this.config.logDirectory)
 
-      // 过滤日志文件
+      // 过滤日志文件（readdir 条目本身不含路径分隔符，仍显式拒绝含 ".." 的条目作边界防御）
       const logFiles = files.filter(file =>
-        file.startsWith('managed-mode-') && file.endsWith('.log')
+        file.startsWith('managed-mode-') && file.endsWith('.log') && !file.includes('..')
       )
 
       const metadata: LogFileMetadata[] = []
 
       for (const file of logFiles) {
-        const filepath = path.join(this.config.logDirectory, file)
+        const filepath = ensurePathWithinBase(
+          path.join(this.config.logDirectory, file),
+          this.config.logDirectory,
+          '托管模式日志文件'
+        )
         const stats = await fs.stat(filepath)
 
         // 读取文件获取条目数

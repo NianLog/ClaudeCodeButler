@@ -192,5 +192,5 @@ Semgrep `1.169.0` 的 JSON `errors` 均为 0，但 `time.fixpoint_timeouts` 在 
 #### 仍然 fail-closed 的发布边界
 
 - `REGISTRY_TRUSTED_PUBLIC_KEYS` 当前为空。`npm.cmd run release:preflight:preview` 可用于开发检查并输出 warning；production `npm.cmd run release:preflight` 会按设计失败，直到维护者执行 offline Ed25519 key ceremony 并只注入对应 SPKI public key。
-- 当前 Windows 企业/代理环境在 electron-builder 下载 Electron `40.10.6` distribution 时报告 `unable to verify the first certificate`。这是证书信任链阻塞，不允许用 `NODE_TLS_REJECT_UNAUTHORIZED=0` 绕过；应通过 `NODE_EXTRA_CA_CERTS` 或 npm `cafile` 配置组织可信根 CA 后重新执行 `npm.cmd run pack:win:all`。
-- 本轮未启动应用。Electron runtime navigation、新窗口策略、installer/portable/zip smoke test、registry release-candidate 对抗用例与业务兼容性必须按 [`docs/1.5.0/09-手动验收清单.md`](./docs/1.5.0/09-手动验收清单.md) 实机验收。
+- 构建机若处于 TLS 拦截网络（如企业代理），electron-builder 下载 Electron distribution 可能报告 `unable to verify the first certificate`。这是证书信任链问题，不允许用 `NODE_TLS_REJECT_UNAUTHORIZED=0` 绕过；应通过 `NODE_EXTRA_CA_CERTS` 或 npm `cafile` 配置组织可信根 CA 后重新执行 `npm.cmd run pack:win:all`。
+- 本轮未启动应用。Electron runtime navigation、新窗口策略、installer/portable/zip smoke test、registry release-candidate 对抗用例与业务兼容性必须在目标机按手动验收清单实机验收。

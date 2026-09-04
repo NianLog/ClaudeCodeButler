@@ -30,7 +30,7 @@ import UpdateModal from '../Common/UpdateModal'
 import TerminalManagement from './TerminalManagement'
 import type { VersionInfo } from '../../services/version-service'
 import type { SettingsTab } from '@shared/types/settings'
-import type { ToolRegistryUpdateStatus } from '@shared/tool-registry'
+import type { ToolRegistryUpdateStatus, RegistryUpdateState } from '@shared/tool-registry'
 import { useMessage } from '../../hooks/useMessage'
 import { useTheme } from '../../hooks/useTheme'
 import ArtifactTemplateSettings from './ArtifactTemplateSettings'
@@ -38,6 +38,23 @@ import { collectRendererPerformanceTimings } from '../../utils/renderer-performa
 
 const { Title, Text } = Typography
 const { Option } = Select
+
+/** 规则库更新状态的 Tag 颜色（文案走 registry.states.* locale 键） */
+const REGISTRY_STATE_TAG_COLORS: Record<RegistryUpdateState, string> = {
+  IDLE: 'default',
+  CHECKING_MANIFEST: 'processing',
+  UP_TO_DATE: 'green',
+  UPDATE_AVAILABLE: 'orange',
+  CHECK_FAILED: 'red',
+  DOWNLOADING: 'processing',
+  VERIFYING_SIGNATURE: 'processing',
+  VERIFYING_HASH: 'processing',
+  VALIDATING_SCHEMA: 'processing',
+  CHECKING_COMPATIBILITY: 'processing',
+  STAGING: 'processing',
+  INSTALLED: 'green',
+  ROLLED_BACK: 'purple'
+}
 
 /**
  * 主题选择器组件
@@ -1034,7 +1051,9 @@ const SettingsPanel: React.FC = () => {
             </Tag>
           </Descriptions.Item>
           <Descriptions.Item label={t('registry.status')}>
-            {registryStatus?.state || 'IDLE'}
+            <Tag color={REGISTRY_STATE_TAG_COLORS[registryStatus?.state ?? 'IDLE']}>
+              {t(`registry.states.${registryStatus?.state ?? 'IDLE'}`)}
+            </Tag>
           </Descriptions.Item>
         </Descriptions>
         {registryStatus?.error && (

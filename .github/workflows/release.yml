@@ -27,8 +27,10 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout code
+      - name: Checkout code (full history for lint ratchet merge-base)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -55,18 +57,26 @@ jobs:
       - name: Install proxy-server dependencies
         run: npm ci --prefix src/proxy-server
 
+      - name: Audit production dependencies
+        # 生产依赖 0 漏洞为发布门禁（开发链已知项单独跟踪，见 CHANGELOG Release blockers 一节）。
+        run: |
+          npm audit --omit=dev
+          npm audit --omit=dev --prefix src/proxy-server
+
       - name: Type check
         run: npm run type-check
 
       - name: Build proxy-server
         run: npm run build --prefix src/proxy-server
 
-      - name: Lint (informational, 渐进治理中)
-        # 当前存在 71 个 error（多为 @typescript-eslint/ban-types 的 `{}` 类型与 no-explicit-any），
-        # 暂不阻塞 CI，避免一次性卡死构建。治理路线：分批修复后改为阻塞式门禁。
-        # 详见 docs/13-项目SDLC规范化分析报告.md 的「质量门禁加固」章节。
-        continue-on-error: true
+      - name: Lint (blocking)
+        # 2026-09-04：全量 lint 已清零（历史遗留 71 个 error 已在 v1.5.0 分支消化），
+        # 转为阻塞式门禁；lint:changed ratchet 作为变更文件级双重保护保留。
         run: npm run lint
+
+      - name: Lint ratchet (changed files, blocking)
+        # 增量门禁：相对 base 分支变更的文件不得新增 lint error（存量不阻塞、不得新增）。
+        run: npm run lint:changed
 
       - name: Run tests with coverage
         run: npm run test -- --run --coverage
@@ -144,7 +154,8 @@ jobs:
           files: |
             release/*.exe
             release/*.zip
-          draft: false
+          # RC 安全惯例：先以 draft 创建，维护者按本地验收清单完成手动验收后再手动 publish。
+          draft: true
           prerelease: false
           generate_release_notes: true
         env:

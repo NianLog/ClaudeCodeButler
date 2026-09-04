@@ -116,7 +116,9 @@ describe('ToolRegistryService', () => {
     const snapshot = await service.getSnapshot()
 
     expect(snapshot.installedVersion).toBe('1.1.0')
-    expect(snapshot.tools.map((tool) => tool.toolId)).toEqual(['claude-code', 'codex-cli', 'example-tool'])
+    expect(snapshot.tools.map((tool) => tool.toolId)).toEqual(
+      ['antigravity', 'claude-code', 'codex-cli', 'example-tool', 'gemini-cli']
+    )
   })
 
   it('应在 schema parse 前拒绝无效 UTF-8 bytes', async () => {
@@ -164,10 +166,44 @@ describe('ToolRegistryService', () => {
     expect(recovered.recoveredFromLastKnownGood).toBe(true)
     expect(recovered.tools.map((tool) => tool.toolId)).toContain('first-tool')
 
-    const rolledBackVersion = await service.rollback()
-    expect(rolledBackVersion).toBe('1.1.0')
+    const rolledBack = await service.rollback()
+    expect(rolledBack).toEqual({ target: 'LAST_KNOWN_GOOD', registryVersion: '1.1.0' })
     const installed = JSON.parse(await readFile(registryPaths.installed, 'utf8')) as typeof builtinRegistryJson
     expect(installed.registryVersion).toBe('1.1.0')
+  })
+
+  it('首次安装后无 last-known-good 时应回退内置基线并清空 installed/metadata', async () => {
+    const service = new ToolRegistryService(registryPaths)
+    await service.installBundle(createInstallInput(createBundle('1.2.1'), '1.5.0'))
+
+    const rolledBack = await service.rollback()
+    expect(rolledBack).toEqual({
+      target: 'EMBEDDED',
+      registryVersion: (builtinRegistryJson as { registryVersion: string }).registryVersion
+    })
+
+    await expect(readFile(registryPaths.installed, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(registryPaths.metadata, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    const snapshot = await service.getSnapshot()
+    expect(snapshot.installedVersion).toBeUndefined()
+    expect(snapshot.recoveredFromLastKnownGood).toBe(false)
+    expect(snapshot.tools.map((tool) => tool.toolId)).toContain('claude-code')
+  })
+
+  it('last-known-good 损坏时 rollback 同样回退内置基线', async () => {
+    const service = new ToolRegistryService(registryPaths)
+    await service.installBundle(createInstallInput(createBundle('1.2.1'), '1.5.0'))
+    await writeFile(registryPaths.lastKnownGood, '{broken', 'utf8')
+
+    const rolledBack = await service.rollback()
+    expect(rolledBack.target).toBe('EMBEDDED')
+    await expect(readFile(registryPaths.lastKnownGood, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('没有任何远程规则库时 rollback 应报错', async () => {
+    const service = new ToolRegistryService(registryPaths)
+
+    await expect(service.rollback()).rejects.toThrow('无需回滚')
   })
 
   it('应缓存未变化 snapshot 并在 storage 变化后失效', async () => {

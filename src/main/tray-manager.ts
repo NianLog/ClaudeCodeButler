@@ -7,13 +7,23 @@ import { Tray, Menu, nativeImage, BrowserWindow, Notification, app, dialog, type
 import { join } from 'path'
 import fs from 'fs'
 import { APP_INFO } from '@shared/constants'
+import type { ToolConfigSetSummary } from '@shared/tool-registry'
 import { logger } from './utils/logger'
 import { configService, managedModeService } from './ipc-handlers'
+import { toolRegistryService } from './services/tool-registry-service'
+import { toolConfigSetService } from './services/tool-config-set-service'
 
 interface TrayConfigSummary {
   name: string
   path: string
   isInUse: boolean
+}
+
+/** 非内置 claude 通道的工具配置集分组（托盘快速切换用） */
+interface TrayToolSetGroup {
+  toolId: string
+  label: string
+  sets: ToolConfigSetSummary[]
 }
 
 export class TrayManager {
@@ -35,7 +45,7 @@ export class TrayManager {
       this.tray.setToolTip(APP_INFO.FULL_NAME)
 
       // 启动阶段先使用占位菜单，避免与首屏同时扫描配置目录。
-      this.setTrayMenu(null)
+      this.setTrayMenu(null, [])
 
       // 设置托盘事件
       this.setupTrayEvents()
@@ -87,39 +97,51 @@ export class TrayManager {
   private async createTrayMenu(): Promise<void> {
     if (!this.tray) return
 
-    // 加载 claude-code 类型的配置列表
-    const configs = await this.loadClaudeCodeConfigs()
-    this.setTrayMenu(configs)
+    // claude-code 走遗留配置通道，其余工具走 registry 配置集通道
+    const [configs, toolGroups] = await Promise.all([this.loadClaudeCodeConfigs(), this.loadToolSetGroups()])
+    this.setTrayMenu(configs, toolGroups)
   }
 
   /**
    * 设置托盘菜单内容
    * @description 启动期可传入 `null` 展示占位菜单，等首屏稳定后再异步填充真实配置项。
    */
-  private setTrayMenu(configs: TrayConfigSummary[] | null): void {
+  private setTrayMenu(configs: TrayConfigSummary[] | null, toolGroups: TrayToolSetGroup[]): void {
     if (!this.tray) return
 
-    const quickSwitchSubmenu =
-      configs === null
-        ? [
-            {
-              label: '加载配置中...',
-              enabled: false
-            }
-          ]
-        : configs.length > 0
-          ? configs.map(config => ({
-              label: config.isInUse ? `● ${config.name}` : `  ${config.name}`,
+    const buildConfigSetItems = (group: TrayToolSetGroup): Electron.MenuItemConstructorOptions => ({
+      label: group.label,
+      submenu:
+        group.sets.length > 0
+          ? group.sets.map(set => ({
+              label: set.isInUse ? `● ${set.name}` : `  ${set.name}`,
               click: () => {
-                this.switchConfig(config.name, config.path)
+                void this.switchToolConfigSet(group.toolId, group.label, set.setId, set.name)
               }
             }))
-          : [
-              {
-                label: '(无可用配置)',
-                enabled: false
-              }
-            ]
+          : [{ label: '(无配置集)', enabled: false }]
+    })
+
+    let quickSwitchSubmenu: Electron.MenuItemConstructorOptions[]
+    if (configs === null) {
+      quickSwitchSubmenu = [{ label: '加载配置中...', enabled: false }]
+    } else {
+      quickSwitchSubmenu = [
+        {
+          label: 'Claude Code',
+          submenu:
+            configs.length > 0
+              ? configs.map(config => ({
+                  label: config.isInUse ? `● ${config.name}` : `  ${config.name}`,
+                  click: () => {
+                    this.switchConfig(config.name, config.path)
+                  }
+                }))
+              : [{ label: '(无可用配置)', enabled: false }]
+        },
+        ...toolGroups.map(buildConfigSetItems)
+      ]
+    }
 
     const template: Electron.MenuItemConstructorOptions[] = [
       {
@@ -221,6 +243,35 @@ export class TrayManager {
   }
 
   /**
+   * 加载所有声明 configSet 分组的 registry 工具及其配置集列表
+   * @description claude-code 走遗留通道不在此列；单个工具加载失败仅跳过，不影响整体菜单。
+   */
+  private async loadToolSetGroups(): Promise<TrayToolSetGroup[]> {
+    try {
+      const snapshot = await toolRegistryService.getSnapshot()
+      const groups: TrayToolSetGroup[] = []
+      for (const tool of snapshot.tools) {
+        if (!tool.artifacts.some(artifact => artifact.configSet)) continue
+        let sets: ToolConfigSetSummary[] = []
+        try {
+          sets = await toolConfigSetService.listConfigSets(tool.toolId)
+        } catch (error) {
+          logger.warn(`加载工具 ${tool.toolId} 配置集列表失败`, error)
+        }
+        groups.push({
+          toolId: tool.toolId,
+          label: tool.displayName['zh-CN'] || tool.displayName['en-US'] || tool.toolId,
+          sets
+        })
+      }
+      return groups
+    } catch (error) {
+      logger.error('加载 registry 工具快照失败:', error)
+      return []
+    }
+  }
+
+  /**
    * 显示主窗口
    */
   private showMainWindow(): void {
@@ -293,10 +344,7 @@ export class TrayManager {
       new Notification({
         title: '配置切换',
         body: `已切换到配置: ${configName}`,
-        icon: iconPath || undefined,
-        ...(process.platform === 'win32' && {
-          appUserModelId: APP_INFO.FULL_NAME
-        })
+        icon: iconPath || undefined
       }).show()
 
       logger.info(`切换配置成功: ${configName} (${configPath})`)
@@ -306,12 +354,59 @@ export class TrayManager {
       // 显示失败通知
       new Notification({
         title: '配置切换失败',
-        body: error instanceof Error ? error.message : String(error),
-        ...(process.platform === 'win32' && {
-          appUserModelId: APP_INFO.FULL_NAME
-        })
+        body: error instanceof Error ? error.message : String(error)
       }).show()
     }
+  }
+
+  /**
+   * 切换 registry 工具配置集（claude-code 之外的通用通道）
+   * @description 托管模式开启时同样拦截，仅弹出系统通知提示用户。
+   */
+  private async switchToolConfigSet(toolId: string, toolLabel: string, setId: string, setName: string): Promise<void> {
+    try {
+      if (managedModeService.isManagedModeEnabled()) {
+        this.showManagedModeBlockedNotification(setName)
+        logger.info(`托管模式已开启，已拦截托盘切换配置集: ${toolId}/${setName} (${setId})`)
+        return
+      }
+
+      await toolConfigSetService.activateConfigSet(toolId, setId)
+
+      // 激活成功，发送切换配置事件给渲染进程以刷新UI
+      const mainWindow = BrowserWindow.getAllWindows()[0]
+      if (mainWindow) {
+        mainWindow.webContents.send('tray:switch-config', { name: setName, path: '', toolId })
+      }
+
+      new Notification({
+        title: '配置切换',
+        body: `已切换 ${toolLabel} 配置集: ${setName}`,
+        icon: this.getNotificationIcon()
+      }).show()
+
+      logger.info(`切换配置集成功: ${toolId}/${setName} (${setId})`)
+    } catch (error) {
+      logger.error('切换配置集失败:', error)
+
+      new Notification({
+        title: '配置切换失败',
+        body: error instanceof Error ? error.message : String(error)
+      }).show()
+    }
+  }
+
+  /**
+   * 系统通知图标路径（Windows 用 ico，其余平台由系统回退）
+   */
+  private getNotificationIcon(): string {
+    if (process.platform === 'win32') {
+      const icoPath = join(__dirname, '../../resources/icons/ccb.ico')
+      if (fs.existsSync(icoPath)) {
+        return icoPath
+      }
+    }
+    return ''
   }
 
   /**
@@ -332,10 +427,7 @@ export class TrayManager {
       new Notification({
         title: '配置切换被拦截',
         body: `托管模式已开启，不允许切换到配置: ${configName}。请先关闭托管模式再操作。`,
-        icon: iconPath || undefined,
-        ...(process.platform === 'win32' && {
-          appUserModelId: APP_INFO.FULL_NAME
-        })
+        icon: iconPath || undefined
       }).show()
     } catch (error) {
       logger.error('显示托管模式拦截通知失败:', error)
@@ -375,7 +467,7 @@ export class TrayManager {
   }
 
   /**
-   * 更新托盘菜单（动态加载 claude-code 类型配置）
+   * 更新托盘菜单（动态加载 claude-code 配置与 registry 工具配置集）
    */
   async updateTrayMenu(): Promise<void> {
     if (!this.tray) return

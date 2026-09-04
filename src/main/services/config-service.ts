@@ -5,7 +5,6 @@
 
 import { promises as fs } from 'fs'
 import { join, basename, extname, dirname } from 'path'
-import { v4 as uuidv4 } from 'uuid'
 import os from 'os'
 import {
   ConfigFile,
@@ -562,7 +561,7 @@ export class ConfigService {
   async createBackup(path: string): Promise<BackupInfo> {
     try {
       const resolvedPath = this.validateConfigPath(path, '备份源配置路径')
-      const backupId = uuidv4()
+      const backupId = crypto.randomUUID()
       const fileName = basename(resolvedPath)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const backupFileName = `${fileName}.${timestamp}.${backupId}.backup`
@@ -1114,7 +1113,7 @@ export class ConfigService {
     }
 
     return {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       name: configName,
       path: filePath,
       type: configType,
@@ -1298,9 +1297,10 @@ export class ConfigService {
     permissions: { allow: unknown[]; deny: unknown[] }
   } {
     // 所有配置文件统一使用标准的 Claude Code settings 配置模板
+    // token 类占位值为空：不预填假值，由用户填入真实凭据
     return {
       env: {
-        ANTHROPIC_AUTH_TOKEN: "Claude Code TokenKey",
+        ANTHROPIC_AUTH_TOKEN: '',
         ANTHROPIC_BASE_URL: "Claude Code API URL",
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
       },
@@ -1370,7 +1370,7 @@ export class ConfigService {
 
           // 创建配置对象（使用默认类型）
           const config: ConfigFile = {
-            id: uuidv4(),
+            id: crypto.randomUUID(),
             name: fileName.replace(/\.(json|md)$/i, ''),
             path: filePath,
             type: defaultType,

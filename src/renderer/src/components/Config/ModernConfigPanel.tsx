@@ -25,6 +25,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   CopyOutlined,
+  CloudDownloadOutlined,
   DownloadOutlined,
   UploadOutlined,
   EyeOutlined,
@@ -37,9 +38,12 @@ import {
 import { useConfigListStore } from '../../store/config-list-store'
 import { useConfigEditorStore } from '../../store/config-editor-store'
 import { ConfigFile } from '@shared/types'
+import type { ToolDefinition } from '@shared/tool-registry'
 import type { ConfigEditorDraft, ConfigSavePayload } from './ConfigEditor'
 const ConfigEditor = React.lazy(() => import('./ConfigEditor'))
 const ConfigImportModal = React.lazy(() => import('./ConfigImportModal'))
+const ToolConfigSetPanel = React.lazy(() => import('./ToolConfigSetPanel'))
+const CloudTemplateLibraryModal = React.lazy(() => import('./CloudTemplateLibraryModal'))
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 import { useTranslation } from '../../locales/useTranslation'
 import {
@@ -57,7 +61,7 @@ const { Option } = Select
  * 现代化配置面板组件
  */
 const ModernConfigPanel: React.FC = () => {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   // v1.4.0：使用 App context 的 message/modal 替代静态 message/Modal.confirm/info，消除 antd 静态函数警告
   const { message, modal } = App.useApp()
 
@@ -88,6 +92,36 @@ const ModernConfigPanel: React.FC = () => {
   const [managedModeEnabled, setManagedModeEnabled] = useState(false)
   // hasBackup 用于检查备份状态，当前仅设置但未读取（预留为后续功能）
   const [, setHasBackup] = useState(false)
+
+  // 多工具配置管理：claude-code 走遗留工作区通道，其余 registry 工具走配置集通道
+  const [manageToolId, setManageToolId] = useState('claude-code')
+  const [configSetTools, setConfigSetTools] = useState<Array<{ toolId: string; label: string }>>([])
+  // Claude 面板的云模板库入口（共享弹窗，按 toolId=claude-code 过滤）
+  const [cloudTemplateOpen, setCloudTemplateOpen] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadConfigSetTools = async (): Promise<void> => {
+      try {
+        const response = await window.electronAPI.toolRegistry.getSnapshot()
+        if (!response.success || !response.data || cancelled) return
+        setConfigSetTools(
+          response.data.tools
+            .filter((tool: ToolDefinition) => tool.artifacts.some((artifact) => artifact.configSet))
+            .map((tool: ToolDefinition) => ({
+              toolId: tool.toolId,
+              label: tool.displayName[language] || tool.toolId
+            }))
+        )
+      } catch {
+        // 快照加载失败时保留 claude-code 单工具视图，不阻塞配置页
+      }
+    }
+    void loadConfigSetTools()
+    return () => {
+      cancelled = true
+    }
+  }, [language])
 
   const [editorVisible, setEditorVisible] = useState(false)
   const [importVisible, setImportVisible] = useState(false)
@@ -642,6 +676,59 @@ const ModernConfigPanel: React.FC = () => {
     )
   }
 
+  /**
+   * 工具选择下拉框：claude-code（遗留工作区配置）+ registry 声明 configSet 的工具
+   */
+  const renderToolSelector = () => (
+    <Select
+      value={manageToolId}
+      style={{ width: 200 }}
+      onChange={(value) => setManageToolId(value)}
+    >
+      <Option value="claude-code">Claude Code</Option>
+      {configSetTools.map((tool) => (
+        <Option key={tool.toolId} value={tool.toolId}>
+          {tool.label}
+        </Option>
+      ))}
+    </Select>
+  )
+
+  // 非 claude-code 工具：渲染 registry 配置集面板（遗留 store 的错误不影响通用视图）
+  if (manageToolId !== 'claude-code') {
+    const activeTool = configSetTools.find((tool) => tool.toolId === manageToolId)
+    return (
+      <div className="modern-config-panel">
+        <div className="config-panel-toolbar">
+          <div className="toolbar-left">{renderToolSelector()}</div>
+        </div>
+        {activeTool ? (
+          <Suspense fallback={<Spin size="large" />}>
+            <ToolConfigSetPanel toolId={activeTool.toolId} toolLabel={activeTool.label} />
+          </Suspense>
+        ) : (
+          <div className="config-panel-empty">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div>
+                  <div>{t('configPanel.empty')}</div>
+                  <Button
+                    type="primary"
+                    style={{ marginTop: 16 }}
+                    onClick={() => setManageToolId('claude-code')}
+                  >
+                    Claude Code
+                  </Button>
+                </div>
+              }
+            />
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (error) {
     return (
       <div className="config-panel-error">
@@ -676,7 +763,8 @@ const ModernConfigPanel: React.FC = () => {
         </div>
         
         <div className="header-right">
-          <Space>
+          <Space wrap>
+            {renderToolSelector()}
             <Button
               icon={<ReloadOutlined />}
               onClick={async () => {
@@ -699,6 +787,12 @@ const ModernConfigPanel: React.FC = () => {
             >
               {t('configPanel.actions.import')}
             </Button>
+            <Button
+              icon={<CloudDownloadOutlined />}
+              onClick={() => setCloudTemplateOpen(true)}
+            >
+              {t('configPanel.actions.cloud')}
+            </Button>
           </Space>
         </div>
       </div>
@@ -711,7 +805,7 @@ const ModernConfigPanel: React.FC = () => {
             placeholder={t('configPanel.search.placeholder')}
             allowClear
             value={filters.search}
-            style={{ width: 300 }}
+            style={{ flex: '0 1 300px', minWidth: 180 }}
             onSearch={handleSearch}
             onChange={(e) => handleSearch(e.target.value)}
           />
@@ -720,7 +814,7 @@ const ModernConfigPanel: React.FC = () => {
             placeholder={t('configPanel.filters.typePlaceholder')}
             allowClear
             value={filters.type}
-            style={{ width: 150 }}
+            style={{ flex: '0 1 150px', minWidth: 120 }}
             onChange={(value) => handleFilterChange('type', value)}
           >
             <Option value="__system__">{t('configPanel.types.system')}</Option>
@@ -739,7 +833,7 @@ const ModernConfigPanel: React.FC = () => {
           <Select
             placeholder={t('configPanel.filters.sortPlaceholder')}
             value={filters.sort}
-            style={{ width: 120 }}
+            style={{ flex: '0 1 120px', minWidth: 110 }}
             onChange={handleSortChange}
           >
             <Option value="name">{t('configPanel.sort.name')}</Option>
@@ -908,6 +1002,18 @@ const ModernConfigPanel: React.FC = () => {
           </Suspense>
         </div>
       </Modal>
+
+      {/* 云模板库（共享弹窗：仅显示/导入 claude-code 的云模板） */}
+      {cloudTemplateOpen && (
+        <Suspense fallback={<Spin size="large" />}>
+          <CloudTemplateLibraryModal
+            open={cloudTemplateOpen}
+            toolId="claude-code"
+            toolLabel="Claude Code"
+            onClose={() => setCloudTemplateOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

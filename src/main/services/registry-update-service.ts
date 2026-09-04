@@ -3,7 +3,7 @@
  * @description 负责规则库 manifest 检查与用户明确批准后的 bundle 下载、校验和安装。
  */
 
-import axios from 'axios'
+import { net } from 'electron'
 import type {
   ToolRegistryManifest,
   ToolRegistryUpdateStatus
@@ -29,7 +29,15 @@ export const REGISTRY_ALLOWED_ORIGINS = ['https://dev.niansir.com'] as const
  * Production registry publisher keys。
  * @description 正式 release 前必须由维护者注入其离线保管 private key 对应的 SPKI public key。
  */
-export const REGISTRY_TRUSTED_PUBLIC_KEYS: RegistryTrustedPublicKeys = Object.freeze({})
+export const REGISTRY_TRUSTED_PUBLIC_KEYS: RegistryTrustedPublicKeys = Object.freeze({
+  // Rehearsal publisher key（2026-09-04 在开发机生成，仅用于 v1.5.0 发布链 rehearsal 与 preview 模式）。
+  // 公共发布前必须轮换为离线 ceremony 生成的 production key；release preflight 拒绝 rehearsal 命名 keyId 进入 production。
+  'ccb-rehearsal-2026-09': [
+    '-----BEGIN PUBLIC KEY-----',
+    'MCowBQYDK2VwAyEAyfS6bIe+NeVBUw+d2MzBenVO++Q+X5C2hMMMtahF+nw=',
+    '-----END PUBLIC KEY-----'
+  ].join('\n')
+})
 
 /** 受限文本 HTTP client contract */
 export interface RegistryHttpClient {
@@ -49,10 +57,35 @@ export interface RegistryHttpClient {
 }
 
 /**
- * Axios registry HTTP client
- * @description 禁止 redirect，限制 timeout/content length，避免重定向绕过 pinned origin。
+ * 流式读取 net.fetch 响应体，超过 maxBytes 立即中断下载。
+ * @description 必须在读取过程中限制大小，避免把超大响应整段缓冲进内存后才拒绝。
  */
-export class AxiosRegistryHttpClient implements RegistryHttpClient {
+async function readNetFetchBody(body: ReadableStream<Uint8Array> | null, maxBytes: number): Promise<Buffer> {
+  if (!body) {
+    return Buffer.alloc(0)
+  }
+  const chunks: Buffer[] = []
+  let total = 0
+  const reader = body.getReader()
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined)
+      throw new Error(`Registry 响应超过 ${maxBytes} bytes`)
+    }
+    chunks.push(Buffer.from(value))
+  }
+  return Buffer.concat(chunks)
+}
+
+/**
+ * Electron net.fetch registry HTTP client
+ * @description 禁止 redirect（redirect:'error'，重定向即失败，避免绕过 pinned origin），
+ * 限制 timeout/content length；Chromium 网络栈遵循系统代理。
+ */
+export class NetFetchRegistryHttpClient implements RegistryHttpClient {
   /**
    * 获取受大小限制的文本
    * @param url 已验证 HTTPS URL
@@ -60,22 +93,18 @@ export class AxiosRegistryHttpClient implements RegistryHttpClient {
    * @returns UTF-8 文本
    */
   public async getText(url: string, maxBytes: number): Promise<string> {
-    const response = await axios.get<string>(url, {
-      responseType: 'text',
-      timeout: 15_000,
-      maxRedirects: 0,
-      maxContentLength: maxBytes,
-      maxBodyLength: maxBytes,
-      transformResponse: [(data) => data],
-      validateStatus: (status) => status === 200
+    const response = await net.fetch(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000)
     })
-    if (typeof response.data !== 'string') {
-      throw new Error('Registry 响应不是 UTF-8 文本')
+    if (response.status !== 200) {
+      throw new Error(`Registry HTTP 状态异常: ${response.status}`)
     }
-    if (Buffer.byteLength(response.data, 'utf8') > maxBytes) {
-      throw new Error(`Registry 响应超过 ${maxBytes} bytes`)
+    if (response.redirected) {
+      throw new Error('Registry 响应发生重定向，已拒绝')
     }
-    return response.data
+    const bytes = await readNetFetchBody(response.body, maxBytes)
+    return bytes.toString('utf8')
   }
 
   /**
@@ -84,19 +113,17 @@ export class AxiosRegistryHttpClient implements RegistryHttpClient {
    * @param maxBytes 最大响应 bytes
    */
   public async getBytes(url: string, maxBytes: number): Promise<Buffer> {
-    const response = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 15_000,
-      maxRedirects: 0,
-      maxContentLength: maxBytes,
-      maxBodyLength: maxBytes,
-      validateStatus: (status) => status === 200
+    const response = await net.fetch(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000)
     })
-    const bytes = Buffer.from(response.data)
-    if (bytes.length > maxBytes) {
-      throw new Error(`Registry 响应超过 ${maxBytes} bytes`)
+    if (response.status !== 200) {
+      throw new Error(`Registry HTTP 状态异常: ${response.status}`)
     }
-    return bytes
+    if (response.redirected) {
+      throw new Error('Registry 响应发生重定向，已拒绝')
+    }
+    return readNetFetchBody(response.body, maxBytes)
   }
 }
 
@@ -125,7 +152,7 @@ export class RegistryUpdateService {
     trustedPublicKeys?: RegistryTrustedPublicKeys
   }) {
     this.registryService = options?.registryService ?? toolRegistryService
-    this.httpClient = options?.httpClient ?? new AxiosRegistryHttpClient()
+    this.httpClient = options?.httpClient ?? new NetFetchRegistryHttpClient()
     this.manifestUrl = options?.manifestUrl ?? REGISTRY_MANIFEST_URL
     this.allowedOrigins = options?.allowedOrigins ?? [...REGISTRY_ALLOWED_ORIGINS]
     this.trustedPublicKeys = options?.trustedPublicKeys ?? REGISTRY_TRUSTED_PUBLIC_KEYS
@@ -257,16 +284,18 @@ export class RegistryUpdateService {
 
   /**
    * 显式回滚规则库
+   * @description 恢复 last-known-good；没有历史版本时由 registry service 回退内置基线，
+   * 状态字段一律取回滚后的 fresh snapshot（embedded 回退时 installedVersion 为空）。
    * @returns 回滚后的状态
    */
   public async rollback(): Promise<ToolRegistryUpdateStatus> {
-    const registryVersion = await this.registryService.rollback()
+    await this.registryService.rollback()
     const snapshot = await this.registryService.getSnapshot()
     this.verifiedManifest = undefined
     this.status = {
       state: 'ROLLED_BACK',
       embeddedVersion: snapshot.embeddedVersion,
-      installedVersion: registryVersion,
+      installedVersion: snapshot.installedVersion,
       lastCheckedAt: new Date().toISOString()
     }
     return this.getStatus()

@@ -204,4 +204,35 @@ describe('RegistryUpdateService', () => {
     await tamperedService.checkForUpdates('1.5.0')
     await expect(tamperedService.installAvailableUpdate('1.5.0')).rejects.toThrow('signature 校验失败')
   })
+
+  it('rollback 状态应取回滚后的 snapshot：embedded 回退时 installedVersion 为空', async () => {
+    const registryService = createRegistryServiceFake()
+    const rollbackSnapshot: ToolRegistrySnapshot = {
+      embeddedVersion: '1.0.0',
+      tools: [],
+      recoveredFromLastKnownGood: false
+    }
+    registryService.getSnapshot.mockResolvedValue(rollbackSnapshot)
+    const service = new RegistryUpdateService({
+      registryService: registryService as never,
+      httpClient: { getText: vi.fn(), getBytes: vi.fn() },
+      manifestUrl: 'https://registry.example/manifest.json',
+      allowedOrigins: ['https://registry.example'],
+      trustedPublicKeys
+    })
+
+    const embeddedStatus = await service.rollback()
+    expect(embeddedStatus.state).toBe('ROLLED_BACK')
+    expect(embeddedStatus.installedVersion).toBeUndefined()
+
+    const lastKnownGoodSnapshot: ToolRegistrySnapshot = {
+      ...rollbackSnapshot,
+      installedVersion: '1.0.0'
+    }
+    registryService.getSnapshot.mockResolvedValue(lastKnownGoodSnapshot)
+    const lastKnownGoodStatus = await service.rollback()
+    expect(lastKnownGoodStatus.state).toBe('ROLLED_BACK')
+    expect(lastKnownGoodStatus.installedVersion).toBe('1.0.0')
+    expect(registryService.rollback).toHaveBeenCalledTimes(2)
+  })
 })

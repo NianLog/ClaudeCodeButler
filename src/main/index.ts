@@ -22,6 +22,25 @@ import { updateService } from './services/update-service';
 import { pathManager } from './utils/path-manager'
 
 /**
+ * 单实例锁：CCB 只允许一个进程运行。
+ * 二次启动的进程拿不到锁直接退出；首个进程在 second-instance 中聚焦已有窗口。
+ */
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
+
+/**
+ * Windows 应用身份（必须在 app ready 前设置）：
+ * - AUMID 与 electron-builder 快捷方式一致，系统通知显示 "CCB" 而非原始 ID；
+ * - app.name 提前设置，避免内部路径/通知在初始化早期使用默认名。
+ */
+if (process.platform === 'win32') {
+  app.setAppUserModelId(APP_INFO.APP_ID)
+}
+app.name = APP_INFO.FULL_NAME
+
+/**
  * 主窗口管理器
  */
 class CCBApp {
@@ -59,6 +78,28 @@ class CCBApp {
    * 设置应用事件监听
    */
   private setupAppEvents(): void {
+    // 二次启动：不新建进程，恢复并聚焦已有主窗口，并给出明确提示
+    app.on('second-instance', () => {
+      const mainWindow = this.windowManager.getMainWindow()
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore()
+        }
+        if (!mainWindow.isVisible()) {
+          mainWindow.show()
+        }
+        mainWindow.focus()
+      }
+      try {
+        new Notification({
+          title: APP_INFO.FULL_NAME,
+          body: '应用已在运行，已为您切换到现有窗口。'
+        }).show()
+      } catch (error) {
+        logger.warn('单实例提示通知发送失败:', error)
+      }
+    })
+
     app.whenReady().then(() => {
       this.onReady()
     })
@@ -147,11 +188,8 @@ class CCBApp {
       const notification = new Notification({
         title,
         body,
-        icon: iconPath || undefined,
-        // Windows 系统需要通过 toastXml 设置 appUserModelId 来显示正确的应用名称
-        ...(process.platform === 'win32' && {
-          appUserModelId: APP_INFO.FULL_NAME
-        })
+        icon: iconPath || undefined
+        // AUMID 已在进程级通过 app.setAppUserModelID 统一设置，通知处不再覆盖
       })
       notification.show()
       return notification
@@ -180,8 +218,7 @@ class CCBApp {
    */
   private async onReady(): Promise<void> {
     try {
-      // 设置应用名称
-      app.name = APP_INFO.FULL_NAME
+      // app.name 已在模块加载阶段提前设置（通知/早期路径依赖它）
 
       logger.info(`应用启动: ${APP_INFO.FULL_NAME} v${APP_INFO.VERSION}`)
       logger.info(`进程: ${process.pid}, 平台: ${process.platform}, 版本: ${process.versions.electron}`)
@@ -419,10 +456,7 @@ class CCBApp {
       new Notification({
         title: '缓存清理',
         body: '缓存已成功清理',
-        icon: iconPath || undefined,
-        ...(process.platform === 'win32' && {
-          appUserModelId: APP_INFO.FULL_NAME
-        })
+        icon: iconPath || undefined
       }).show()
     } catch (error) {
       logger.error('清理缓存失败:', error)
@@ -524,8 +558,8 @@ if (isDebugMode) {
   logger.info('调试模式已启用（-debug）')
 }
 
-// 创建应用实例
-const ccbApp = new CCBApp()
+// 创建应用实例（仅单实例锁持有进程进入完整启动流程，二次启动进程已在上文退出）
+const ccbApp = gotSingleInstanceLock ? new CCBApp() : null
 
 // 处理未捕获的异常
 process.on('uncaughtException', (error) => {

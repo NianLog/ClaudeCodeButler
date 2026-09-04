@@ -363,8 +363,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
             <img className="logo-icon" src={ccbLogo} alt="CCB" />
             {!sidebarCollapsed && (
               <div className="logo-text">
-                <Text className="logo-title">CCB</Text>
-                <Text className="logo-subtitle">Claude Code Butler</Text>
+                <span className="logo-title">CCB</span>
+                <span className="logo-subtitle">Claude Code Butler</span>
               </div>
             )}
           </div>

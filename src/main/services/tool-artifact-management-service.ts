@@ -22,6 +22,7 @@ import {
   type ToolArtifactCodecService
 } from './tool-artifact-codec-service'
 import { pathManager } from '../utils/path-manager'
+import { ensurePathWithinBase } from '../utils/path-security'
 
 /** 持久化 backup metadata */
 interface StoredArtifactBackup extends ConfigArtifactBackup {
@@ -166,8 +167,16 @@ export class ToolArtifactManagementService {
     await mkdir(this.backupDirectory, { recursive: true })
     const backupId = randomUUID()
     const contentFileName = `${backupId}.backup`
-    const contentPath = path.join(this.backupDirectory, contentFileName)
-    const metadataPath = path.join(this.backupDirectory, `${backupId}.json`)
+    const contentPath = ensurePathWithinBase(
+      path.join(this.backupDirectory, contentFileName),
+      this.backupDirectory,
+      '配置备份内容文件'
+    )
+    const metadataPath = ensurePathWithinBase(
+      path.join(this.backupDirectory, `${backupId}.json`),
+      this.backupDirectory,
+      '配置备份元数据文件'
+    )
     const backup: StoredArtifactBackup = {
       backupId,
       toolId,
@@ -216,7 +225,11 @@ export class ToolArtifactManagementService {
     }
     const backups = await Promise.all(fileNames
       .filter((fileName) => /^[0-9a-f-]{36}\.json$/i.test(fileName))
-      .map((fileName) => this.readStoredBackup(path.join(this.backupDirectory, fileName))))
+      .map((fileName) => this.readStoredBackup(ensurePathWithinBase(
+        path.join(this.backupDirectory, fileName),
+        this.backupDirectory,
+        '配置备份元数据文件'
+      ))))
     return backups
       .filter((backup): backup is StoredArtifactBackup => Boolean(
         backup
@@ -237,16 +250,27 @@ export class ToolArtifactManagementService {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(backupId)) {
       throw new Error('backupId 格式无效')
     }
-    const metadataPath = path.join(this.backupDirectory, `${backupId}.json`)
+    const metadataPath = ensurePathWithinBase(
+      path.join(this.backupDirectory, `${backupId}.json`),
+      this.backupDirectory,
+      '配置备份元数据文件'
+    )
     const backup = await this.readStoredBackup(metadataPath)
     if (!backup || backup.backupId !== backupId) throw new Error('备份 metadata 无效')
+    // readStoredBackup 已校验 contentFileName === `${backupId}.backup`；此处再显式断言一次，
+    // 保证 join 的动态片段被限制为受控 backup directory 内的固定模式文件名
+    if (backup.contentFileName !== `${backupId}.backup`) throw new Error('备份内容文件名无效')
     const authorization = await this.discoveryService.authorizeArtifact(
       backup.toolId,
       backup.artifactId,
       backup.originalPath,
       'RESTORE'
     )
-    const contentPath = path.join(this.backupDirectory, backup.contentFileName)
+    const contentPath = ensurePathWithinBase(
+      path.join(this.backupDirectory, backup.contentFileName),
+      this.backupDirectory,
+      '配置备份内容文件'
+    )
     const backupMetadata = await lstat(contentPath)
     if (
       backupMetadata.isSymbolicLink()
@@ -299,7 +323,11 @@ export class ToolArtifactManagementService {
         || typeof backup.createdAt !== 'string'
         || typeof backup.size !== 'number'
       ) return undefined
-      const contentFile = await lstat(path.join(this.backupDirectory, backup.contentFileName))
+      const contentFile = await lstat(ensurePathWithinBase(
+        path.join(this.backupDirectory, backup.contentFileName),
+        this.backupDirectory,
+        '配置备份内容文件'
+      ))
       if (contentFile.isSymbolicLink() || !contentFile.isFile() || contentFile.size > CONFIG_ARTIFACT_MAX_BYTES) {
         return undefined
       }
@@ -338,7 +366,11 @@ export class ToolArtifactManagementService {
     const fileNames = await readdir(this.backupDirectory)
     const backups = await Promise.all(fileNames
       .filter((fileName) => /^[0-9a-f-]{36}\.json$/i.test(fileName))
-      .map((fileName) => this.readStoredBackup(path.join(this.backupDirectory, fileName))))
+      .map((fileName) => this.readStoredBackup(ensurePathWithinBase(
+        path.join(this.backupDirectory, fileName),
+        this.backupDirectory,
+        '配置备份元数据文件'
+      ))))
     const matchingBackups = backups
       .filter((backup): backup is StoredArtifactBackup => Boolean(
         backup
@@ -349,8 +381,16 @@ export class ToolArtifactManagementService {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     const expiredBackups = matchingBackups.slice(this.maxBackupsPerArtifact)
     await Promise.all(expiredBackups.flatMap((backup) => [
-      rm(path.join(this.backupDirectory, `${backup.backupId}.json`), { force: true }),
-      rm(path.join(this.backupDirectory, backup.contentFileName), { force: true })
+      rm(ensurePathWithinBase(
+        path.join(this.backupDirectory, `${backup.backupId}.json`),
+        this.backupDirectory,
+        '配置备份元数据文件'
+      ), { force: true }),
+      rm(ensurePathWithinBase(
+        path.join(this.backupDirectory, backup.contentFileName),
+        this.backupDirectory,
+        '配置备份内容文件'
+      ), { force: true })
     ]))
   }
 

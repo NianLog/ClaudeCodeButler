@@ -19,7 +19,7 @@ import type {
   AgentFormData,
   AgentImportOptions
 } from '@shared/types/agents'
-import { ensureSafePathSegment } from '../utils/path-security'
+import { ensurePathWithinBase, ensureSafePathSegment } from '../utils/path-security'
 
 /**
  * Agent管理服务类
@@ -248,8 +248,8 @@ class AgentsManagementService {
     await this.initializeAgentsDir()
 
     // 生成文件名（使用name的slug形式）
-    const fileName = `${this.slugify(formData.name)  }.md`
-    const filePath = path.join(this.agentsDir, fileName)
+    const fileName = this.toSafeFileName(formData.name)
+    const filePath = ensurePathWithinBase(path.join(this.agentsDir, fileName), this.agentsDir, 'Agent 文件路径')
 
     // 检查文件是否已存在
     // 注意：独立捕获 fs.access 的 ENOENT，避免与“已存在”判断共用 catch 导致同名 Agent 被静默覆盖。
@@ -321,8 +321,8 @@ class AgentsManagementService {
     }
 
     // 生成目标文件名
-    const fileName = `${this.slugify(metadata.name)  }.md`
-    const targetPath = path.join(this.agentsDir, fileName)
+    const fileName = this.toSafeFileName(metadata.name)
+    const targetPath = ensurePathWithinBase(path.join(this.agentsDir, fileName), this.agentsDir, 'Agent 文件路径')
 
     // 检查目标文件是否已存在
     try {
@@ -364,8 +364,8 @@ class AgentsManagementService {
       throw new Error('Agent文件缺少必填的description字段')
     }
 
-    const fileName = `${this.slugify(metadata.name)  }.md`
-    const targetPath = path.join(this.agentsDir, fileName)
+    const fileName = this.toSafeFileName(metadata.name)
+    const targetPath = ensurePathWithinBase(path.join(this.agentsDir, fileName), this.agentsDir, 'Agent 文件路径')
 
     try {
       await fs.access(targetPath)
@@ -491,6 +491,19 @@ class AgentsManagementService {
       .replace(/--+/g, '-') // 移除多个连字符
       .replace(/^-+/, '') // 移除前导连字符
       .replace(/-+$/, '') // 移除尾部连字符
+  }
+
+  /**
+   * 将 Agent 名称转换为受控 .md 文件名
+   * @description slug 已限定为 [\w-]，这里再做显式闭集断言（含拒绝空 slug），
+   * 保证 path.join 的动态片段不可能包含分隔符或 ".."。
+   */
+  private toSafeFileName(name: string): string {
+    const slug = this.slugify(name)
+    if (!/^[\w-]+$/.test(slug)) {
+      throw new Error('Agent 名称无法转换为安全文件名（名称为空或包含非法字符）')
+    }
+    return `${slug}.md`
   }
 }
 

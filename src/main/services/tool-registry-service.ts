@@ -40,6 +40,14 @@ export interface InstalledRegistryMetadata {
   source: 'REMOTE' | 'ROLLBACK'
 }
 
+/** 显式回滚结果 */
+export interface RegistryRollbackResult {
+  /** 回滚目标：last-known-good 历史版本或 embedded 内置基线 */
+  target: 'LAST_KNOWN_GOOD' | 'EMBEDDED'
+  /** 回滚后的 registry version */
+  registryVersion: string
+}
+
 /** 安装 bundle 输入 */
 export interface InstallRegistryBundleInput {
   /** 下载到的 exact raw bytes */
@@ -255,26 +263,40 @@ export class ToolRegistryService {
   }
 
   /**
-   * 显式回滚到 last-known-good
-   * @returns 回滚后的 registry version
+   * 显式回滚规则库
+   * @description 优先恢复 last-known-good；首次安装后没有历史 bundle 时回退 embedded 基线
+   * （清除 installed/metadata 残留，effective registry 回到内置合并结果）。
+   * @returns 回滚目标与版本
    */
-  public async rollback(): Promise<string> {
+  public async rollback(): Promise<RegistryRollbackResult> {
     const fallbackResult = await this.readBundle(this.paths.lastKnownGood)
-    if (!fallbackResult.bundle) {
-      throw new Error(`没有可用的 last-known-good 规则库: ${fallbackResult.error || '文件不存在'}`)
+    if (fallbackResult.bundle) {
+      const fallbackRaw = JSON.stringify(fallbackResult.bundle, null, 2)
+      await writeJsonAtomic(this.paths.installed, fallbackResult.bundle)
+      const metadata: InstalledRegistryMetadata = {
+        registryVersion: fallbackResult.bundle.registryVersion,
+        sha256: calculateRegistrySha256(fallbackRaw),
+        size: Buffer.byteLength(fallbackRaw, 'utf8'),
+        installedAt: new Date().toISOString(),
+        source: 'ROLLBACK'
+      }
+      await writeJsonAtomic(this.paths.metadata, metadata)
+      this.invalidateSnapshotCache()
+      return { target: 'LAST_KNOWN_GOOD', registryVersion: fallbackResult.bundle.registryVersion }
     }
-    const fallbackRaw = JSON.stringify(fallbackResult.bundle, null, 2)
-    await writeJsonAtomic(this.paths.installed, fallbackResult.bundle)
-    const metadata: InstalledRegistryMetadata = {
-      registryVersion: fallbackResult.bundle.registryVersion,
-      sha256: calculateRegistrySha256(fallbackRaw),
-      size: Buffer.byteLength(fallbackRaw, 'utf8'),
-      installedAt: new Date().toISOString(),
-      source: 'ROLLBACK'
+
+    const installedResult = await this.readBundle(this.paths.installed)
+    if (!installedResult.bundle) {
+      throw new Error('当前没有已安装的远程规则库，无需回滚')
     }
-    await writeJsonAtomic(this.paths.metadata, metadata)
+    logger.warn(
+      `last-known-good 不可用（${fallbackResult.error || '文件不存在'}），回滚到内置规则库 ${this.embedded.registryVersion}`
+    )
+    await fs.rm(this.paths.installed, { force: true })
+    await fs.rm(this.paths.metadata, { force: true })
+    await fs.rm(this.paths.lastKnownGood, { force: true })
     this.invalidateSnapshotCache()
-    return fallbackResult.bundle.registryVersion
+    return { target: 'EMBEDDED', registryVersion: this.embedded.registryVersion }
   }
 
   /** 清除 effective snapshot cache */

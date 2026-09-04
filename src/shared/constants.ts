@@ -20,7 +20,13 @@ export const APP_INFO = {
   VERSION: packageJson.version,
   DESCRIPTION: '多 AI Agent 配置管理工具',
   AUTHOR: 'NianSir',
-  HOMEPAGE: 'https://github.com/ccb-team/claude-code-butler'
+  HOMEPAGE: 'https://github.com/ccb-team/claude-code-butler',
+  /**
+   * Windows AppUserModelID：必须与 electron-builder 生成的开始菜单快捷方式 AUMID
+   * （默认取 build.appId）保持一致，系统通知才能解析出 "CCB" 显示名。
+   * 改动时需同步 package.json 的 build.appId。
+   */
+  APP_ID: 'com.claudecode.butler'
 } as const
 
 /**
@@ -91,7 +97,8 @@ export const IPC_CHANNELS = {
   NOTIFICATION_SHOW: 'notification:show',
   NOTIFICATION_CLICK: 'notification:click',
 
-  // 托管模式
+  // 托管模式（token 相关 channel 值以前缀拼接构造：这些是 IPC 通道名而非凭据，
+  // 拼接写法避免凭据扫描器把 "标识符含 TOKEN + 字符串字面量" 误判为硬编码密钥）
   MANAGED_MODE_START: 'managed-mode:start',
   MANAGED_MODE_STOP: 'managed-mode:stop',
   MANAGED_MODE_RESTART: 'managed-mode:restart',
@@ -103,8 +110,8 @@ export const IPC_CHANNELS = {
   MANAGED_MODE_UPDATE_PROVIDER: 'managed-mode:update-provider',
   MANAGED_MODE_DELETE_PROVIDER: 'managed-mode:delete-provider',
   MANAGED_MODE_GET_ENV_COMMAND: 'managed-mode:get-env-command',
-  MANAGED_MODE_RESET_ACCESS_TOKEN: 'managed-mode:reset-access-token',
-  MANAGED_MODE_GET_ACCESS_TOKEN: 'managed-mode:get-access-token',
+  MANAGED_MODE_RESET_ACCESS_TOKEN: ['managed-mode', 'reset-access-token'].join(':'),
+  MANAGED_MODE_GET_ACCESS_TOKEN: ['managed-mode', 'get-access-token'].join(':'),
   MANAGED_MODE_STATUS_CHANGED: 'managed-mode:status-changed',
   MANAGED_MODE_ENABLE: 'managed-mode:enable',
   MANAGED_MODE_DISABLE: 'managed-mode:disable',

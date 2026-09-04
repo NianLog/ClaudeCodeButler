@@ -71,6 +71,34 @@ describe('release preflight', () => {
     expect(result.errors.join('\n')).toContain('production publisher public key')
   })
 
+  it('production mode 应拒绝 rehearsal 命名的 publisher keyId', () => {
+    const result = auditReleaseSnapshot(createSnapshot({
+      registryUpdateSource: "REGISTRY_TRUSTED_PUBLIC_KEYS = Object.freeze({ 'ccb-rehearsal-2026-09': pem })"
+    }))
+
+    expect(result.errors.join('\n')).toContain('非 production 命名 keyId')
+    expect(result.errors.join('\n')).toContain('ccb-rehearsal-2026-09')
+  })
+
+  it('preview mode 对 rehearsal 命名 keyId 只警告', () => {
+    const result = auditReleaseSnapshot(createSnapshot({
+      allowPreviewRegistry: true,
+      registryUpdateSource: "REGISTRY_TRUSTED_PUBLIC_KEYS = Object.freeze({ 'ccb-rehearsal-2026-09': pem })"
+    }))
+
+    expect(result.errors).toEqual([])
+    expect(result.warnings.join('\n')).toContain('ccb-rehearsal-2026-09')
+  })
+
+  it('production 命名 keyId 应通过 trust map 检查', () => {
+    const result = auditReleaseSnapshot(createSnapshot({
+      registryUpdateSource: "REGISTRY_TRUSTED_PUBLIC_KEYS = Object.freeze({ 'ccb-publisher-2026': pem })"
+    }))
+
+    expect(result.errors).toEqual([])
+    expect(result.warnings).toEqual([])
+  })
+
   it.each(['', 'ENCRYPTED ', 'RSA ', 'DSA ', 'EC ', 'OPENSSH '])(
     '应阻止 tracked private key marker prefix: %s',
     (prefix) => {

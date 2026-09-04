@@ -43,7 +43,7 @@ export const TOOL_DETECTOR_TYPES = ['COMMAND_EXISTS', 'PATH_EXISTS'] as const
 export type ToolDetectorType = typeof TOOL_DETECTOR_TYPES[number]
 
 /** 首版允许的内置 handler 标识 */
-export const ARTIFACT_HANDLERS = ['JSON_FILE_V1', 'MARKDOWN_FILE_V1', 'TEXT_FILE_V1'] as const
+export const ARTIFACT_HANDLERS = ['JSON_FILE_V1', 'MARKDOWN_FILE_V1', 'TEXT_FILE_V1', 'TOML_FILE_V1'] as const
 
 /** 配置资产 handler 标识 */
 export type ArtifactHandler = typeof ARTIFACT_HANDLERS[number]
@@ -84,6 +84,18 @@ export interface ConfigArtifactDefinition {
   handler: ArtifactHandler
   /** 新建配置时使用的声明式默认模板 */
   defaultTemplate?: string
+  /**
+   * 编辑分组标识（可选）：同工具内 editGroup 相同的 artifacts 在同一编辑面板聚合呈现，
+   * 保存时由应用按分组成员逐一走既有 per-artifact 授权/校验/备份/原子写链路。
+   * 仅是 UI 聚合元数据，不改变任何文件的安全边界。
+   */
+  editGroup?: string
+  /**
+   * 配置集分组标识（可选）：同工具内 configSet 相同的 artifacts 构成一个可整体快照/切换的
+   * "配置集"单元（命名快照存储于 CCB 数据目录；激活 = 全组校验后逐文件走既有授权/备份/
+   * 原子写链）。与 editGroup（编辑聚合）语义正交：一个管"编辑时的呈现"，一个管"运行时切换"。
+   */
+  configSet?: string
 }
 
 /** AI 工具规则定义 */
@@ -232,8 +244,55 @@ export interface DiscoveredConfigArtifact {
 
 /** 只读配置资产内容 */
 export interface ConfigArtifactContent extends DiscoveredConfigArtifact {
-  /** 原始 UTF-8 文本；首版不对 TOML 等未实现 codec 的格式伪造 parse 结果 */
+  /** 原始 UTF-8 文本（保留注释与格式，保存同样以原文写回） */
   content: string
+}
+
+/** 配置集内单文件摘要 */
+export interface ToolConfigSetFileSummary {
+  /** 配置资产 identifier */
+  artifactId: string
+  /** 文件内容格式 */
+  format: ArtifactFormat
+  /** 快照字节数 */
+  size: number
+}
+
+/** 配置集摘要（列表项） */
+export interface ToolConfigSetSummary {
+  /** 所属工具 identifier */
+  toolId: string
+  /** 配置集稳定 identifier（存储寻址用，非用户可见） */
+  setId: string
+  /** 用户可见名称 */
+  name: string
+  /** ISO-8601 创建时间 */
+  createdAt: string
+  /** ISO-8601 最后修改时间 */
+  lastModifiedAt: string
+  /** 快照包含的文件 */
+  files: ToolConfigSetFileSummary[]
+  /** 快照内容是否与当前生效配置一致 */
+  isInUse: boolean
+}
+
+/** 配置集内容（编辑用） */
+export interface ToolConfigSetContent {
+  /** 所属工具 identifier */
+  toolId: string
+  /** 配置集稳定 identifier */
+  setId: string
+  /** 用户可见名称 */
+  name: string
+  /** 快照文件原文 */
+  files: Array<{
+    /** 配置资产 identifier */
+    artifactId: string
+    /** 文件内容格式 */
+    format: ArtifactFormat
+    /** 原始 UTF-8 文本 */
+    content: string
+  }>
 }
 
 /** 配置资产 validation 结果 */

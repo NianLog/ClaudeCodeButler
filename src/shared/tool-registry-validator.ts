@@ -35,6 +35,8 @@ const MAX_TOOLS = 100
 const MAX_ARTIFACTS_PER_TOOL = 50
 /** 单工具最大 detector 数 */
 const MAX_DETECTORS_PER_TOOL = 10
+/** 单个编辑分组最大成员数（同一编辑面板聚合的文件数上限） */
+const MAX_EDIT_GROUP_MEMBERS = 4
 /** 普通字符串最大长度 */
 const MAX_STRING_LENGTH = 4096
 /** 本地化文本最大长度 */
@@ -292,7 +294,7 @@ function readArtifact(value: unknown, path: string, errors: string[]): ConfigArt
   }
   validateAllowedKeys(
     value,
-    ['artifactId', 'displayName', 'format', 'scope', 'paths', 'capabilities', 'handler', 'defaultTemplate'],
+    ['artifactId', 'displayName', 'format', 'scope', 'paths', 'capabilities', 'handler', 'defaultTemplate', 'editGroup', 'configSet'],
     path,
     errors
   )
@@ -331,6 +333,12 @@ function readArtifact(value: unknown, path: string, errors: string[]): ConfigArt
   const defaultTemplate = value.defaultTemplate === undefined
     ? undefined
     : readString(value.defaultTemplate, `${path}.defaultTemplate`, errors, 64 * 1024)
+  const editGroup = value.editGroup === undefined
+    ? undefined
+    : readIdentifier(value.editGroup, `${path}.editGroup`, errors)
+  const configSet = value.configSet === undefined
+    ? undefined
+    : readIdentifier(value.configSet, `${path}.configSet`, errors)
 
   return {
     artifactId: readIdentifier(value.artifactId, `${path}.artifactId`, errors),
@@ -345,7 +353,9 @@ function readArtifact(value: unknown, path: string, errors: string[]): ConfigArt
       errors
     ),
     handler,
-    ...(defaultTemplate === undefined ? {} : { defaultTemplate })
+    ...(defaultTemplate === undefined ? {} : { defaultTemplate }),
+    ...(editGroup === undefined ? {} : { editGroup }),
+    ...(configSet === undefined ? {} : { configSet })
   }
 }
 
@@ -392,6 +402,20 @@ function readTool(value: unknown, path: string, errors: string[]): ToolDefinitio
     }
     artifactIds.add(artifact.artifactId)
   }
+  const groupSizes = (groupField: 'editGroup' | 'configSet'): void => {
+    const sizes = new Map<string, number>()
+    for (const artifact of parsedArtifacts) {
+      const group = artifact[groupField]
+      if (!group) continue
+      const size = (sizes.get(group) ?? 0) + 1
+      sizes.set(group, size)
+      if (size > MAX_EDIT_GROUP_MEMBERS) {
+        errors.push(`${path}.artifacts: ${groupField} ${group} 成员超过 ${MAX_EDIT_GROUP_MEMBERS} 个`)
+      }
+    }
+  }
+  groupSizes('editGroup')
+  groupSizes('configSet')
 
   return {
     toolId: readIdentifier(value.toolId, `${path}.toolId`, errors),

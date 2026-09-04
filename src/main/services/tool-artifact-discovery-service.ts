@@ -151,10 +151,18 @@ export class ToolArtifactDiscoveryService {
     if (!artifact.capabilities.includes(capability)) {
       throw new Error(`配置资产未声明 ${capability} capability: ${artifactId}`)
     }
-    const resolvedPath = this.resolveArtifactPaths(artifact)
-      .find((candidate) => this.pathsEqual(candidate, requestedPath))
+    const candidates = this.resolveArtifactPaths(artifact)
+    if (candidates.length === 0) {
+      throw new Error(`配置资产未声明当前平台路径: ${artifactId}`)
+    }
+    // requestedPath 为空时由 main 侧取 registry 声明的主候选路径（用于按声明创建缺失文件），
+    // 路径仍完全来自 registry 声明，renderer 无法注入任意路径。
+    const resolvedPath = requestedPath === ''
+      ? candidates[0]
+      : candidates.find((candidate) => this.pathsEqual(candidate, requestedPath))
     if (!resolvedPath) throw new Error('拒绝访问 registry 未声明的配置路径')
-    await this.assertNoSymbolicLinks(resolvedPath)
+    // 最终文件段允许不存在：EDIT 可创建 registry 声明的新文件；父目录链仍拒绝 symlink。
+    await this.assertNoSymbolicLinks(resolvedPath, true)
     return { tool, artifact, resolvedPath }
   }
 
@@ -235,16 +243,30 @@ export class ToolArtifactDiscoveryService {
   /**
    * 拒绝最终文件及其任一中间目录中的 symbolic link/junction。
    * @param resolvedPath 已通过 registry allowlist 的绝对路径
+   * @param tolerateMissingFinalSegment 允许最终文件段不存在（EDIT 创建 registry 声明的新文件）；
+   *        任一父目录缺失或含 symlink 仍然拒绝
    */
-  private async assertNoSymbolicLinks(resolvedPath: string): Promise<void> {
+  private async assertNoSymbolicLinks(
+    resolvedPath: string,
+    tolerateMissingFinalSegment = false
+  ): Promise<void> {
     const platform = this.detectionService.getPlatform()
     const pathImplementation = platform === 'WINDOWS' ? path.win32 : path.posix
     const parsedPath = pathImplementation.parse(resolvedPath)
     const segments = resolvedPath.slice(parsedPath.root.length).split(pathImplementation.sep).filter(Boolean)
     let currentPath = parsedPath.root
-    for (const segment of segments) {
+    for (const [index, segment] of segments.entries()) {
       currentPath = pathImplementation.join(currentPath, segment)
-      const metadata = await lstat(currentPath)
+      let metadata
+      try {
+        metadata = await lstat(currentPath)
+      } catch (error) {
+        const nodeError = error as NodeJS.ErrnoException
+        if (tolerateMissingFinalSegment && nodeError.code === 'ENOENT' && index === segments.length - 1) {
+          return
+        }
+        throw error
+      }
       if (metadata.isSymbolicLink()) {
         throw new Error(`配置资产路径包含 symbolic link: ${currentPath}`)
       }

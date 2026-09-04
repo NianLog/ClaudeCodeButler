@@ -25,10 +25,32 @@ describe('ToolArtifactCodecService', () => {
     expect(service.validate('YAML', 'value: !!js/function function() {}').valid).toBe(false)
   })
 
-  it('应接受普通文本并拒绝 NUL 与未实现 TOML validation', () => {
+  it('应接受普通文本并拒绝 NUL', () => {
     expect(service.validate('MARKDOWN', '# Instructions\n').valid).toBe(true)
     expect(service.validate('TEXT', 'a\0b').valid).toBe(false)
-    expect(service.validate('TOML', 'model = "gpt-5"').errors[0]).toContain('TOML')
+  })
+
+  it('应校验 TOML 并拒绝 malformed TOML（Codex config.toml 场景）', () => {
+    const codexLike = [
+      '# 用户配置',
+      'model = "gpt-5.2"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
+      '',
+      '[mcp_servers.context7]',
+      'command = "npx"',
+      'args = ["-y", "@upstash/context7-mcp"]',
+      'env = { API_KEY = "value" }',
+      '',
+      '[profiles.fast]',
+      'model_reasoning_effort = "high"',
+      ''
+    ].join('\n')
+    expect(service.validate('TOML', codexLike)).toEqual({ valid: true, format: 'TOML', errors: [] })
+    expect(service.validate('TOML', '{"json": "pasted"}').valid).toBe(false)
+    expect(service.validate('TOML', 'key = ').valid).toBe(false)
+    expect(service.validate('TOML', '[unclosed').valid).toBe(false)
+    expect(service.validate('TOML', 'a = 1\0').valid).toBe(false)
   })
 
   it('应拒绝超过深度限制的 parsed configuration', () => {

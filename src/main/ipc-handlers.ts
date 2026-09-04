@@ -26,9 +26,11 @@ import { environmentCheckService } from './services/environment-check-service'
 import { terminalManagementService } from './services/terminal-management-service'
 import { toolRegistryService } from './services/tool-registry-service'
 import { registryUpdateService } from './services/registry-update-service'
+import { createTemplateCloudService } from './services/template-cloud-service'
 import { performanceSnapshotService } from './services/performance-snapshot-service'
 import { toolArtifactDiscoveryService } from './services/tool-artifact-discovery-service'
 import { toolArtifactManagementService } from './services/tool-artifact-management-service'
+import { toolConfigSetService } from './services/tool-config-set-service'
 import { createArtifactTemplateService } from './services/artifact-template-service'
 import {
   ensureAllowedUrl,
@@ -42,6 +44,7 @@ import { ensureExternalUrl } from './utils/ssrf-guard'
 const configService = new ConfigService()
 const settingsService = new SettingsService()
 const artifactTemplateService = createArtifactTemplateService(settingsService)
+const templateCloudService = createTemplateCloudService(artifactTemplateService)
 
 // 导出 configService 供其他模块使用
 export { configService, settingsService, managedModeService }
@@ -166,12 +169,38 @@ function setupToolRegistryHandlers(): void {
   ipcMain.handle('toolRegistry:restoreArtifactBackup', createSimpleHandler((backupId: string) =>
     toolArtifactManagementService.restoreBackup(backupId)
   ))
+  ipcMain.handle('toolRegistry:listConfigSets', createSimpleHandler((toolId: string) =>
+    toolConfigSetService.listConfigSets(toolId)
+  ))
+  ipcMain.handle('toolRegistry:createConfigSet', createSimpleHandler((toolId: string, name: string) =>
+    toolConfigSetService.createConfigSet(toolId, name)
+  ))
+  ipcMain.handle('toolRegistry:readConfigSet', createSimpleHandler((toolId: string, setId: string) =>
+    toolConfigSetService.readConfigSet(toolId, setId)
+  ))
+  ipcMain.handle('toolRegistry:saveConfigSetContent', createSimpleHandler((
+    toolId: string,
+    setId: string,
+    files: Array<{ artifactId: string; content: string }>
+  ) => toolConfigSetService.saveConfigSetContent(toolId, setId, files)))
+  ipcMain.handle('toolRegistry:activateConfigSet', createSimpleHandler((toolId: string, setId: string) =>
+    toolConfigSetService.activateConfigSet(toolId, setId)
+  ))
+  ipcMain.handle('toolRegistry:deleteConfigSet', createSimpleHandler((toolId: string, setId: string) =>
+    toolConfigSetService.deleteConfigSet(toolId, setId)
+  ))
   ipcMain.handle('toolRegistry:getUpdateStatus', createSimpleHandler(() => registryUpdateService.getStatus()))
   ipcMain.handle('toolRegistry:checkForUpdates', createSimpleHandler(() => registryUpdateService.checkForUpdates(app.getVersion())))
   ipcMain.handle('toolRegistry:installAvailableUpdate', createSimpleHandler(() =>
     registryUpdateService.installAvailableUpdate(app.getVersion())
   ))
   ipcMain.handle('toolRegistry:rollback', createSimpleHandler(() => registryUpdateService.rollback()))
+  ipcMain.handle('toolRegistry:listCloudTemplates', createSimpleHandler(() =>
+    templateCloudService.listTemplates(app.getVersion())
+  ))
+  ipcMain.handle('toolRegistry:importCloudTemplate', createSimpleHandler((templateId: string, nameOverride?: string) =>
+    templateCloudService.importTemplate(templateId, app.getVersion(), nameOverride ? { name: nameOverride } : undefined)
+  ))
   ipcMain.handle('performance:capture', createSimpleHandler(() => performanceSnapshotService.capture()))
   ipcMain.handle('performance:exportSnapshot', createSimpleHandler((rendererTimings?: unknown) =>
     performanceSnapshotService.exportSnapshot(rendererTimings)

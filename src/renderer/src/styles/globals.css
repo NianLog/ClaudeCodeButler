@@ -5,8 +5,6 @@
  */
 
 /* 组件样式引入：CSS 规范要求 @import 位于所有 style rules 之前 */
-@import './components/Header.css';
-@import './components/Sidebar.css';
 @import './components/Config.css';
 
 /* 兜底变量（主题 JS 加载前的默认值，与 CCB Dark Pro 一致） */

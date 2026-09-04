@@ -13,8 +13,8 @@ import { promisify } from 'util'
 import os from 'os'
 import path from 'path'
 import fs from 'fs'
+import { net } from 'electron'
 import { logger } from '../utils/logger'
-import axios from 'axios'
 
 const execAsync = promisify(exec)
 
@@ -118,18 +118,25 @@ class ClaudeCodeVersionService {
     try {
       logger.info('获取Claude Code最新版本...')
 
-      // 从npm registry获取最新版本
-      const response = await axios.get(
+      // 从npm registry获取最新版本（net.fetch 遵循系统代理设置）
+      const response = await net.fetch(
         'https://registry.npmjs.org/@anthropic-ai/claude-code',
         {
-          timeout: 10000,
           headers: {
-            'Accept': 'application/json'
-          }
+            'Accept': 'application/vnd.npm.install-v1+json, application/json'
+          },
+          signal: AbortSignal.timeout(10000)
         }
       )
+      if (!response.ok) {
+        logger.warn(`npm registry 请求失败: HTTP ${response.status}`)
+        return null
+      }
+      const registryData = (await response.json()) as {
+        'dist-tags'?: { latest?: string }
+      }
 
-      const latestVersion = response.data['dist-tags']?.latest
+      const latestVersion = registryData['dist-tags']?.latest
       if (latestVersion) {
         logger.info(`最新Claude Code版本: ${latestVersion}`)
         return latestVersion

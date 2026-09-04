@@ -20,7 +20,91 @@ describe('validateToolRegistryBundle', () => {
     expect(result.data?.tools[0].toolId).toBe('claude-code')
     expect(result.data?.tools[0].artifacts).toHaveLength(3)
     expect(result.data?.tools[1].toolId).toBe('codex-cli')
-    expect(result.data?.tools[1].artifacts[0].capabilities).toEqual(['DISCOVER', 'READ'])
+    expect(result.data?.tools[1].artifacts[0].capabilities).toEqual(
+      ['DISCOVER', 'READ', 'VALIDATE', 'EDIT', 'BACKUP', 'RESTORE']
+    )
+  })
+
+  it('应接受内置 registry 的全部工具与 editGroup 声明', () => {
+    const result = validateToolRegistryBundle(JSON.stringify(builtinRegistryJson))
+
+    expect(result.success).toBe(true)
+    expect(result.data?.tools.map((tool) => tool.toolId)).toEqual(
+      ['claude-code', 'codex-cli', 'gemini-cli', 'antigravity']
+    )
+    const codex = result.data?.tools[1]
+    expect(codex?.artifacts.map((artifact) => artifact.artifactId)).toEqual(
+      ['user-config', 'auth', 'agents-instructions']
+    )
+    expect(codex?.artifacts[0].editGroup).toBe('core')
+    expect(codex?.artifacts[1].editGroup).toBe('core')
+    expect(codex?.artifacts[2].editGroup).toBeUndefined()
+    expect(codex?.artifacts[0].handler).toBe('TOML_FILE_V1')
+  })
+
+  it('应拒绝非法 editGroup 标识与超员编辑分组', () => {
+    const invalid = structuredClone(builtinRegistryJson) as unknown as Record<string, unknown>
+    const tools = invalid.tools as Array<Record<string, unknown>>
+    const claudeArtifacts = tools[0].artifacts as Array<Record<string, unknown>>
+    claudeArtifacts.forEach((artifact) => {
+      artifact.editGroup = 'Invalid_Group'
+    })
+
+    const badIdentifier = validateToolRegistryBundle(JSON.stringify(invalid))
+    expect(badIdentifier.success).toBe(false)
+    expect(badIdentifier.errors.join('\n')).toContain('editGroup')
+
+    const oversized = structuredClone(builtinRegistryJson) as unknown as Record<string, unknown>
+    const oversizedTools = oversized.tools as Array<Record<string, unknown>>
+    const oversizedArtifacts = oversizedTools[0].artifacts as Array<Record<string, unknown>>
+    oversizedArtifacts.forEach((artifact) => {
+      artifact.editGroup = 'core'
+    })
+    const extraAlpha = structuredClone(oversizedArtifacts[0]) as Record<string, unknown>
+    const extraBeta = structuredClone(oversizedArtifacts[0]) as Record<string, unknown>
+    extraAlpha.artifactId = 'extra-alpha'
+    extraBeta.artifactId = 'extra-beta'
+    oversizedArtifacts.push(extraAlpha, extraBeta)
+    const groupResult = validateToolRegistryBundle(JSON.stringify(oversized))
+    expect(groupResult.success).toBe(false)
+    expect(groupResult.errors.join('\n')).toContain('editGroup core 成员超过')
+  })
+
+  it('应接受内置 registry 的 configSet 声明并拒绝非法/超员配置集分组', () => {
+    const result = validateToolRegistryBundle(JSON.stringify(builtinRegistryJson))
+
+    expect(result.success).toBe(true)
+    // claude-code 走遗留工作区配置通道，不应声明 configSet
+    const claude = result.data?.tools[0]
+    expect(claude?.artifacts.every((artifact) => artifact.configSet === undefined)).toBe(true)
+    const codex = result.data?.tools[1]
+    expect(codex?.artifacts[0].configSet).toBe('core')
+    expect(codex?.artifacts[1].configSet).toBe('core')
+    expect(codex?.artifacts[2].configSet).toBeUndefined()
+
+    const invalid = structuredClone(builtinRegistryJson) as unknown as Record<string, unknown>
+    const tools = invalid.tools as Array<Record<string, unknown>>
+    const codexArtifacts = tools[1].artifacts as Array<Record<string, unknown>>
+    codexArtifacts[0].configSet = 'Invalid_Set'
+
+    const badIdentifier = validateToolRegistryBundle(JSON.stringify(invalid))
+    expect(badIdentifier.success).toBe(false)
+    expect(badIdentifier.errors.join('\n')).toContain('configSet')
+
+    const oversized = structuredClone(builtinRegistryJson) as unknown as Record<string, unknown>
+    const oversizedTools = oversized.tools as Array<Record<string, unknown>>
+    const oversizedArtifacts = oversizedTools[1].artifacts as Array<Record<string, unknown>>
+    oversizedArtifacts.forEach((artifact) => {
+      artifact.configSet = 'core'
+    })
+    const extraGamma = structuredClone(oversizedArtifacts[0]) as Record<string, unknown>
+    const extraDelta = structuredClone(oversizedArtifacts[0]) as Record<string, unknown>
+    extraGamma.artifactId = 'extra-gamma'
+    extraDelta.artifactId = 'extra-delta'
+    oversizedArtifacts.push(extraGamma, extraDelta)
+    const groupResult = validateToolRegistryBundle(JSON.stringify(oversized))
+    expect(groupResult.success).toBe(false)
+    expect(groupResult.errors.join('\n')).toContain('configSet core 成员超过')
   })
 
   it('应拒绝 command detector 参数与未知 capability', () => {
@@ -90,6 +174,42 @@ describe('validateToolRegistryManifest', () => {
     }), ['https://dev.niansir.com'])
 
     expect(result.success).toBe(true)
+  })
+
+  it('应拒绝纯字符串或缺失的 releaseNotes（回归：发布端曾按字符串生成）', () => {
+    const baseManifest = {
+      schemaVersion: 1,
+      registryVersion: '1.2.1',
+      minimumAppVersion: '1.5.0',
+      publishedAt: '2026-09-05T00:00:00.000Z',
+      bundleUrl: 'https://dev.niansir.com/software/ccb/registry/bundles/1.2.1-abcd1234.json',
+      bundleSha256: 'a'.repeat(64),
+      bundleSize: 11239,
+      signatureAlgorithm: 'ED25519',
+      keyId: 'ccb-rehearsal-2026-09',
+      signature: Buffer.alloc(64).toString('base64')
+    }
+
+    const asString = validateToolRegistryManifest(
+      JSON.stringify({ ...baseManifest, releaseNotes: 'CCB registry 1.2.1' }),
+      ['https://dev.niansir.com']
+    )
+    expect(asString.success).toBe(false)
+    expect(asString.errors.join('\n')).toContain('$.releaseNotes: 必须为本地化文本对象')
+
+    const missing = validateToolRegistryManifest(
+      JSON.stringify({ ...baseManifest }),
+      ['https://dev.niansir.com']
+    )
+    expect(missing.success).toBe(false)
+    expect(missing.errors.join('\n')).toContain('$.releaseNotes: 必须为本地化文本对象')
+
+    const emptyLocale = validateToolRegistryManifest(
+      JSON.stringify({ ...baseManifest, releaseNotes: { 'zh-CN': '更新', 'en-US': '' } }),
+      ['https://dev.niansir.com']
+    )
+    expect(emptyLocale.success).toBe(false)
+    expect(emptyLocale.errors.join('\n')).toContain('$.releaseNotes.en-US: 必须为非空字符串')
   })
 
   it('应拒绝 HTTP 与非 allowlist origin', () => {
