@@ -21,7 +21,7 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 
 ### Project Status
 
-- **Current version**: `1.5.0` (in development); release baseline `1.4.0`
+- **Current version**: `1.5.0` (released 2026-09-05); previous release `1.4.0`
 - **v1.5.0 theme**: from a Claude Code-only manager to a registry-driven multi-AI-tool configuration control plane
 - **Supported tools**: Claude Code, Codex CLI, Gemini CLI, and Antigravity — onboarded through a declarative JSON registry covering artifact discovery, validation, atomic edits, backup/restore, and configuration-set snapshot switching
 - **Quality & security**: automated tests and both production builds green; root and proxy-server production-dependency audits report `0 vulnerabilities` (see [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md))
