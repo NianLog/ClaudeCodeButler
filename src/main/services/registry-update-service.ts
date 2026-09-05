@@ -30,11 +30,11 @@ export const REGISTRY_ALLOWED_ORIGINS = ['https://dev.niansir.com'] as const
  * @description 正式 release 前必须由维护者注入其离线保管 private key 对应的 SPKI public key。
  */
 export const REGISTRY_TRUSTED_PUBLIC_KEYS: RegistryTrustedPublicKeys = Object.freeze({
-  // Rehearsal publisher key（2026-09-04 在开发机生成，仅用于 v1.5.0 发布链 rehearsal 与 preview 模式）。
-  // 公共发布前必须轮换为离线 ceremony 生成的 production key；release preflight 拒绝 rehearsal 命名 keyId 进入 production。
-  'ccb-rehearsal-2026-09': [
+  // Production publisher key（keyId ccb-publisher-2026-09，2026-09-05 ceremony 轮换，取代 rehearsal key）。
+  // 私钥离线双份加密保存于维护侧；应用只固定 SPKI public key。远程 registry 与云模板通道共用本 trust map。
+  'ccb-publisher-2026-09': [
     '-----BEGIN PUBLIC KEY-----',
-    'MCowBQYDK2VwAyEAyfS6bIe+NeVBUw+d2MzBenVO++Q+X5C2hMMMtahF+nw=',
+    'MCowBQYDK2VwAyEACp6xzpN6L737hkZQBJFUJK+GvS8FK2RrJmASRgvuKFc=',
     '-----END PUBLIC KEY-----'
   ].join('\n')
 })
