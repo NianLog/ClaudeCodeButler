@@ -68,7 +68,7 @@
 - 修订全局 List 策略：普通 description 最多两行，结构化 path/tags 由页面专属布局管理，移动端 actions 独占下一行，避免标签遮挡主内容。
 - 通用 artifact backup 增加每个 tool/artifact/path 默认 20 份 retention 与串行 mutation queue，避免并发创建突破上限或磁盘无界增长。
 - 新建 Claude 配置不再依赖 renderer 内的全局模板快照，改为向 main process 解析 artifact-specific effective template；迟到响应不会覆盖用户已经输入的草稿。
-- `REGISTRY_TRUSTED_PUBLIC_KEYS` 注入 rehearsal publisher key（`ccb-rehearsal-2026-09`，开发机生成、私钥不入库）：v1.5.0 开发期 rehearsal 与 preview 模式可用；production preflight 按设计拒绝该 key，公共发布前必须离线 ceremony 轮换。
+- ~~`REGISTRY_TRUSTED_PUBLIC_KEYS` 注入 rehearsal publisher key（`ccb-rehearsal-2026-09`，开发机生成、私钥不入库）：v1.5.0 开发期 rehearsal 与 preview 模式可用；production preflight 按设计拒绝该 key，公共发布前必须离线 ceremony 轮换。~~ 已于 2026-09-05 完成轮换，见 Security 节 production publisher key ceremony 条目。
 - CI 质量门禁升级：lint 由 informational 转为阻塞（存量 error 已清零）、新增 `lint:changed` ratchet 与生产依赖 `npm audit --omit=dev` 双包门禁、quality checkout 改为 full history 以支持 merge-base、tag release 改为 draft 供人工验收后发布。
 - 生产依赖安全升级：js-yaml 4.3.2、qs 6.16.0、body-parser 2.3.0、dompurify 3.4.14；brace-expansion range overrides 升至 1.1.18 / 2.1.4（minimatch v5 依赖链保持 5.x 不动）。
 - **体积优化（asar 减半）**：Monaco 按需运行时（`monaco-runtime.ts` 只引 editor 核心 + JSON 语言 + Markdown 高亮，ts/css/html worker 等死重出产物）；移除 axios（简单请求改 `net.fetch`——Chromium 网络栈、遵循系统代理，企业环境更优；托管转发改 `upstream-http-client`）；`uuid` 改用原生 `crypto.randomUUID()`；electron-builder `compression: "maximum"` 并排除 `**/*.map`。app.asar `23.16 MB → 11.76 MB（-49.2%）`，win-unpacked `310 MB → 299 MB`，ZIP `-2.78 MB`、Portable/NSIS 各 `-1.57 MB`；renderer 静态产物 `8.7 MB`（原 Monaco worker 死重约 8.3 MB 出清），main/preload 体积保持基线（288.87 KB / 12.93 KB）。
@@ -93,6 +93,7 @@
 
 ### Security
 
+- **R1 production publisher key ceremony 完成（2026-09-05）**：Ed25519 production keypair（keyId `ccb-publisher-2026-09`）经 `keygen.cjs` 生成，SPKI public key 注入 `REGISTRY_TRUSTED_PUBLIC_KEYS`（rehearsal key 移除，registry 与云模板通道共用同一 trust map）；远程 registry 1.2.1 bundle 与 templates v1.0.0 index 以 production key 重签（bundle 内容寻址不变，仅 manifest/index 签名更替），`tools/verify.cjs` 完整客户端链 + 20/20 对抗自检通过；production `release:preflight` 通过。verify 工具的 selftest 重签名私钥改为按 manifest keyId 推导（密钥轮换后自检自动跟随）。披露：ceremony 在维护者本人受控开发机完成（未满足清单要求的断网离线机），私钥仅存 `.keys/`（gitignored），离线介质双份冷备份待维护者补齐。
 - 提交前安全门禁（Mimosa L3）21 项高危全数处置：`start-admin.js` 管理员提升脚本结构性加固——PowerShell/osascript 只接收完全静态的脚本文本，目标路径经环境变量传入（运行期作为数据而非代码读取）、路径白名单校验，Linux pkexec/sudo 参数数组为固定结构并以 `--` 终止选项解析，同时移除从未被 npm 脚本使用的 argv 透传；Agent 文件名 slug 闭集断言、备份 contentFileName 等式断言、两处 readdir 过滤拒绝 `..` 条目之外，全部动态文件名 join 站点（agents、托管模式日志、系统设置备份、配置备份目录共 4 个服务、11 处）统一以 `ensurePathWithinBase` 在 join 结果上做根目录边界校验；新建配置模板的 token 类字段不再预填占位假值；上游错误码/IPC 通道名/测试密钥向量改为运行期等值的拼接构造，消除凭据扫描误报。
 - Remote registry manifest 现在必须声明 `ED25519` signature metadata；未知 key、非 Ed25519 key、无效 Base64 或 raw bundle signature mismatch 均 fail-closed。
 - Signature 通过后继续绑定 SHA-256、size、schema、registry version、minimum app version 与 downgrade policy，拒绝合法旧 bundle 被错误 manifest 重新包装。
@@ -115,13 +116,13 @@
 - 新增 registry rehearsal 四场景测试（env-gated，6 项）与 preflight rehearsal-key 防误发测试（3 项）。
 - 新增 `upstream-http-client` 单元测试 7 项（JSON 转发与 content-length、非 2xx 透传、SSE 流序保持、超时映射 ECONNABORTED、连接拒绝保留原生 code、无效 URL、响应体大小上限中断下载）。
 - 新增 TOML codec 单元测试（合法 Codex 形态 config 含 mcp_servers/profiles/inline table 通过；JSON 误贴、截断赋值、未闭合 table、NUL 拒绝）与 editGroup validator 测试（4 工具全量声明通过、非法标识拒绝、超员分组拒绝）；registry service merge 断言更新为 4 内置工具。
-- Full Vitest 当前为 33 个测试文件、211 项测试全部通过（含 4 项 env-gated rehearsal skip）。
+- Full Vitest 当前为 36 个测试文件、252 项测试全部通过（本地含 production key 驱动的 6 项 env-gated rehearsal；CI 无私钥时该文件跳过）。
 - Semgrep full scan：`198 targets / 369 rules / 0 findings / 0 structured errors`；explicit-path scan：`35 targets / 336 rules / 0 findings / 0 structured errors`。OSS engine 另报告 41/8 条 fixpoint timeout warnings，已在安全报告中披露并执行补偿审查。
 - Root/proxy 生产依赖 npm audit 均为 `0 vulnerabilities`，TypeScript、ESLint（零错误，CI 阻塞）、root production build 与 proxy-server build 全部通过。
 
 ### Release blockers
 
-- `REGISTRY_TRUSTED_PUBLIC_KEYS` 当前为 rehearsal key：production `release:preflight` 按设计 fail-closed（拒绝 rehearsal 命名 keyId）；维护者完成 offline Ed25519 production key ceremony 并轮换后方可发布。rehearsal 四场景（valid/tampered/unknown-key/rollback）已验证通过。
+- ~~`REGISTRY_TRUSTED_PUBLIC_KEYS` 当前为 rehearsal key：production `release:preflight` 按设计 fail-closed（拒绝 rehearsal 命名 keyId）；维护者完成 offline Ed25519 production key ceremony 并轮换后方可发布。rehearsal 四场景（valid/tampered/unknown-key/rollback）已验证通过。~~ **R1 已完成（2026-09-05）**：production keyId `ccb-publisher-2026-09` 已注入 trust map（registry 与云模板通道共用），rehearsal key 已移除；远程 registry 1.2.1 与 templates v1.0.0 已用 production key 重签并通过 20/20 对抗自检；production `release:preflight` 通过。披露：ceremony 在维护者本人受控开发机完成（与 rehearsal key 同机、断网要求未满足），私钥仅存 `.keys/`（gitignored），离线介质双份冷备份待维护者补齐。
 - Windows 三产物打包链路已打通：Electron 发行版经镜像下载并做 SHASUMS256 双源交叉校验（TLS 校验全程保持开启），Portable/NSIS/ZIP 可复现生成并完成隔离环境冒烟。剩余：目标机人工安装/卸载验收。
 - 当前静态包体记录为 main `306.94 KB`、preload `13.26 KB`、renderer entry `197.99 KB`（云模板批增量：main +~17.6 KB / preload +~0.3 KB，来源为 TemplateCloudService、`@shared/template-cloud(-validator)` 契约与新增 IPC/桥接方法；rollback embedded 回退批 main +~0.5 KB；规则库状态美化批 renderer entry +~1.2 KB 为 26 个双语状态 locale 键。renderer entry 曾于 rollback 批复测修正：chunk 拓扑不变（云模板弹窗仍为独立 lazy chunk），此前记录的 `201.38 KB` 与复测不符已作废）；app.asar 当前 `11.83 MB`（体积优化后 11.76 MB + smol-toml 等多工具配置集批增量，asar 内 node_modules 85 包：基线 84 + smol-toml；renderer 静态产物合计 `8.7 MB`，Monaco 主 chunk `3.73 MB` + json/editor worker）。runtime 性能（PERF-01~07 三轮 median）和三类包人工 smoke test 留待实机验收（含双开进程聚焦与通知应用名显示）。
 

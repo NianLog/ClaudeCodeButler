@@ -108,9 +108,14 @@ function createUpdateService(
 }
 
 describe('Registry publisher rehearsal', () => {
-  it('production trust map 应包含 rehearsal publisher key', () => {
-    expect(REGISTRY_TRUSTED_PUBLIC_KEYS[DEFAULT_REHEARSAL_KEY_ID]).toMatch(/BEGIN PUBLIC KEY/)
-    expect(REGISTRY_TRUSTED_PUBLIC_KEYS[DEFAULT_REHEARSAL_KEY_ID]).not.toContain('PRIVATE KEY')
+  it('production trust map 应只包含 production 命名的 SPKI publisher key', () => {
+    const keyIds = Object.keys(REGISTRY_TRUSTED_PUBLIC_KEYS)
+    expect(keyIds.length).toBeGreaterThan(0)
+    for (const keyId of keyIds) {
+      expect(keyId).not.toMatch(/rehearsal|test|dev|staging|example|sample|placeholder|dummy/i)
+      expect(REGISTRY_TRUSTED_PUBLIC_KEYS[keyId]).toMatch(/BEGIN PUBLIC KEY/)
+      expect(REGISTRY_TRUSTED_PUBLIC_KEYS[keyId]).not.toContain('PRIVATE KEY')
+    }
   })
 
   it('offline signing helper 应拒绝非法 keyId 与超限 bundle', () => {
