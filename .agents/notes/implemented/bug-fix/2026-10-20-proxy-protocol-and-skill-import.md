@@ -29,4 +29,4 @@ Last-verified: 2026-10-25
 
 ## 后续导入提案（2026-10-25）
 
-[跨工具导入与全局管理对象](../../proposed/feature/2026-10-25-agent-import-and-global-context.md)将复用本笔记的 Skill 暂存、备份与回滚，不以增加来源为由绕过校验；新增格式和交互尚未实施。
+[跨工具导入与全局管理对象](../../implemented/feature/2026-10-25-agent-import-and-global-context.md)已复用本笔记的 Skill 暂存、备份与回滚；新增格式和交互的验收见对应 implemented 记录。

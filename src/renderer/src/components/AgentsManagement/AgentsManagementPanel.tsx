@@ -1,3 +1,5 @@
+import { useAgentContextStore } from '../../store/agent-context-store'
+import { useAgentDraftGuard } from '../../hooks/useAgentDraftGuard'
 /**
  * 子Agent管理面板组件
  *
@@ -420,6 +422,9 @@ const AgentsManagementPanel: React.FC = () => {
     }
   ]
 
+  useAgentDraftGuard('legacy-agents', { dirty: isFormModalOpen || isImportModalOpen, busy: isLoading,
+    discard: () => { closeFormModal(); closeImportModal() } })
+
   return (
     <div className="agents-management-panel">
       {/* 标题栏 */}
@@ -610,9 +615,9 @@ const AgentsManagementPanel: React.FC = () => {
         title={formMode === 'add' ? t('agents.form.createTitle') : t('agents.form.editTitle')}
         open={isFormModalOpen}
         onOk={formMode === 'add' ? handleAdd : handleEdit}
-        onCancel={closeFormModal}
+        onCancel={() => useAgentContextStore.getState().requestChange(closeFormModal)}
         width={720}
-        afterClose={() => form.resetFields()}
+        afterClose={() => form.resetFields()} maskClosable={false}
       >
         <Form
           form={form}
@@ -691,7 +696,7 @@ const AgentsManagementPanel: React.FC = () => {
           setFileList([])
           closeImportModal()
         }}
-        width={600}
+        width={600} maskClosable={false}
       >
         <Upload.Dragger
           accept=".md"

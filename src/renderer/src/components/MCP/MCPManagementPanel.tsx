@@ -1,3 +1,5 @@
+import { useAgentDraftGuard } from '../../hooks/useAgentDraftGuard'
+import { useAgentContextStore } from '../../store/agent-context-store'
 /**
  * MCP管理面板
  * @description 管理Claude Code的MCP服务器配置,支持全局和项目级服务器
@@ -427,6 +429,8 @@ const MCPManagementPanel: React.FC = () => {
     )
   }
 
+  useAgentDraftGuard('legacy-mcp', { dirty: isEditModalVisible, busy: isLoading, discard: () => setIsEditModalVisible(false) })
+
   return (
     <div className="mcp-management-panel">
       {/* 错误提示 */}
@@ -554,16 +558,16 @@ const MCPManagementPanel: React.FC = () => {
         }
         open={isEditModalVisible}
         onOk={handleSaveEdit}
-        onCancel={() => {
+        onCancel={() => useAgentContextStore.getState().requestChange(() => {
           setIsEditModalVisible(false)
           setEditingServer(null)
           setEditingServerId('')
           setIsAddMode(false)
-        }}
+        })}
         width={800}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
-        destroyOnHidden
+        destroyOnHidden maskClosable={false}
       >
         {isAddMode && (
           <>

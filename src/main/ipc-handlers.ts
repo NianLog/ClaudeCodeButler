@@ -38,6 +38,10 @@ import {
   sanitizeFileName
 } from './utils/path-security'
 import { updateService } from './services/update-service'
+import { setupAgentResourceHandlers } from './ipc/agent-resource-handlers'
+import { withAgentResourceMutation } from './utils/agent-resource-queue'
+import { agentResourceService } from './services/agent-resource-service'
+import type { AgentResourceKind } from '@shared/agent-resources'
 
 
 // 服务实例
@@ -67,6 +71,30 @@ function createSimpleHandler<T extends unknown[], R>(
       }
     }
   }
+}
+
+function createResourceMutationHandler<T extends unknown[], R>(handler: (...args: T) => Promise<R> | R, kind?: AgentResourceKind) {
+  return createSimpleHandler((...args: T) => withAgentResourceMutation(async () => {
+    if (kind) await agentResourceService.authorizeLegacyWrite(kind)
+    return handler(...args)
+  }))
+}
+
+function createAgentMutationHandler<T extends unknown[], R>(handler: (...args: T) => Promise<R> | R) {
+  return createResourceMutationHandler(handler, 'SUBAGENT')
+}
+
+function createSkillMutationHandler<T extends unknown[], R>(handler: (...args: T) => Promise<R> | R) {
+  return createResourceMutationHandler(handler, 'SKILL')
+}
+
+async function mutateLegacyMcp<T>(operation: () => Promise<T>): Promise<T | { success: false; error: string }> {
+  try {
+    return await withAgentResourceMutation(async () => {
+      await agentResourceService.authorizeLegacyWrite('MCP')
+      return operation()
+    })
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'MCP 保存失败' } }
 }
 
 /**
@@ -109,6 +137,7 @@ export function setupIpcHandlers(): void {
   setupEnvironmentHandlers()
   setupTerminalHandlers()
   setupToolRegistryHandlers()
+  setupAgentResourceHandlers()
 
   logger.info('IPC 处理器设置完成')
 }
@@ -150,13 +179,13 @@ function setupToolRegistryHandlers(): void {
     requestedPath: string,
     content: string
   ) => toolArtifactManagementService.validateArtifact(toolId, artifactId, requestedPath, content)))
-  ipcMain.handle('toolRegistry:editArtifact', createSimpleHandler((
+  ipcMain.handle('toolRegistry:editArtifact', createResourceMutationHandler((
     toolId: string,
     artifactId: string,
     requestedPath: string,
     content: string
   ) => toolArtifactManagementService.editArtifact(toolId, artifactId, requestedPath, content)))
-  ipcMain.handle('toolRegistry:createArtifactBackup', createSimpleHandler((
+  ipcMain.handle('toolRegistry:createArtifactBackup', createResourceMutationHandler((
     toolId: string,
     artifactId: string,
     requestedPath: string
@@ -166,27 +195,27 @@ function setupToolRegistryHandlers(): void {
     artifactId: string,
     requestedPath: string
   ) => toolArtifactManagementService.listBackups(toolId, artifactId, requestedPath)))
-  ipcMain.handle('toolRegistry:restoreArtifactBackup', createSimpleHandler((backupId: string) =>
+  ipcMain.handle('toolRegistry:restoreArtifactBackup', createResourceMutationHandler((backupId: string) =>
     toolArtifactManagementService.restoreBackup(backupId)
   ))
   ipcMain.handle('toolRegistry:listConfigSets', createSimpleHandler((toolId: string) =>
     toolConfigSetService.listConfigSets(toolId)
   ))
-  ipcMain.handle('toolRegistry:createConfigSet', createSimpleHandler((toolId: string, name: string) =>
+  ipcMain.handle('toolRegistry:createConfigSet', createResourceMutationHandler((toolId: string, name: string) =>
     toolConfigSetService.createConfigSet(toolId, name)
   ))
   ipcMain.handle('toolRegistry:readConfigSet', createSimpleHandler((toolId: string, setId: string) =>
     toolConfigSetService.readConfigSet(toolId, setId)
   ))
-  ipcMain.handle('toolRegistry:saveConfigSetContent', createSimpleHandler((
+  ipcMain.handle('toolRegistry:saveConfigSetContent', createResourceMutationHandler((
     toolId: string,
     setId: string,
     files: Array<{ artifactId: string; content: string }>
   ) => toolConfigSetService.saveConfigSetContent(toolId, setId, files)))
-  ipcMain.handle('toolRegistry:activateConfigSet', createSimpleHandler((toolId: string, setId: string) =>
+  ipcMain.handle('toolRegistry:activateConfigSet', createResourceMutationHandler((toolId: string, setId: string) =>
     toolConfigSetService.activateConfigSet(toolId, setId)
   ))
-  ipcMain.handle('toolRegistry:deleteConfigSet', createSimpleHandler((toolId: string, setId: string) =>
+  ipcMain.handle('toolRegistry:deleteConfigSet', createResourceMutationHandler((toolId: string, setId: string) =>
     toolConfigSetService.deleteConfigSet(toolId, setId)
   ))
   ipcMain.handle('toolRegistry:getUpdateStatus', createSimpleHandler(() => registryUpdateService.getStatus()))
@@ -709,17 +738,17 @@ function setupMCPHandlers(): void {
 
   // 添加或更新MCP服务器
   ipcMain.handle('mcp:add-or-update-server', async (_, formData: Parameters<typeof mcpManagementService.addOrUpdateServer>[0]) => {
-    return await mcpManagementService.addOrUpdateServer(formData)
+    return await mutateLegacyMcp(() => mcpManagementService.addOrUpdateServer(formData))
   })
 
   // 删除MCP服务器
   ipcMain.handle('mcp:delete-server', async (_, serverId: string, scope: string) => {
-    return await mcpManagementService.deleteServer(serverId, scope)
+    return await mutateLegacyMcp(() => mcpManagementService.deleteServer(serverId, scope))
   })
 
   // 切换MCP服务器启用状态
   ipcMain.handle('mcp:toggle-server', async (_, serverId: string, scope: string) => {
-    return await mcpManagementService.toggleServer(serverId, scope)
+    return await mutateLegacyMcp(() => mcpManagementService.toggleServer(serverId, scope))
   })
 
   // 验证MCP服务器可用性
@@ -729,7 +758,7 @@ function setupMCPHandlers(): void {
 
   // 复制MCP服务器
   ipcMain.handle('mcp:duplicate-server', async (_, serverId: string, scope: string, newServerId: string, targetScope: string) => {
-    return await mcpManagementService.duplicateServer(serverId, scope, newServerId, targetScope)
+    return await mutateLegacyMcp(() => mcpManagementService.duplicateServer(serverId, scope, newServerId, targetScope))
   })
 
   // 获取所有项目路径
@@ -744,7 +773,7 @@ function setupMCPHandlers(): void {
 
   // 导入服务器配置
   ipcMain.handle('mcp:import-server-config', async (_, jsonString: string, serverId: string, targetScope: string) => {
-    return await mcpManagementService.importServerConfig(jsonString, serverId, targetScope)
+    return await mutateLegacyMcp(() => mcpManagementService.importServerConfig(jsonString, serverId, targetScope))
   })
 
   // 读取Claude配置文件
@@ -753,9 +782,6 @@ function setupMCPHandlers(): void {
   })
 
   // 保存Claude配置文件
-  ipcMain.handle('mcp:save-claude-config', async (_, config: Parameters<typeof mcpManagementService.saveClaudeConfig>[0]) => {
-    return await mcpManagementService.saveClaudeConfig(config)
-  })
 }
 
 /**
@@ -769,28 +795,28 @@ function setupAgentsHandlers(): void {
   ipcMain.handle('agents:get', createSimpleHandler((agentId: string) => agentsManagementService.getAgent(agentId)))
 
   // 添加新Agent
-  ipcMain.handle('agents:add', createSimpleHandler((formData: Parameters<typeof agentsManagementService.addAgent>[0]) => agentsManagementService.addAgent(formData)))
+  ipcMain.handle('agents:add', createAgentMutationHandler((formData: Parameters<typeof agentsManagementService.addAgent>[0]) => agentsManagementService.addAgent(formData)))
 
   // 删除Agent
-  ipcMain.handle('agents:delete', createSimpleHandler((agentId: string) => agentsManagementService.deleteAgent(agentId)))
+  ipcMain.handle('agents:delete', createAgentMutationHandler((agentId: string) => agentsManagementService.deleteAgent(agentId)))
 
   // 导入单个Agent
-  ipcMain.handle('agents:import', createSimpleHandler((sourceFilePath: string, options?: Parameters<typeof agentsManagementService.importAgent>[1]) =>
+  ipcMain.handle('agents:import', createAgentMutationHandler((sourceFilePath: string, options?: Parameters<typeof agentsManagementService.importAgent>[1]) =>
     agentsManagementService.importAgent(sourceFilePath, options)
   ))
 
   // 导入Agent内容
-  ipcMain.handle('agents:import-content', createSimpleHandler((content: string, options?: Parameters<typeof agentsManagementService.importAgentContent>[1]) =>
+  ipcMain.handle('agents:import-content', createAgentMutationHandler((content: string, options?: Parameters<typeof agentsManagementService.importAgentContent>[1]) =>
     agentsManagementService.importAgentContent(content, options)
   ))
 
   // 批量导入Agent
-  ipcMain.handle('agents:batch-import', createSimpleHandler((sourceFilePaths: string[], options?: Parameters<typeof agentsManagementService.batchImportAgents>[1]) =>
+  ipcMain.handle('agents:batch-import', createAgentMutationHandler((sourceFilePaths: string[], options?: Parameters<typeof agentsManagementService.batchImportAgents>[1]) =>
     agentsManagementService.batchImportAgents(sourceFilePaths, options)
   ))
 
   // 批量导入Agent内容
-  ipcMain.handle('agents:batch-import-content', createSimpleHandler((contents: Parameters<typeof agentsManagementService.batchImportAgentsContent>[0], options?: Parameters<typeof agentsManagementService.batchImportAgentsContent>[1]) =>
+  ipcMain.handle('agents:batch-import-content', createAgentMutationHandler((contents: Parameters<typeof agentsManagementService.batchImportAgentsContent>[0], options?: Parameters<typeof agentsManagementService.batchImportAgentsContent>[1]) =>
     agentsManagementService.batchImportAgentsContent(contents, options)
   ))
 }
@@ -806,28 +832,28 @@ function setupSkillsHandlers(): void {
   ipcMain.handle('skills:get', createSimpleHandler((skillId: string) => skillsManagementService.getSkill(skillId)))
 
   // 添加新Skill
-  ipcMain.handle('skills:add', createSimpleHandler((formData: Parameters<typeof skillsManagementService.addSkill>[0]) => skillsManagementService.addSkill(formData)))
+  ipcMain.handle('skills:add', createSkillMutationHandler((formData: Parameters<typeof skillsManagementService.addSkill>[0]) => skillsManagementService.addSkill(formData)))
 
   // 删除Skill
-  ipcMain.handle('skills:delete', createSimpleHandler((skillId: string) => skillsManagementService.deleteSkill(skillId)))
+  ipcMain.handle('skills:delete', createSkillMutationHandler((skillId: string) => skillsManagementService.deleteSkill(skillId)))
 
   // 导入单个Skill
-  ipcMain.handle('skills:import', createSimpleHandler((sourceDirPath: string, options?: Parameters<typeof skillsManagementService.importSkill>[1]) =>
+  ipcMain.handle('skills:import', createSkillMutationHandler((sourceDirPath: string, options?: Parameters<typeof skillsManagementService.importSkill>[1]) =>
     skillsManagementService.importSkill(sourceDirPath, options)
   ))
 
   // 导入Skill文件列表
-  ipcMain.handle('skills:import-files', createSimpleHandler((payload: Parameters<typeof skillsManagementService.importSkillFiles>[0], options?: Parameters<typeof skillsManagementService.importSkillFiles>[1]) =>
+  ipcMain.handle('skills:import-files', createSkillMutationHandler((payload: Parameters<typeof skillsManagementService.importSkillFiles>[0], options?: Parameters<typeof skillsManagementService.importSkillFiles>[1]) =>
     skillsManagementService.importSkillFiles(payload, options)
   ))
 
   // 批量导入Skill
-  ipcMain.handle('skills:batch-import', createSimpleHandler((sourceDirPaths: string[], options?: Parameters<typeof skillsManagementService.batchImportSkills>[1]) =>
+  ipcMain.handle('skills:batch-import', createSkillMutationHandler((sourceDirPaths: string[], options?: Parameters<typeof skillsManagementService.batchImportSkills>[1]) =>
     skillsManagementService.batchImportSkills(sourceDirPaths, options)
   ))
 
   // 批量导入Skill文件列表
-  ipcMain.handle('skills:batch-import-files', createSimpleHandler((payloads: Parameters<typeof skillsManagementService.batchImportSkillsFiles>[0], options?: Parameters<typeof skillsManagementService.batchImportSkillsFiles>[1]) =>
+  ipcMain.handle('skills:batch-import-files', createSkillMutationHandler((payloads: Parameters<typeof skillsManagementService.batchImportSkillsFiles>[0], options?: Parameters<typeof skillsManagementService.batchImportSkillsFiles>[1]) =>
     skillsManagementService.batchImportSkillsFiles(payloads, options)
   ))
 }

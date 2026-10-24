@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "1.2.0",
-  "minimumAppVersion": "1.5.0",
+  "registryVersion": "1.3.0",
+  "minimumAppVersion": "1.5.1",
   "tools": [
     {
       "toolId": "claude-code",
-      "definitionVersion": "1.0.0",
+      "definitionVersion": "1.5.1",
       "displayName": {
         "zh-CN": "Claude Code",
         "en-US": "Claude Code"
@@ -80,7 +80,8 @@
             "READ",
             "VALIDATE",
             "BACKUP",
-            "RESTORE"
+            "RESTORE",
+            "MANAGE_MCP"
           ],
           "handler": "JSON_FILE_V1"
         },
@@ -112,12 +113,64 @@
           ],
           "handler": "MARKDOWN_FILE_V1",
           "defaultTemplate": "# Global Instructions\n"
+        },
+        {
+          "artifactId": "skills",
+          "displayName": {
+            "zh-CN": "Skills目录",
+            "en-US": "Skills Directory"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.claude/skills"
+            ],
+            "MACOS": [
+              "${HOME}/.claude/skills"
+            ],
+            "LINUX": [
+              "${HOME}/.claude/skills"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "MANAGE_DIRECTORY"
+          ],
+          "handler": "SKILL_DIRECTORY_V1"
+        },
+        {
+          "artifactId": "subagents",
+          "displayName": {
+            "zh-CN": "子Agent目录",
+            "en-US": "Subagent Directory"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.claude/agents"
+            ],
+            "MACOS": [
+              "${HOME}/.claude/agents"
+            ],
+            "LINUX": [
+              "${HOME}/.claude/agents"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "MANAGE_DIRECTORY"
+          ],
+          "handler": "SUBAGENT_DIRECTORY_V1"
         }
       ]
     },
     {
       "toolId": "codex-cli",
-      "definitionVersion": "1.2.0",
+      "definitionVersion": "1.5.1",
       "displayName": {
         "zh-CN": "Codex CLI",
         "en-US": "Codex CLI"
@@ -163,7 +216,8 @@
             "VALIDATE",
             "EDIT",
             "BACKUP",
-            "RESTORE"
+            "RESTORE",
+            "MANAGE_MCP"
           ],
           "handler": "TOML_FILE_V1",
           "defaultTemplate": "# Codex CLI 用户配置（TOML；保存前会做语法校验）\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\n",
@@ -230,12 +284,67 @@
           ],
           "handler": "MARKDOWN_FILE_V1",
           "defaultTemplate": "# Codex Global Instructions\n"
+        },
+        {
+          "artifactId": "skills",
+          "displayName": {
+            "zh-CN": "Skills目录",
+            "en-US": "Skills Directory"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.agents/skills",
+              "${HOME}/.codex/skills"
+            ],
+            "MACOS": [
+              "${HOME}/.agents/skills",
+              "${HOME}/.codex/skills"
+            ],
+            "LINUX": [
+              "${HOME}/.agents/skills",
+              "${HOME}/.codex/skills"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "MANAGE_DIRECTORY"
+          ],
+          "handler": "SKILL_DIRECTORY_V1"
+        },
+        {
+          "artifactId": "subagents",
+          "displayName": {
+            "zh-CN": "子Agent目录",
+            "en-US": "Subagent Directory"
+          },
+          "format": "TOML",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.codex/agents"
+            ],
+            "MACOS": [
+              "${HOME}/.codex/agents"
+            ],
+            "LINUX": [
+              "${HOME}/.codex/agents"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "MANAGE_DIRECTORY"
+          ],
+          "handler": "SUBAGENT_DIRECTORY_V1"
         }
       ]
     },
     {
       "toolId": "gemini-cli",
-      "definitionVersion": "1.1.0",
+      "definitionVersion": "1.5.1",
       "displayName": {
         "zh-CN": "Gemini CLI",
         "en-US": "Gemini CLI"
@@ -281,7 +390,8 @@
             "VALIDATE",
             "EDIT",
             "BACKUP",
-            "RESTORE"
+            "RESTORE",
+            "MANAGE_MCP"
           ],
           "handler": "JSON_FILE_V1",
           "defaultTemplate": "{\n  \"security\": {\n    \"auth\": {\n      \"selectedType\": \"gemini-api-key\"\n    }\n  }\n}",
@@ -347,12 +457,64 @@
           ],
           "handler": "MARKDOWN_FILE_V1",
           "defaultTemplate": "# Gemini Global Instructions\n"
+        },
+        {
+          "artifactId": "skills",
+          "displayName": {
+            "zh-CN": "Skills目录",
+            "en-US": "Skills Directory"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/skills"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/skills"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/skills"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "MANAGE_DIRECTORY"
+          ],
+          "handler": "SKILL_DIRECTORY_V1"
+        },
+        {
+          "artifactId": "subagents",
+          "displayName": {
+            "zh-CN": "子Agent目录",
+            "en-US": "Subagent Directory"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/agents"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/agents"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/agents"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "MANAGE_DIRECTORY"
+          ],
+          "handler": "SUBAGENT_DIRECTORY_V1"
         }
       ]
     },
     {
       "toolId": "antigravity",
-      "definitionVersion": "1.1.0",
+      "definitionVersion": "1.5.1",
       "displayName": {
         "zh-CN": "Antigravity",
         "en-US": "Antigravity"
@@ -398,7 +560,8 @@
             "VALIDATE",
             "EDIT",
             "BACKUP",
-            "RESTORE"
+            "RESTORE",
+            "MANAGE_MCP"
           ],
           "handler": "JSON_FILE_V1",
           "defaultTemplate": "{\n  \"mcpServers\": {}\n}"
@@ -433,6 +596,61 @@
           "handler": "JSON_FILE_V1",
           "configSet": "core",
           "defaultTemplate": "{}"
+        },
+        {
+          "artifactId": "skills",
+          "displayName": {
+            "zh-CN": "Skills目录",
+            "en-US": "Skills Directory"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/config/skills",
+              "${HOME}/.gemini/antigravity-cli/skills"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/config/skills",
+              "${HOME}/.gemini/antigravity-cli/skills"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/config/skills",
+              "${HOME}/.gemini/antigravity-cli/skills"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "MANAGE_DIRECTORY"
+          ],
+          "handler": "SKILL_DIRECTORY_V1"
+        },
+        {
+          "artifactId": "subagents",
+          "displayName": {
+            "zh-CN": "子Agent目录",
+            "en-US": "Subagent Directory"
+          },
+          "format": "MARKDOWN",
+          "scope": "USER",
+          "paths": {
+            "WINDOWS": [
+              "${HOME}/.gemini/config/agents"
+            ],
+            "MACOS": [
+              "${HOME}/.gemini/config/agents"
+            ],
+            "LINUX": [
+              "${HOME}/.gemini/config/agents"
+            ]
+          },
+          "capabilities": [
+            "DISCOVER",
+            "READ",
+            "MANAGE_DIRECTORY"
+          ],
+          "handler": "SUBAGENT_DIRECTORY_V1"
         }
       ]
     }

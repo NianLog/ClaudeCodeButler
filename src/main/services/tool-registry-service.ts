@@ -83,7 +83,7 @@ export function calculateRegistrySha256(rawBytes: string | Buffer): string {
 
 /**
  * 合并 embedded 与 installed bundle
- * @description installed 中同 toolId 定义覆盖 embedded，其余 embedded tools 保留。
+ * @description 优先较新完整定义；同版本或已有路径/权限不同则保留 installed，不拼接权限。
  * @param embedded 内置 bundle
  * @param installed 已安装 bundle
  * @returns 按 toolId 排序的 immutable-friendly tools 数组
@@ -93,8 +93,18 @@ export function mergeToolRegistryBundles(
   installed?: ToolRegistryBundle
 ): ToolDefinition[] {
   const definitions = new Map(embedded.tools.map((tool) => [tool.toolId, tool]))
+  const legacyResourceProtocol = installed && compareStrictSemVer(installed.minimumAppVersion, '1.5.1') < 0
   for (const tool of installed?.tools ?? []) {
-    definitions.set(tool.toolId, tool)
+    const builtin = definitions.get(tool.toolId)
+    const preservesExisting = builtin && tool.artifacts.every(existing => {
+      const replacement = builtin.artifacts.find(artifact => artifact.artifactId === existing.artifactId)
+      const legacyCapabilities = (capabilities: string[]) => capabilities.filter(capability => !legacyResourceProtocol || !['MANAGE_MCP', 'MANAGE_DIRECTORY'].includes(capability)).sort()
+      return replacement && existing.handler === replacement.handler && existing.format === replacement.format &&
+        existing.editGroup === replacement.editGroup && existing.configSet === replacement.configSet &&
+        existing.scope === replacement.scope && (['WINDOWS', 'MACOS', 'LINUX'] as const).every(platform => JSON.stringify(existing.paths[platform]) === JSON.stringify(replacement.paths[platform])) &&
+        JSON.stringify(legacyCapabilities(existing.capabilities)) === JSON.stringify(legacyCapabilities(replacement.capabilities))
+    })
+    if (!builtin || compareStrictSemVer(builtin.definitionVersion, tool.definitionVersion) <= 0 || !preservesExisting) definitions.set(tool.toolId, tool)
   }
   return [...definitions.values()].sort((left, right) => left.toolId.localeCompare(right.toolId))
 }

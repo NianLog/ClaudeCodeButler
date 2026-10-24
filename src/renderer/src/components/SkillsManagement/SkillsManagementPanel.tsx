@@ -1,3 +1,5 @@
+import { useAgentContextStore } from '../../store/agent-context-store'
+import { useAgentDraftGuard } from '../../hooks/useAgentDraftGuard'
 /**
  * Skills管理面板组件
  *
@@ -399,6 +401,9 @@ const SkillsManagementPanel: React.FC = () => {
     }
   ]
 
+  useAgentDraftGuard('legacy-skills', { dirty: isFormModalOpen || isImportModalOpen, busy: isLoading,
+    discard: () => { closeFormModal(); closeImportModal() } })
+
   return (
     <div className="skills-management-panel">
       {/* 标题栏 */}
@@ -593,9 +598,9 @@ const SkillsManagementPanel: React.FC = () => {
         title={formMode === 'add' ? t('skills.form.createTitle') : t('skills.form.editTitle')}
         open={isFormModalOpen}
         onOk={formMode === 'add' ? handleAdd : handleEdit}
-        onCancel={closeFormModal}
+        onCancel={() => useAgentContextStore.getState().requestChange(closeFormModal)}
         width={720}
-        afterClose={() => form.resetFields()}
+        afterClose={() => form.resetFields()} maskClosable={false}
       >
         <Form
           form={form}
@@ -640,7 +645,7 @@ const SkillsManagementPanel: React.FC = () => {
           setFileList([])
           closeImportModal()
         }}
-        width={600}
+        width={600} maskClosable={false}
       >
         <Upload.Dragger
           directory

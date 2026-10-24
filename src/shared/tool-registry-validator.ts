@@ -339,6 +339,14 @@ function readArtifact(value: unknown, path: string, errors: string[]): ConfigArt
   const configSet = value.configSet === undefined
     ? undefined
     : readIdentifier(value.configSet, `${path}.configSet`, errors)
+  const capabilities = readAllowedArray<ToolCapability>(value.capabilities, TOOL_CAPABILITIES, `${path}.capabilities`, errors)
+  const directory = handler === 'SKILL_DIRECTORY_V1' || handler === 'SUBAGENT_DIRECTORY_V1'
+  if (directory && (capabilities.some(capability => ['EDIT', 'VALIDATE', 'BACKUP', 'RESTORE', 'ACTIVATE', 'WATCH'].includes(capability)) || editGroup || configSet || defaultTemplate !== undefined)) {
+    errors.push(`${path}: 资源目录仅允许专用管理能力，不能作为普通文件编辑或配置集成员`)
+  }
+  if (capabilities.includes('MANAGE_DIRECTORY') && !directory) errors.push(`${path}: MANAGE_DIRECTORY 只适用于资源目录 handler`)
+  if (capabilities.includes('MANAGE_MCP') && !['JSON_FILE_V1', 'TOML_FILE_V1'].includes(handler)) errors.push(`${path}: MANAGE_MCP 只适用于 JSON/TOML 文件 handler`)
+  if (handler === 'SKILL_DIRECTORY_V1' && format !== 'MARKDOWN' || handler === 'SUBAGENT_DIRECTORY_V1' && !['MARKDOWN', 'TOML'].includes(format)) errors.push(`${path}: 资源目录 format 与 handler 不匹配`)
 
   return {
     artifactId: readIdentifier(value.artifactId, `${path}.artifactId`, errors),
@@ -346,12 +354,7 @@ function readArtifact(value: unknown, path: string, errors: string[]): ConfigArt
     format,
     scope,
     paths: platformPaths,
-    capabilities: readAllowedArray<ToolCapability>(
-      value.capabilities,
-      TOOL_CAPABILITIES,
-      `${path}.capabilities`,
-      errors
-    ),
+    capabilities,
     handler,
     ...(defaultTemplate === undefined ? {} : { defaultTemplate }),
     ...(editGroup === undefined ? {} : { editGroup }),
@@ -506,6 +509,11 @@ export function validateToolRegistryBundle(rawJson: string): RegistryValidationR
     registryVersion: readSemVer(parsed.registryVersion, '$.registryVersion', errors),
     minimumAppVersion: readSemVer(parsed.minimumAppVersion, '$.minimumAppVersion', errors),
     tools: parsedTools
+  }
+  if (errors.length === 0 && parsedTools.some(tool => tool.artifacts.some(artifact =>
+    artifact.handler.endsWith('_DIRECTORY_V1') || artifact.capabilities.some(capability => capability === 'MANAGE_MCP' || capability === 'MANAGE_DIRECTORY')
+  )) && compareStrictSemVer(bundle.minimumAppVersion, '1.5.1') < 0) {
+    errors.push('$.minimumAppVersion: 资源目录与结构化 MCP 管理要求 1.5.1 或更新版本')
   }
   return errors.length === 0
     ? { success: true, data: bundle, errors: [] }

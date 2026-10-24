@@ -187,7 +187,7 @@ export class ToolArtifactDiscoveryService {
     tool: ToolDefinition,
     artifact: ConfigArtifactDefinition
   ): Promise<DiscoveredConfigArtifact[]> {
-    if (!artifact.capabilities.includes('DISCOVER')) return []
+    if (!artifact.capabilities.includes('DISCOVER') || artifact.handler.endsWith('_DIRECTORY_V1')) return []
     const results = await Promise.all(this.resolveArtifactPaths(artifact).map(async (resolvedPath) => {
       try {
         return await this.readFileMetadata(tool.toolId, artifact, resolvedPath)

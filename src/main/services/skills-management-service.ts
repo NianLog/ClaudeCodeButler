@@ -21,6 +21,7 @@ import type {
   SkillFileStructure
 } from '@shared/types/skills'
 import { ensureSafePathSegment, resolveSafeChildPath, sanitizeFileName, normalizePathForComparison } from '../utils/path-security'
+import { assertNoLinks } from './agent-resource-files'
 
 const MAX_IMPORT_FILES = 2000
 const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024
@@ -29,13 +30,12 @@ const MAX_IMPORT_TOTAL_BYTES = 50 * 1024 * 1024
 /**
  * Skills管理服务类
  */
-class SkillsManagementService {
+export class SkillsManagementService {
   private skillsDir: string
   private importQueue: Promise<unknown> = Promise.resolve()
 
-  constructor() {
-    this.skillsDir = path.join(os.homedir(), '.claude', 'skills')
-    void this.initializeSkillsDir().catch(error => logger.error('初始化 Skill 目录失败', error))
+  constructor(directory = path.join(os.homedir(), '.claude', 'skills')) {
+    this.skillsDir = path.resolve(directory)
   }
 
   /**
@@ -52,6 +52,7 @@ class SkillsManagementService {
    * 初始化skills目录
    */
   private async initializeSkillsDir(): Promise<void> {
+    await assertNoLinks(this.skillsDir)
     for (const directory of [path.dirname(this.skillsDir), this.skillsDir]) {
       try {
         const stats = await fs.lstat(directory)
@@ -61,7 +62,7 @@ class SkillsManagementService {
         await fs.mkdir(directory, { recursive: true })
       }
     }
-    const expected = path.join(await fs.realpath(os.homedir()), '.claude', 'skills')
+    const expected = this.skillsDir
     if (normalizePathForComparison(await fs.realpath(this.skillsDir)) !== normalizePathForComparison(expected)) {
       throw new Error('Skill 根目录超出当前用户允许的路径')
     }
@@ -72,8 +73,6 @@ class SkillsManagementService {
    */
   public async scanSkills(): Promise<SkillDirectory[]> {
     try {
-      await this.initializeSkillsDir()
-
       const entries = await fs.readdir(this.skillsDir, { withFileTypes: true })
       const skillDirs = entries
         .filter(entry => entry.isDirectory())
@@ -94,8 +93,9 @@ class SkillsManagementService {
       logger.info(`扫描到 ${skills.length} 个Skill目录`)
       return skills
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
       logger.error('扫描Skill目录失败:', error)
-      return []
+      throw error
     }
   }
 
@@ -353,7 +353,7 @@ class SkillsManagementService {
    * 导入Skill文件列表
    */
   public async importSkillFiles(
-    payload: { rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> },
+    payload: { rootDirName: string; files: Array<{ relativePath: string; contentBase64: string; executable?: boolean }> },
     options: SkillImportOptions = {}
   ): Promise<string> {
     if (!payload || !Array.isArray(payload.files) || !payload.files.length || payload.files.length > MAX_IMPORT_FILES) {
@@ -369,16 +369,17 @@ class SkillsManagementService {
       if (typeof file.contentBase64 !== 'string' || file.contentBase64.length > Math.ceil(MAX_IMPORT_FILE_BYTES / 3) * 4) {
         throw new Error('Skill 文件不能超过 10 MiB')
       }
+      if (file.executable !== undefined && typeof file.executable !== 'boolean') throw new Error('Skill 可执行标记必须是布尔值')
       const content = Buffer.from(file.contentBase64, 'base64')
       if (content.toString('base64') !== file.contentBase64) throw new Error('Skill 文件的 Base64 编码无效')
       this.checkImportBudget(budget, content.length)
-      return { relativePath, content }
+      return { relativePath, content, executable: file.executable === true }
     })
     return this.commitSkillImport(payload.rootDirName, options, async staged => {
       for (const file of files) {
         const target = resolveSafeChildPath(staged, file.relativePath, 'Skill文件路径')
         await fs.mkdir(path.dirname(target), { recursive: true })
-        await fs.writeFile(target, file.content, { flag: 'wx' })
+        await fs.writeFile(target, file.content, { flag: 'wx', mode: file.executable ? 0o700 : 0o600 })
       }
     })
   }

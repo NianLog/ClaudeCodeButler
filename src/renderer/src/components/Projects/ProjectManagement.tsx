@@ -172,7 +172,7 @@ const TerminalConfigModal: React.FC<{
       onCancel={onCancel}
       onOk={handleConfirm}
       okText={t('projects.actions.continue')}
-      cancelText={t('common.cancel')}
+      cancelText={t('common.cancel')} maskClosable={false}
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         <div>

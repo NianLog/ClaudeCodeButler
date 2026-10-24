@@ -63,6 +63,7 @@ import type {
   TemplateCloudListResult
 } from '@shared/template-cloud'
 import type { PerformanceSnapshot, RendererPerformanceTiming } from '@shared/performance'
+import type { AgentResourcesAPI } from '@shared/agent-resources'
 
 /**
  * 配置管理 API
@@ -842,6 +843,7 @@ export interface ElectronAPI {
   environment: EnvironmentAPI
   terminal: TerminalAPI
   toolRegistry: ToolRegistryAPI
+  agentResources: AgentResourcesAPI
   performance: PerformanceAPI
   // 移除安全API
 }
@@ -930,6 +932,20 @@ const systemAPI: SystemAPI = {
 }
 
 /** 工具规则库 IPC facade */
+const agentResourcesAPI: AgentResourcesAPI = {
+  listResources: input => ipcRenderer.invoke('agentResources:listResources', input),
+  readResource: input => ipcRenderer.invoke('agentResources:readResource', input),
+  saveResource: input => ipcRenderer.invoke('agentResources:saveResource', input),
+  deleteResource: input => ipcRenderer.invoke('agentResources:deleteResource', input),
+  discoverImportSources: input => ipcRenderer.invoke('agentResources:discoverImportSources', input),
+  discoverResourceBackups: input => ipcRenderer.invoke('agentResources:discoverResourceBackups', input),
+  chooseImportProject: () => ipcRenderer.invoke('agentResources:chooseImportProject'),
+  chooseImportFile: input => ipcRenderer.invoke('agentResources:chooseImportFile', input),
+  listImportResources: input => ipcRenderer.invoke('agentResources:listImportResources', input),
+  previewResourceImport: input => ipcRenderer.invoke('agentResources:previewResourceImport', input),
+  applyResourceImport: input => ipcRenderer.invoke('agentResources:applyResourceImport', input)
+}
+
 const toolRegistryAPI: ToolRegistryAPI = {
   getSnapshot: () => ipcRenderer.invoke('toolRegistry:getSnapshot'),
   getTool: (toolId: string) => ipcRenderer.invoke('toolRegistry:getTool', toolId),
@@ -1243,6 +1259,7 @@ const electronAPI: ElectronAPI = {
   environment: environmentAPI,
   terminal: terminalAPI,
   toolRegistry: toolRegistryAPI,
+  agentResources: agentResourcesAPI,
   performance: performanceAPI
   // 移除安全API
 }

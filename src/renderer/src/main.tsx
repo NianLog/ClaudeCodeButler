@@ -10,6 +10,7 @@ import zhCN from 'antd/locale/zh_CN'
 import enUS from 'antd/locale/en_US'
 import App from './App'
 import './styles/globals.css'
+import './styles/workspace.css'
 import { useTranslation } from './locales/useTranslation'
 import { formatTranslation, getCurrentLanguage, languageResources } from './locales'
 import { useTheme } from './hooks/useTheme'
@@ -88,7 +89,14 @@ const RootApp: React.FC = () => {
       theme={{
         algorithm: currentTheme.mode === 'light' ? theme.defaultAlgorithm : theme.darkAlgorithm,
         token: {
+          fontWeightStrong: currentTheme.mode === 'dark' ? 550 : 600,
+          fontFamily: currentTheme.cssVars['--font-ui'],
           colorPrimary: currentTheme.antdTokens.colorPrimary,
+          colorLink: currentTheme.cssVars['--accent'],
+          colorLinkHover: currentTheme.cssVars['--accent-hover'],
+          colorError: currentTheme.cssVars['--red'],
+          colorWarning: currentTheme.cssVars['--yellow'],
+          colorSuccess: currentTheme.cssVars['--green'],
           colorBgContainer: currentTheme.antdTokens.colorBgContainer,
           colorBgElevated: currentTheme.antdTokens.colorBgElevated,
           colorBgLayout: currentTheme.antdTokens.colorBgLayout,
@@ -109,9 +117,9 @@ const RootApp: React.FC = () => {
     >
       <AntApp
         message={{
+          duration: 2.5,
           top: 80,
           maxCount: 3,
-          duration: 4.5,
           rtl: false,
         }}
       >

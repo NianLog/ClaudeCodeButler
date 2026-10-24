@@ -31,6 +31,7 @@ const DEFAULT_REHEARSAL_KEY_ID = 'ccb-rehearsal-2026-09'
 
 // builtin registry 版本随发布推进，演练场景版本必须始终高于 embedded baseline
 const embeddedVersion = (builtinRegistryJson as { registryVersion: string }).registryVersion
+const embeddedMinimumAppVersion = builtinRegistryJson.minimumAppVersion
 const embeddedMinor = Number(embeddedVersion.split('.')[1])
 const rehearsalVersionA = `1.${embeddedMinor + 1}.0`
 const rehearsalVersionB = `1.${embeddedMinor + 2}.0`
@@ -62,7 +63,7 @@ function createManifestText(
   return JSON.stringify({
     schemaVersion: 1,
     registryVersion,
-    minimumAppVersion: '1.5.0',
+    minimumAppVersion: embeddedMinimumAppVersion,
     publishedAt: '2026-09-04T00:00:00.000Z',
     bundleUrl: REHEARSAL_BUNDLE_URL,
     bundleSha256: integrity.bundleSha256,
@@ -154,11 +155,11 @@ describe('Registry publisher rehearsal', () => {
       const registryService = createRegistryService()
       const service = createUpdateService(registryService, createHttpClient(manifest11, bundle11))
 
-      const checked = await service.checkForUpdates('1.5.0')
+      const checked = await service.checkForUpdates(embeddedMinimumAppVersion)
       expect(checked.state).toBe('UPDATE_AVAILABLE')
       expect(checked.availableVersion).toBe(rehearsalVersionA)
 
-      const installed = await service.installAvailableUpdate('1.5.0')
+      const installed = await service.installAvailableUpdate(embeddedMinimumAppVersion)
       expect(installed.state).toBe('INSTALLED')
 
       const snapshot = await registryService.getSnapshot()
@@ -172,8 +173,8 @@ describe('Registry publisher rehearsal', () => {
       tampered[Math.floor(tampered.length / 2)] ^= 0x01
       const service = createUpdateService(registryService, createHttpClient(manifest11, tampered))
 
-      await service.checkForUpdates('1.5.0')
-      await expect(service.installAvailableUpdate('1.5.0')).rejects.toThrow(/signature|SHA-256/i)
+      await service.checkForUpdates(embeddedMinimumAppVersion)
+      await expect(service.installAvailableUpdate(embeddedMinimumAppVersion)).rejects.toThrow(/signature|SHA-256/i)
 
       const snapshot = await registryService.getSnapshot()
       expect(snapshot.installedVersion).toBeUndefined()
@@ -183,7 +184,7 @@ describe('Registry publisher rehearsal', () => {
       const registryService = createRegistryService()
       const service = createUpdateService(registryService, createHttpClient(manifestUnknownKey, bundle11))
 
-      const status = await service.checkForUpdates('1.5.0')
+      const status = await service.checkForUpdates(embeddedMinimumAppVersion)
       expect(status.state).toBe('CHECK_FAILED')
       expect(status.error).toContain('未受信任')
     })
@@ -192,8 +193,8 @@ describe('Registry publisher rehearsal', () => {
       const registryService = createRegistryService()
       const install = async (manifestText: string, bundle: Buffer): Promise<void> => {
         const service = createUpdateService(registryService, createHttpClient(manifestText, bundle))
-        await service.checkForUpdates('1.5.0')
-        await service.installAvailableUpdate('1.5.0')
+        await service.checkForUpdates(embeddedMinimumAppVersion)
+        await service.installAvailableUpdate(embeddedMinimumAppVersion)
       }
 
       await install(manifest11, bundle11)

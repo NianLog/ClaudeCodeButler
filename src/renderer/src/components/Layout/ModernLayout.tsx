@@ -1,3 +1,6 @@
+import AgentContextGuard from '../Common/AgentContextGuard'
+import { AGENT_LABELS, useAgentContextStore } from '../../store/agent-context-store'
+import type { ManagedAgentId } from '@shared/agent-resources'
 /**
  * 现代化布局组件
  * 采用现代桌面应用设计模式，提供更好的用户体验
@@ -9,21 +12,20 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Layout, Button, Space, Badge, Tooltip, Dropdown, Avatar, Typography } from 'antd'
+import { Layout, Button, Space, Select, Tag, Tooltip, Dropdown } from 'antd'
 import {
-  BellOutlined,
   SettingOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   QuestionCircleOutlined,
   GithubOutlined,
-  SearchOutlined,
   UserOutlined,
   LogoutOutlined,
   FileTextOutlined,
   RobotOutlined,
   BarChartOutlined,
   ReloadOutlined,
+  BgColorsOutlined,
   ProjectOutlined,
   CloudDownloadOutlined,
   ApiOutlined,
@@ -31,7 +33,6 @@ import {
   CheckCircleOutlined,
   RobotOutlined as AgentOutlined,
   AppstoreOutlined as SkillsOutlined,
-  CodeOutlined,
   DownOutlined,
   UpOutlined
 } from '@ant-design/icons'
@@ -49,7 +50,6 @@ import ccbLogo from '../../assets/icons/ccb_64.png'
 import './ModernLayout.css'
 
 const { Sider, Content } = Layout
-const { Text } = Typography
 
 /**
  * 现代化布局组件属性
@@ -63,11 +63,13 @@ interface ModernLayoutProps {
  */
 const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
   const { t } = useTranslation()
-  const { currentTheme } = useTheme()
+  const { currentTheme, setTheme, availableThemes } = useTheme()
+  const managedToolId = useAgentContextStore((state) => state.selectedToolId)
+  const selectManagedTool = useAgentContextStore((state) => state.selectTool)
   const message = useMessage()
   const {
     version,
-    notifications,
+
     sidebarCollapsed,
     expandedMenuGroups,
     activeMainTab,
@@ -75,13 +77,13 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
     toggleMenuGroup,
     setActiveMainTab,
     addNotification,
-    refreshAll
+
   } = useAppStore(
     // v1.4.0 性能：selector 只订阅用到的字段（store 默认 shallow 比较），避免 store 其他字段
     // （platform/theme/language 等）变化触发本组件不必要的重渲染
     (s) => ({
       version: s.version,
-      notifications: s.notifications,
+
       sidebarCollapsed: s.sidebarCollapsed,
       expandedMenuGroups: s.expandedMenuGroups,
       activeMainTab: s.activeMainTab,
@@ -89,7 +91,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
       toggleMenuGroup: s.toggleMenuGroup,
       setActiveMainTab: s.setActiveMainTab,
       addNotification: s.addNotification,
-      refreshAll: s.refreshAll,
+
     })
   )
 
@@ -97,7 +99,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
   // 使用默认值防止设置未加载时出现错误
   const { startupCheckUpdate = true, silentUpdateCheck = true } = notificationSettings || {}
 
-  const [searchValue, setSearchValue] = useState('')
+
   const [updateModalVisible, setUpdateModalVisible] = useState(false)
   // v1.4.0：托管模式状态（用于侧边栏导航项状态标签高亮）
   const [managedModeActive, setManagedModeActive] = useState(false)
@@ -195,22 +197,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
   // 旧版 light/dark 切换已废弃，不再覆盖 data-theme 属性
 
   // 全局刷新
-  const handleGlobalRefresh = async () => {
-    try {
-      await refreshAll()
-      addNotification({
-        type: 'success',
-        title: t('layout.refresh.successTitle'),
-        message: t('layout.refresh.successMessage')
-      })
-    } catch (error) {
-      addNotification({
-        type: 'error',
-        title: t('layout.refresh.failedTitle'),
-        message: error instanceof Error ? error.message : t('common.unknownError')
-      })
-    }
-  }
+  const handleGlobalRefresh = () => useAgentContextStore.getState().refresh()
 
   // 检查更新
   const handleCheckUpdate = async () => {
@@ -373,16 +360,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
         <div className="sidebar-content">
           <div className="sidebar-nav">
             <div className="nav-section">
-              <div
-                className={`nav-item ${activeMainTab === 'ai-tools' ? 'active' : ''}`}
-                onClick={() => setActiveMainTab('ai-tools')}
-              >
-                <div className="nav-icon">
-                  <CodeOutlined />
-                </div>
-                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.aiTools')}</span>}
-              </div>
-              <div
+              <button type="button"
                 className={`nav-item ${activeMainTab === 'configs' ? 'active' : ''}`}
                 onClick={() => setActiveMainTab('configs')}
               >
@@ -390,53 +368,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                   <FileTextOutlined />
                 </div>
                 {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.configs')}</span>}
-              </div>
-              <div
-                className={`nav-item ${activeMainTab === 'automation' ? 'active' : ''}`}
-                onClick={() => setActiveMainTab('automation')}
-              >
-                <div className="nav-icon">
-                  <RobotOutlined />
-                </div>
-                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.automation')}</span>}
-              </div>
-              <div
-                className={`nav-item ${activeMainTab === 'statistics' ? 'active' : ''}`}
-                onClick={() => setActiveMainTab('statistics')}
-              >
-                <div className="nav-icon">
-                  <BarChartOutlined />
-                </div>
-                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.statistics')}</span>}
-              </div>
-              <div
-                className={`nav-item ${activeMainTab === 'projects' ? 'active' : ''}`}
-                onClick={() => setActiveMainTab('projects')}
-              >
-                <div className="nav-icon">
-                  <ProjectOutlined />
-                </div>
-                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.projects')}</span>}
-              </div>
-            </div>
-
-            <div className="nav-section">
-              <div
-                className="nav-section-title"
-                onClick={() => !sidebarCollapsed && toggleMenuGroup('advanced')}
-                style={{ cursor: sidebarCollapsed ? 'default' : 'pointer' }}
-              >
-                {!sidebarCollapsed && (
-                  <>
-                    <span>{t('layout.nav.advanced')}</span>
-                    {expandedMenuGroups.advanced ? <UpOutlined /> : <DownOutlined />}
-                  </>
-                )}
-              </div>
-              {/* 侧边栏收起时也显示高级功能菜单项 */}
-              {(expandedMenuGroups.advanced || sidebarCollapsed) && (
-                <>
-                  <div
+              </button>
+              <button type="button"
                     className={`nav-item ${activeMainTab === 'mcp-management' ? 'active' : ''}`}
                     onClick={() => setActiveMainTab('mcp-management')}
                   >
@@ -444,17 +377,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                       <ToolOutlined />
                     </div>
                     {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.mcp')}</span>}
-                  </div>
-                  <div
-                    className={`nav-item ${activeMainTab === 'agents-management' ? 'active' : ''}`}
-                    onClick={() => setActiveMainTab('agents-management')}
-                  >
-                    <div className="nav-icon">
-                      <AgentOutlined />
-                    </div>
-                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.agents')}</span>}
-                  </div>
-                  <div
+                  </button>
+              <button type="button"
                     className={`nav-item ${activeMainTab === 'skills-management' ? 'active' : ''}`}
                     onClick={() => setActiveMainTab('skills-management')}
                   >
@@ -462,8 +386,62 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                       <SkillsOutlined />
                     </div>
                     {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.skills')}</span>}
-                  </div>
-                  <div
+                  </button>
+              <button type="button"
+                    className={`nav-item ${activeMainTab === 'agents-management' ? 'active' : ''}`}
+                    onClick={() => setActiveMainTab('agents-management')}
+                  >
+                    <div className="nav-icon">
+                      <AgentOutlined />
+                    </div>
+                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.agents')}</span>}
+                  </button>
+            </div>
+
+            <div className="nav-section">
+              <button type="button" aria-expanded={expandedMenuGroups.advanced}
+                className="nav-section-title"
+                onClick={() => !sidebarCollapsed && toggleMenuGroup('advanced')}
+                style={{ cursor: sidebarCollapsed ? 'default' : 'pointer' }}
+              >
+                {!sidebarCollapsed && (
+                  <>
+                    <span>Claude Code</span>
+                    {expandedMenuGroups.advanced ? <UpOutlined /> : <DownOutlined />}
+                  </>
+                )}
+              </button>
+              {/* 侧边栏收起时也显示高级功能菜单项 */}
+              {(expandedMenuGroups.advanced || sidebarCollapsed) && (
+                <>
+                  <button type="button"
+                className={`nav-item ${activeMainTab === 'automation' ? 'active' : ''}`}
+                onClick={() => setActiveMainTab('automation')}
+              >
+                <div className="nav-icon">
+                  <RobotOutlined />
+                </div>
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.automation')}</span>}
+              </button>
+                  <button type="button"
+                className={`nav-item ${activeMainTab === 'statistics' ? 'active' : ''}`}
+                onClick={() => setActiveMainTab('statistics')}
+              >
+                <div className="nav-icon">
+                  <BarChartOutlined />
+                </div>
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.statistics')}</span>}
+              </button>
+                  <button type="button"
+                className={`nav-item ${activeMainTab === 'projects' ? 'active' : ''}`}
+                onClick={() => setActiveMainTab('projects')}
+              >
+                <div className="nav-icon">
+                  <ProjectOutlined />
+                </div>
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.projects')}</span>}
+              </button>
+                  <button type="button"
                     className={`nav-item ${activeMainTab === 'environment-check' ? 'active' : ''}`}
                     onClick={() => setActiveMainTab('environment-check')}
                   >
@@ -471,8 +449,8 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                       <CheckCircleOutlined />
                     </div>
                     {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.environmentCheck')}</span>}
-                  </div>
-                  <div
+                  </button>
+                  <button type="button"
                     className={`nav-item ${activeMainTab === 'managed-mode' ? 'active' : ''}`}
                     onClick={() => setActiveMainTab('managed-mode')}
                   >
@@ -516,7 +494,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                         )}
                       </span>
                     )}
-                  </div>
+                  </button>
                 </>
               )}
             </div>
@@ -525,7 +503,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
               <div className="nav-section-title">
                 {!sidebarCollapsed && <span>{t('layout.nav.tools')}</span>}
               </div>
-              <div
+              <button type="button"
                 className={`nav-item ${activeMainTab === 'settings' ? 'active' : ''}`}
                 onClick={() => setActiveMainTab('settings')}
               >
@@ -533,7 +511,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                   <SettingOutlined />
                 </div>
                 {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.settings')}</span>}
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -554,75 +532,41 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
       </Sider>
 
       <Layout className="modern-main">
+        <AgentContextGuard />
         {/* Content 顶部工具栏（替代被移除的自定义 header） */}
         <div className="content-toolbar">
           <div className="toolbar-left">
-            <div className="breadcrumb">
-              <Text className="breadcrumb-item">
-                {activeMainTab === 'configs' && t('layout.breadcrumb.configs')}
-                {activeMainTab === 'automation' && t('layout.breadcrumb.automation')}
-                {activeMainTab === 'statistics' && t('layout.breadcrumb.statistics')}
-                {activeMainTab === 'projects' && t('layout.breadcrumb.projects')}
-                {activeMainTab === 'mcp-management' && t('layout.breadcrumb.mcp')}
-                {activeMainTab === 'agents-management' && t('layout.breadcrumb.agents')}
-                {activeMainTab === 'skills-management' && t('layout.breadcrumb.skills')}
-                {activeMainTab === 'environment-check' && t('layout.breadcrumb.environmentCheck')}
-                {activeMainTab === 'managed-mode' && t('layout.breadcrumb.managedMode')}
-                {activeMainTab === 'settings' && t('layout.breadcrumb.settings')}
-              </Text>
-              <Text className="breadcrumb-separator">/</Text>
-              <Text className="breadcrumb-item active">
-                {activeMainTab === 'configs' && t('layout.breadcrumb.configsSub')}
-                {activeMainTab === 'automation' && t('layout.breadcrumb.automationSub')}
-                {activeMainTab === 'statistics' && t('layout.breadcrumb.statisticsSub')}
-                {activeMainTab === 'projects' && t('layout.breadcrumb.projectsSub')}
-                {activeMainTab === 'mcp-management' && t('layout.breadcrumb.mcpSub')}
-                {activeMainTab === 'agents-management' && t('layout.breadcrumb.agentsSub')}
-                {activeMainTab === 'skills-management' && t('layout.breadcrumb.skillsSub')}
-                {activeMainTab === 'environment-check' && t('layout.breadcrumb.environmentCheckSub')}
-                {activeMainTab === 'managed-mode' && t('layout.breadcrumb.managedModeSub')}
-                {activeMainTab === 'settings' && t('layout.breadcrumb.settingsSub')}
-              </Text>
-            </div>
+            <label htmlFor="global-agent-selector" className="global-agent-label">{t('agentContext.current')}</label>
+            <Select id="global-agent-selector" aria-label={t('agentContext.current')} value={managedToolId}
+              onChange={(value: ManagedAgentId) => selectManagedTool(value)} style={{ width: 190 }}
+              options={Object.entries(AGENT_LABELS).map(([value, label]) => ({ value, label }))} />
+            <Tag>{t('agentContext.userScope')}</Tag>
           </div>
 
           <div className="toolbar-right">
             <Space size="small">
-              {/* 搜索 */}
-              <div className="toolbar-search">
-                <SearchOutlined className="toolbar-search-icon" />
-                <input
-                  type="text"
-                  placeholder={t('layout.search.placeholder')}
-                  className="toolbar-search-input"
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                />
-              </div>
-
               {/* 全局刷新 */}
               <Tooltip title={t('layout.tooltip.refreshAll')}>
                 <Button
                   type="text"
                   icon={<ReloadOutlined />}
+                  aria-label={t('common.refresh')}
                   onClick={handleGlobalRefresh}
                 />
               </Tooltip>
 
-              {/* 通知 */}
-              <Tooltip title={t('layout.tooltip.notifications')}>
-                <Badge count={notifications.length} size="small">
-                  <Button type="text" icon={<BellOutlined />} />
-                </Badge>
-              </Tooltip>
-
+              <Dropdown trigger={['click']} menu={{ selectedKeys: [currentTheme.id], items: availableThemes.map((theme) => ({
+                key: theme.id, label: theme.name, onClick: () => setTheme(theme.id)
+              })) }}>
+                <Button type="text" icon={<BgColorsOutlined />} aria-label={t('settings.theme.title')} />
+              </Dropdown>
               {/* 帮助菜单 */}
               <Dropdown
                 menu={{ items: helpMenuItems }}
                 placement="bottomRight"
                 trigger={['click']}
               >
-                <Button type="text" icon={<QuestionCircleOutlined />} />
+                <Button type="text" icon={<QuestionCircleOutlined />} aria-label={t('agentContext.helpMenu')} />
               </Dropdown>
 
               {/* 用户菜单 */}
@@ -631,7 +575,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 placement="bottomRight"
                 trigger={['click']}
               >
-                <Avatar size="small" icon={<UserOutlined />} />
+                <Button type="text" icon={<UserOutlined />} aria-label={t('agentContext.applicationMenu')} />
               </Dropdown>
             </Space>
           </div>

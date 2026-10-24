@@ -1,10 +1,11 @@
+import { useAgentContextStore } from './store/agent-context-store'
 /**
  * React 主应用组件
  * 提供应用布局和路由功能
  */
 
 import React, { useEffect, useState, Suspense } from 'react'
-import { App as AntdApp, Spin } from 'antd'
+import { Alert, App as AntdApp, Spin } from 'antd'
 import { useAppStore } from './store/app-store'
 import { useSettingsStore } from './store/settings-store'
 import { useConfigListStore } from './store/config-list-store'
@@ -16,17 +17,17 @@ import {
   measureRendererInitialization
 } from './utils/renderer-performance'
 import ModernLayout from './components/Layout/ModernLayout'
-const ModernConfigPanel = React.lazy(() => import('./components/Config/ModernConfigPanel'))
+
 const AutomationPanel = React.lazy(() => import('./components/Automation/AutomationPanel'))
 const StatisticsPanel = React.lazy(() => import('./components/Statistics/StatisticsPanel'))
 const SettingsPanel = React.lazy(() => import('./components/Settings/SettingsPanel'))
 const ProjectManagement = React.lazy(() => import('./components/Projects/ProjectManagement'))
 const ManagedModePanel = React.lazy(() => import('./components/ManagedMode/ManagedModePanel'))
-const MCPManagementPanel = React.lazy(() => import('./components/MCP/MCPManagementPanel'))
-const AgentsManagementPanel = React.lazy(() => import('./components/AgentsManagement/AgentsManagementPanel'))
-const SkillsManagementPanel = React.lazy(() => import('./components/SkillsManagement/SkillsManagementPanel'))
+
+
+
 const EnvironmentCheckPanel = React.lazy(() => import('./components/EnvironmentCheck/EnvironmentCheckPanel'))
-const AIToolManagementPanel = React.lazy(() => import('./components/AIToolManagement/AIToolManagementPanel'))
+
 import LoadingScreen from './components/Common/LoadingScreen'
 import ErrorBoundary from './components/Common/ErrorBoundary'
 import NotificationContainer from './components/Common/NotificationContainer'
@@ -39,7 +40,12 @@ import './styles/design-system.css'
 /**
  * 内部应用组件，在 AntdApp context 中
  */
+const ConfigurationWorkspace = React.lazy(() => import('./components/Config/ConfigurationWorkspace'))
+const AgentResourcesPage = React.lazy(() => import('./components/AgentResources/AgentResourcesPage'))
+
 const AppContent: React.FC = () => {
+  const managedToolId = useAgentContextStore((state) => state.selectedToolId)
+  const managedRevision = useAgentContextStore((state) => state.revision)
   const { message } = AntdApp.useApp()
   const { t } = useTranslation()
   const {
@@ -205,9 +211,9 @@ const AppContent: React.FC = () => {
   const renderContent = () => {
     switch (activeMainTab) {
       case 'configs':
-        return <ModernConfigPanel />
+        return <ConfigurationWorkspace key={`${managedToolId}:${managedRevision}`} />
       case 'ai-tools':
-        return <AIToolManagementPanel />
+        return <ConfigurationWorkspace key={`${managedToolId}:${managedRevision}`} />
       case 'automation':
         return <AutomationPanel />
       case 'statistics':
@@ -215,11 +221,11 @@ const AppContent: React.FC = () => {
       case 'projects':
         return <ProjectManagement />
       case 'mcp-management':
-        return <MCPManagementPanel />
+        return <AgentResourcesPage kind="MCP" key={`${managedToolId}:MCP`} />
       case 'agents-management':
-        return <AgentsManagementPanel />
+        return <AgentResourcesPage kind="SUBAGENT" key={`${managedToolId}:SUBAGENT`} />
       case 'skills-management':
-        return <SkillsManagementPanel />
+        return <AgentResourcesPage kind="SKILL" key={`${managedToolId}:SKILL`} />
       case 'environment-check':
         return <EnvironmentCheckPanel />
       case 'managed-mode':
@@ -227,7 +233,7 @@ const AppContent: React.FC = () => {
       case 'settings':
         return <SettingsPanel />
       default:
-        return <ModernConfigPanel />
+        return <ConfigurationWorkspace key={`${managedToolId}:${managedRevision}`} />
     }
   }
 
@@ -240,6 +246,8 @@ const AppContent: React.FC = () => {
           </div>
         )}
       >
+        {['projects', 'statistics', 'managed-mode', 'automation', 'environment-check'].includes(activeMainTab) &&
+          <Alert className="scope-notice" showIcon type="info" title={t('agentContext.claudeOnly')} />}
         {renderContent()}
       </Suspense>
 
@@ -273,9 +281,7 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <AntdApp>
-        <AppContent />
-      </AntdApp>
+      <AppContent />
     </ErrorBoundary>
   )
 }

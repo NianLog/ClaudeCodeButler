@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — 架构现状与演进计划
 
 > 活文档。新增/移动模块、改变分层边界、引入新依赖或新数据流时，必须在同一提交更新本文件。
-> 更新时间：2026-10-24（1.5.1 未发布候选，分支 `codex/safety-reliability-ab`）。
+> 更新时间：2026-10-25（1.5.1 未发布候选，分支 `codex/v1.5.1-agents-ux-upgrades`）。
 
 ## 1. 产品与架构定位
 
@@ -174,7 +174,7 @@ template 解析      = USER_OVERRIDE > REGISTRY > EMBEDDED
 - `transport.ts` 按 transformer 选择 Anthropic Messages、Chat Completions 或 Gemini Content 地址与头；未知 transformer 拒绝，不从请求接受任意上游地址，不跟随重定向。主应用仍使用原集成代理，不因此获得原生转换能力。
 - 请求与响应转换复用 `transformers/chat-completions.ts`、`gemini-content.ts`；`stream.ts` 为每个请求创建独立 SSE 帧缓冲，UTF-8 解码保留分段状态。普通请求时限覆盖正文，成功 SSE 清除响应头时限，下游断开取消上游，不自动重试。支持范围见 [独立包说明](src/proxy-server/PROTOCOL.md)。
 - Skill 目录与文件列表导入共用 `commitSkillImport` 队列：根目录及链接检查 → 独占暂存 → 完整文件/元数据校验 → 原目录 rename 为备份 → 暂存目录替换 → 清理。安装失败恢复原目录；恢复也失败则保留备份路径并报告。只清理本次 mkdtemp 创建的目录。双 rename 不是断电事务，也不锁外部 CLI。
-- 所有 Skill 仍位于 `~/.claude/skills`，默认不覆盖，IPC 签名不变；不执行导入的 SKILL.md 或脚本。拒绝 traversal、UNC、ADS、保留名、重复路径、链接、无效 Base64/UTF-8；导入上限为 2000 项（目录导入含子目录）、单文件 10 MiB、总计 50 MiB、深度 32。
+- C 批旧 Claude 通道的 Skill 位于 `~/.claude/skills`，默认不覆盖，IPC 签名不变；不执行导入的 SKILL.md 或脚本。拒绝 traversal、UNC、ADS、保留名、重复路径、链接、无效 Base64/UTF-8；导入上限为 2000 项（目录导入含子目录）、单文件 10 MiB、总计 50 MiB、深度 32。
 
 
 ## 10. 稳定工具链与运行时边界（2026-10-25）
@@ -182,3 +182,16 @@ template 解析      = USER_OVERRIDE > REGISTRY > EMBEDDED
 Electron 45.0.0 / React 19 / AntD 6 / Zustand 5，Vite 8 与 ESLint 10；main/preload 仍为 CJS。两套锁文件与禁 lifecycle 的 .npmrc 独立维护。集成代理先鉴权后解码，MCP 探测使用 net.fetch 并取消正文；普通上游请求临时关闭空闲连接复用，解压后的请求移除 Content-Encoding。Chromium Brotli 已核实包含修复，保留 br。内嵌 Node 24.22.0 的其他厂商回补仍待核实，正式发布继续阻塞。
 
 决策与兼容例外见 [.agents 工具链记录](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)。
+
+
+## 11. 全局 Agent 资源与导入边界（2026-10-25）
+
+Renderer 的 agent-context-store 统一四管理目标、dirty/busy 与请求代次；ConfigurationWorkspace 复用旧工作区/配置集和原生文件面板，AgentResourcesPage 共用 MCP/Skill/子 Agent 列表与编辑抽屉。旧 AI 工具导航迁入配置管理。退出先由 renderer 确认草稿，再停止后台并排空资源写队列。
+
+preload.agentResources → 独立 agent-resource-handlers → AgentResourceService；codecs 负责有限原生转换，files 负责受限文件/整包校验，backups 只把本机 UUID/content 转为只读来源。全部真实路径在主进程从 effective registry 重推，renderer 只传 ID；会话窗口绑定、30 分钟有效，apply 重验来源/目标/规则/启停 sidecar。旧 MCP、Skill、Agent、artifact、配置集与恢复写入口共享同一 mutation 队列，不承诺跨进程事务。
+
+MANAGE_MCP / MANAGE_DIRECTORY、SKILL_DIRECTORY_V1 / SUBAGENT_DIRECTORY_V1 是 1.5.1 有限协议扩展。内置 registry 1.3.0，definition 1.5.1；installed 同版优先，旧自定义路径与受限能力保留，新协议不自动提权。Claude workspace 保持 LEGACY_COMPAT。切换和扫描不创建资源目录。
+
+JSONC 采用拒绝危险键/重复键后的局部 raw 修改，保留注释与未知大整数；TOML 仅改可安全定位的 table。Skill 沿用全包暂存/备份/切换，附件保持。备份实际快照必须先匹配 revision，metadata.originalPath 不决定任何恢复路径。旧归档恢复只有原生写成功后才确认移除；清理失败报告部分完成。
+
+六新增工具只是导入来源；不能等价的认证、停用、权限、模型和工具限制逐项阻止，不猜字段。详细契约、官方来源与取舍见 [.agents 导入记录](.agents/notes/implemented/feature/2026-10-25-agent-import-and-global-context.md)；四主题规范见 [DESIGN.md](DESIGN.md)。

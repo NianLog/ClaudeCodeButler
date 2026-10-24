@@ -6,6 +6,7 @@
 import { createWithEqualityFn } from 'zustand/traditional'
 import { shallow } from 'zustand/shallow'
 import { APP_INFO } from '@shared/constants'
+import { useAgentContextStore } from './agent-context-store'
 
 const FALLBACK_APP_VERSION = APP_INFO.VERSION
 
@@ -76,7 +77,9 @@ export const useAppStore = createWithEqualityFn<AppStore>((set, get) => ({
   notifications: [],
 
   // 操作
-  setActiveMainTab: (tab) => set({ activeMainTab: tab }),
+  setActiveMainTab: (tab) => {
+    useAgentContextStore.getState().requestChange(() => set({ activeMainTab: tab === 'ai-tools' ? 'configs' : tab }))
+  },
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   toggleMenuGroup: (group) => set((state) => ({
     expandedMenuGroups: {

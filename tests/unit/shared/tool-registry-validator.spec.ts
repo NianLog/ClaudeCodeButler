@@ -13,15 +13,23 @@ import {
 } from '../../../src/shared/tool-registry-validator'
 
 describe('validateToolRegistryBundle', () => {
+  it('requires resource handlers to declare minimum app 1.5.1 and handles invalid versions fail-closed', () => {
+    const old = { ...builtinRegistryJson, minimumAppVersion: '1.5.0' }
+    expect(validateToolRegistryBundle(JSON.stringify(old)).errors.join(' ')).toContain('1.5.1')
+    expect(() => validateToolRegistryBundle(JSON.stringify({ ...old, minimumAppVersion: 'invalid' }))).not.toThrow()
+    expect(validateToolRegistryBundle(JSON.stringify({ ...old, minimumAppVersion: 'invalid' })).success).toBe(false)
+  })
   it('应接受内置 Claude Code registry', () => {
     const result = validateToolRegistryBundle(JSON.stringify(builtinRegistryJson))
 
     expect(result.success).toBe(true)
     expect(result.data?.tools[0].toolId).toBe('claude-code')
-    expect(result.data?.tools[0].artifacts).toHaveLength(3)
+    expect(result.data?.tools[0].artifacts).toHaveLength(5)
+    expect(result.data?.tools[0].artifacts.find(artifact => artifact.artifactId === 'mcp-registry')?.capabilities).toContain('MANAGE_MCP')
+    expect(result.data?.tools[0].artifacts.find(artifact => artifact.artifactId === 'mcp-registry')?.capabilities).not.toContain('EDIT')
     expect(result.data?.tools[1].toolId).toBe('codex-cli')
     expect(result.data?.tools[1].artifacts[0].capabilities).toEqual(
-      ['DISCOVER', 'READ', 'VALIDATE', 'EDIT', 'BACKUP', 'RESTORE']
+      ['DISCOVER', 'READ', 'VALIDATE', 'EDIT', 'BACKUP', 'RESTORE', 'MANAGE_MCP']
     )
   })
 
@@ -34,7 +42,7 @@ describe('validateToolRegistryBundle', () => {
     )
     const codex = result.data?.tools[1]
     expect(codex?.artifacts.map((artifact) => artifact.artifactId)).toEqual(
-      ['user-config', 'auth', 'agents-instructions']
+      ['user-config', 'auth', 'agents-instructions', 'skills', 'subagents']
     )
     expect(codex?.artifacts[0].editGroup).toBe('core')
     expect(codex?.artifacts[1].editGroup).toBe('core')
@@ -46,7 +54,7 @@ describe('validateToolRegistryBundle', () => {
     const invalid = structuredClone(builtinRegistryJson) as unknown as Record<string, unknown>
     const tools = invalid.tools as Array<Record<string, unknown>>
     const claudeArtifacts = tools[0].artifacts as Array<Record<string, unknown>>
-    claudeArtifacts.forEach((artifact) => {
+    claudeArtifacts.filter(artifact => !String(artifact.handler).endsWith('_DIRECTORY_V1')).forEach((artifact) => {
       artifact.editGroup = 'Invalid_Group'
     })
 
@@ -57,7 +65,7 @@ describe('validateToolRegistryBundle', () => {
     const oversized = structuredClone(builtinRegistryJson) as unknown as Record<string, unknown>
     const oversizedTools = oversized.tools as Array<Record<string, unknown>>
     const oversizedArtifacts = oversizedTools[0].artifacts as Array<Record<string, unknown>>
-    oversizedArtifacts.forEach((artifact) => {
+    oversizedArtifacts.filter(artifact => !String(artifact.handler).endsWith('_DIRECTORY_V1')).forEach((artifact) => {
       artifact.editGroup = 'core'
     })
     const extraAlpha = structuredClone(oversizedArtifacts[0]) as Record<string, unknown>

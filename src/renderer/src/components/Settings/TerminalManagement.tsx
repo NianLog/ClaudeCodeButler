@@ -369,7 +369,7 @@ const TerminalManagement: React.FC = () => {
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
         okButtonProps={{ size: 'large' }}
-        cancelButtonProps={{ size: 'large' }}
+        cancelButtonProps={{ size: 'large' }} maskClosable={false}
       >
         <Form
           form={form}

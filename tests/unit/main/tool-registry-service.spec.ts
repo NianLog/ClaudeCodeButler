@@ -21,9 +21,70 @@ vi.mock('../../../src/main/utils/logger', () => ({
 
 import {
   calculateRegistrySha256,
+  mergeToolRegistryBundles,
   ToolRegistryService,
   type ToolRegistryPaths
 } from '../../../src/main/services/tool-registry-service'
+import type { ToolRegistryBundle } from '../../../src/shared/tool-registry'
+import { validateToolRegistryBundle } from '../../../src/shared/tool-registry-validator'
+
+describe('definition-aware registry merge', () => {
+  const legacy = (): ToolRegistryBundle => {
+    const bundle = structuredClone(builtinRegistryJson) as ToolRegistryBundle
+    bundle.minimumAppVersion = '1.5.0'
+    for (const tool of bundle.tools) {
+      tool.definitionVersion = '1.0.0'
+      tool.artifacts = tool.artifacts.filter(artifact => !artifact.handler.endsWith('_DIRECTORY_V1'))
+      for (const artifact of tool.artifacts) artifact.capabilities = artifact.capabilities.filter(capability => capability !== 'MANAGE_MCP')
+    }
+    return bundle
+  }
+
+  it('new compatible builtins replace older cached definitions as complete definitions', () => {
+    const merged = mergeToolRegistryBundles(builtinRegistryJson as ToolRegistryBundle, legacy())
+    expect(merged.find(tool => tool.toolId === 'claude-code')?.artifacts.map(artifact => artifact.artifactId)).toContain('skills')
+    expect(merged.find(tool => tool.toolId === 'claude-code')?.artifacts.find(artifact => artifact.artifactId === 'mcp-registry')?.capabilities).not.toContain('EDIT')
+  })
+
+  it('custom installed paths and reduced legacy permissions remain intact', () => {
+    const custom = legacy()
+    custom.tools[0].artifacts[0].paths.WINDOWS = ['${HOME}/.custom/settings.json']
+    const restricted = legacy()
+    restricted.tools[0].artifacts[0].capabilities = ['DISCOVER', 'READ']
+    for (const candidate of [custom, restricted]) {
+      expect(mergeToolRegistryBundles(builtinRegistryJson as ToolRegistryBundle, candidate).find(tool => tool.toolId === 'claude-code')).toEqual(candidate.tools[0])
+    }
+  })
+
+  it('same-version installed definitions and newer restricted definitions win without mixing', () => {
+    for (const version of ['1.5.1', '9.0.0']) {
+      const installed = legacy()
+      installed.tools[0].definitionVersion = version
+      installed.tools[0].artifacts[0].capabilities = ['READ']
+      const merged = mergeToolRegistryBundles(builtinRegistryJson as ToolRegistryBundle, installed)
+      expect(merged.find(tool => tool.toolId === 'claude-code')).toEqual(installed.tools[0])
+    }
+  })
+
+  it('preserves installed configuration-set membership instead of adding credentials to another group', () => {
+    const installed = legacy()
+    const codex = installed.tools.find(tool => tool.toolId === 'codex-cli')!
+    codex.artifacts.find(artifact => artifact.artifactId === 'auth')!.configSet = 'private-auth'
+    expect(mergeToolRegistryBundles(builtinRegistryJson as ToolRegistryBundle, installed).find(tool => tool.toolId === 'codex-cli')).toEqual(codex)
+  })
+
+  it('does not restore explicitly removed resource permissions from a source supporting the new protocol', () => {
+    const installed = structuredClone(builtinRegistryJson) as ToolRegistryBundle
+    installed.registryVersion = '1.3.1'
+    const claude = installed.tools.find(tool => tool.toolId === 'claude-code')!
+    claude.definitionVersion = '1.5.0'
+    claude.artifacts.find(artifact => artifact.artifactId === 'skills')!.capabilities = ['DISCOVER', 'READ']
+    expect(validateToolRegistryBundle(JSON.stringify(installed)).success).toBe(true)
+    const effective = mergeToolRegistryBundles(builtinRegistryJson as ToolRegistryBundle, installed).find(tool => tool.toolId === 'claude-code')!
+    expect(effective).toEqual(claude)
+    expect(effective.artifacts.find(artifact => artifact.artifactId === 'skills')!.capabilities).not.toContain('MANAGE_DIRECTORY')
+  })
+})
 
 let tempDirectory: string
 let registryPaths: ToolRegistryPaths

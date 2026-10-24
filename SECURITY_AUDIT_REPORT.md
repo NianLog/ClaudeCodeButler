@@ -1,5 +1,29 @@
 # Semgrep 安全审计与改进报告
 
+## 2026-10-25：多 Agent、稳定依赖与安全边界
+
+本次是未发布的 1.5.1 扩展，扩展前检查点 ed53f23，工具链批次 66355df。保留原路径、用户数据与正式签名门禁；本地未签名候选待此次重建，不能沿用下方 2026-10-24 包的验证结论。
+
+| 检查 | 当前证据 |
+| --- | --- |
+| 源代码完整回归 | 52 files / 464 tests 全通过，无跳过，含本地 production-key rehearsal 和模板 staging |
+| 覆盖率 | statements 47.43%、branches 51.75%、functions 46.73%、lines 47.56%；不含 renderer，不是功能覆盖率 |
+| 工具链独立快照 | 类型、lint、生产构建通过；357 tests 通过，缺 web 发布物的 6 项 staging 条件跳过 |
+| 依赖审计 | 重新 npm 12 严格 ci：根 747 包、proxy 121 包；根/代理生产与全量 audit 四项均为 0。官方 registry 最后核对 47 个不同直接包，无未说明的版本落后；例外仅 TS 6.0.3 与 Node 24 类型 |
+| 源代码静态门禁 | 类型检查 0 error；全量 lint 0 error / 16 warning；root/proxy 双构建通过 |
+| 真实 Electron 交互 | 11 项通过：四主题、四目标、脱敏导入、Monaco、失败保稿、保存再切换、附件恢复、1280 布局、退出拦截；四主题实际测得主按钮文字最低约5.13:1、次级文字约5.00:1、输入边界约3.17:1，Input/Select 双环焦点生效；离屏捕获，不是手工可访问性验收 |
+| 独立恢复复核 | 2 files / 42 tests，通过真实瞬时外部修改反例；原件保留且无可见坏备份 |
+| 包与云 CI | 本次候选完整校验待后续验收记录；云端 CI 未运行，未 tag、push 或发布 |
+
+本轮复现并关闭：默认预览 argv/query 明文泄漏、旧 raw MCP 写入口绕过能力、JSONC 危险原型键、registry 合并恢复已撤销能力、旧 MCP 整文件重写损坏大整数、危险 scope 原型污染、解压转发残留 Content-Encoding、恢复前移除归档导致副本丢失、归档大整数损坏、瞬时外部编辑导致坏备份后仍覆盖原件。每项均有对应测试；没有把缺乏复现的猜测写成漏洞。
+
+Electron 45.0.0 实际 Node 24.22.0 / Chromium 156.0.8078.48；构建和独立代理为 Node 24.22.1 / npm 12.2.1。Chromium Brotli 固定源码已包含修复，因此保留 br；三种压缩解码实际转发回归通过。Electron 非规范 TLS 主机直接探针仍未拒绝；生产 URL 规范化、过滤来路 Host、HTTP agent:false、鉴权前置和 net.fetch 取消正文降低可达面，但不代表厂商回补完成。未使用的 DNS Resolver 路径和有限随机探针结果不当作修复证明。
+
+正式发布仍阻塞于内嵌 Node 相关厂商回补证据、有效签名与真实安装升级验收。两套 npm audit 为零不替代运行时证明。未关闭 TLS/sandbox/签名链，不以签名暂缓删除正式门禁。
+
+决策与官方证据：[工具链](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)、[导入与全局上下文](.agents/notes/implemented/feature/2026-10-25-agent-import-and-global-context.md)。实际 CLI/模型账号、企业 CA、macOS/Linux、屏幕阅读器、NSIS 安装/卸载尚未实机验收。
+
+
 ## 2026-10-24：1.5.1 收尾与本地候选验收
 
 本轮沿用 A/B/C 修复和旧配置路径，补齐托管模式错误反馈、实际重启、连接关闭及配置目录监控。1.6 路线已写入 DDE proposed 提案，本版未实施这些新功能。签名按用户要求暂缓，继续不 tag、不上传、不发布；本地候选不等于生产上线或正式发布验收。
@@ -363,8 +387,3 @@ Semgrep `1.169.0` 的 JSON `errors` 均为 0，但 `time.fixpoint_timeouts` 在 
 - `REGISTRY_TRUSTED_PUBLIC_KEYS` 当前为空。`npm.cmd run release:preflight:preview` 可用于开发检查并输出 warning；production `npm.cmd run release:preflight` 会按设计失败，直到维护者执行 offline Ed25519 key ceremony 并只注入对应 SPKI public key。
 - 构建机若处于 TLS 拦截网络（如企业代理），electron-builder 下载 Electron distribution 可能报告 `unable to verify the first certificate`。这是证书信任链问题，不允许用 `NODE_TLS_REJECT_UNAUTHORIZED=0` 绕过；应通过 `NODE_EXTRA_CA_CERTS` 或 npm `cafile` 配置组织可信根 CA 后重新执行 `npm.cmd run pack:win:all`。
 - 本轮未启动应用。Electron runtime navigation、新窗口策略、installer/portable/zip smoke test、registry release-candidate 对抗用例与业务兼容性必须在目标机按手动验收清单实机验收。
-
-
-## 2026-10-25：D0/D1 稳定兼容升级
-
-Node 24.22.1 / npm 12.2.1 隔离安装，Electron 45.0.0 内嵌 Node 24.22.0。两套生产及全量依赖审计结果、版本矩阵和运行时可达性见 [.agents 工具链记录](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)。Brotli 修复已通过 Electron→Chromium→固定源码证明，保留 br；其他内嵌 Node 厂商回补保留为正式发布阻塞，不以 audit 0 关闭。先鉴权后解码、net.fetch 取消正文、agent:false 及解压转发头均有回归。暂不发布。

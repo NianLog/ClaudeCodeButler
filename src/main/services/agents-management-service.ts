@@ -29,7 +29,6 @@ class AgentsManagementService {
 
   constructor() {
     this.agentsDir = path.join(os.homedir(), '.claude', 'agents')
-    this.initializeAgentsDir()
   }
 
   /**
@@ -59,8 +58,6 @@ class AgentsManagementService {
    */
   public async scanAgents(): Promise<AgentFile[]> {
     try {
-      await this.initializeAgentsDir()
-
       const entries = await fs.readdir(this.agentsDir, { withFileTypes: true })
       const agentFiles = entries
         .filter(entry => entry.isFile() && entry.name.endsWith('.md'))
@@ -81,8 +78,9 @@ class AgentsManagementService {
       logger.info(`扫描到 ${agents.length} 个Agent文件`)
       return agents
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
       logger.error('扫描Agent文件失败:', error)
-      return []
+      throw error
     }
   }
 

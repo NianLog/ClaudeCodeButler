@@ -17,6 +17,8 @@ import { statisticsService } from './services/statistics-service'
 import { ruleEngineService } from './services/rule-engine.service' // 导入规则引擎
 import { registerManagedModeHandlers, initializeManagedMode, disposeManagedMode } from './ipc/managed-mode-handlers' // 导入托管模式处理程序
 import { APP_INFO } from '@shared/constants'
+import { prepareRendererExit } from './utils/renderer-exit-guard'
+import { flushAgentResourceMutations } from './utils/agent-resource-queue'
 import { logger, LogLevel } from './utils/logger'
 import { updateService } from './services/update-service';
 import { pathManager } from './utils/path-manager'
@@ -132,15 +134,18 @@ class CCBApp {
         return
       }
 
-      // 允许真正退出
       const mainWindow = this.windowManager.getMainWindow()
-      if (mainWindow) {
-        mainWindow.removeAllListeners('close')
-      }
-
-      this.cleanupPromise = this.cleanup().finally(() => {
+      this.cleanupPromise = (async () => {
+        if (!await prepareRendererExit(mainWindow?.webContents)) {
+          mainWindow?.show()
+          return
+        }
+        mainWindow?.removeAllListeners('close')
+        await this.cleanup()
         this.cleanupCompleted = true
         app.quit()
+      })().finally(() => {
+        this.cleanupPromise = null
       })
     })
 
@@ -520,6 +525,7 @@ class CCBApp {
     logger.info('正在清理应用资源...')
 
     try {
+      await flushAgentResourceMutations()
       await statisticsService.shutdown()
       this.ruleEngine.stop() // 停止规则引擎
       await disposeManagedMode() // 清理托管模式

@@ -23,11 +23,11 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 
 - **Current candidate**: `1.5.1` (unreleased); latest published release `1.5.0` (2026-09-05)
 - **v1.5.0 theme**: from a Claude Code-only manager to a registry-driven multi-AI-tool configuration control plane
-- **Supported tools**: Claude Code, Codex CLI, Gemini CLI, and Antigravity — onboarded through a declarative JSON registry covering artifact discovery, validation, atomic edits, backup/restore, and configuration-set snapshot switching
+- **Managed targets**: Claude Code, Codex CLI, Gemini CLI and Antigravity across configuration/MCP/Skills/subagents. Cursor, Qoder, WorkBuddy, TRAE, Pi and OpenCode are additional import sources.
 - **1.5.1 safety fixes**: serialized atomic writes, validation before configuration-set activation, accurate settings error feedback, bounded version requests, and upstream cancellation. Existing paths and data formats remain compatible.
 - **Final fixes**: damaged or unreadable managed settings are preserved; startup, restart and restore failures are reported. The restart button actually restarts the service, while provider switches only refresh the UI after completion.
 - **Batch C**: the standalone proxy requires accessToken and uses protocol-specific endpoints and SSE translation. Skill replacement stages and validates the complete import before swapping, with rollback on failure. See the [standalone proxy guide](src/proxy-server/PROTOCOL.md) for startup and protocol limits.
-- **Local acceptance**: 46 test files / 351 tests pass; both production dependency audits are clean. Maximum-compression Windows Portable/NSIS/ZIP candidates are built; ZIP and Portable pass runtime business checks and graceful shutdown. These unsigned local candidates have not been published.
+- **Local acceptance**: 52 files / 464 tests pass with no skips; type checks and both builds pass, lint has zero errors (16 warnings), and 11 native Electron interaction checks pass. Fresh package verification is tracked in the security report; no release is published.
 - **Release gates**: production audits for both packages, preflight, Authenticode checks, ASAR integrity, dependency SBOMs, SHA-256 and build provenance. Local unsigned packages are for testing; see [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for verification and remaining build-tool advisories.
 
 The product name remains **Claude Code Butler**. The name records the project's origin rather than limiting its architecture: new tools are integrated through a bounded registry and built-in capabilities, while `CCB`, `.ccb`, app identity, and repository identifiers remain stable.
@@ -103,7 +103,7 @@ The product name remains **Claude Code Butler**. The name records the project's 
 ### Requirements
 
 - Node.js ^24.22.1 and npm 12.2.1
-- npm >= 10.0.0
+- npm 12.2.1
 - Python >= 3.10 only when running the local Semgrep audit
 
 ### Installation
@@ -120,6 +120,9 @@ npm ci
 
 # Install the standalone proxy-server dependencies
 npm ci --prefix src/proxy-server
+
+# .npmrc disables install scripts; explicitly run only the reviewed Electron downloader
+node node_modules/electron/install.js
 ```
 
 ### Development Mode
@@ -217,13 +220,13 @@ npm run dist:all
 - **Electron**: 45.0.0
 - **electron-vite**: 5.0.0
 - **Vite**: 7.3.6
-- **TypeScript**: 5.9.3
+- **TypeScript**: 6.0.3
 
 ### Renderer (bundled at build time, kept out of runtime `dependencies`)
 
-- **React**: 18.3.1
-- **Ant Design**: 5.27.6
-- **Zustand**: 4.5.7
+- **React**: 19.3.1
+- **Ant Design**: 6.6.7
+- **Zustand**: 5.0.16
 - **Monaco Editor**: 0.55.1 via `@monaco-editor/react` 4.7 (on-demand runtime)
 - **Recharts**: 2.15.4
 - **react-markdown**: 9.1 / **remark-gfm**: 4.0.1
@@ -454,3 +457,8 @@ Made by NianSir
 
 
 Toolchain update (2026-10-25): Electron 45.0.0, React 19, AntD 6, Zustand 5; isolated Node 24.22.1 / npm 12.2.1. TypeScript stays on supported 6.0.3 pending parser support for 7. Electron Node backport verification remains a release gate. No release has been published.
+
+
+### 1.5.1 cross-tool configuration
+
+The header selects one managed target. Native files, validation and backup/restore remain in Configuration. Imports use selection, redacted preview and per-item receipts; conflicts default to skip and incompatible permission/auth/variable/model semantics are blocked. Generic TRAE/Pi subagents are not converted. Skills/roles can be restored from local backups; MCP restores the whole native file. Unsaved drafts guard navigation and exit and stay in process memory. Existing paths and user data are preserved.

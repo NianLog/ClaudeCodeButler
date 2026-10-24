@@ -165,7 +165,7 @@
 }
 
 .managed-mode-panel .ant-tabs-tab-active {
-  background: var(--accent);
+  background: var(--accent-solid);
   color: var(--text-inverse);
   border-color: var(--accent);
 }

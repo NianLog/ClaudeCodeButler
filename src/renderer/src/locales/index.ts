@@ -4,6 +4,7 @@
  */
 
 import { ReactNode } from 'react'
+import { agentResourceMessages } from './agent-resources'
 
 // 支持的语言类型
 export type SupportedLanguage = 'zh-CN' | 'en-US'
@@ -2680,8 +2681,8 @@ const enUS: TranslationDict = {
 
 // 语言资源
 export const languageResources: LanguageResources = {
-  'zh-CN': zhCN,
-  'en-US': enUS
+  'zh-CN': { ...zhCN, ...agentResourceMessages['zh-CN'] },
+  'en-US': { ...enUS, ...agentResourceMessages['en-US'] }
 }
 
 // 默认语言

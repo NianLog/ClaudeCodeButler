@@ -60,9 +60,127 @@ describe('MCPManagementService', () => {
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     await fs.rm(tempHomeDir, { recursive: true, force: true })
+  })
+
+  it('legacy add/update/delete and project creation preserve unrelated raw numbers and comments', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    const file = path.join(tempHomeDir, '.claude.json')
+    const original = '{\n// keep native preferences\n"large":9007199254740993123,"mcpServers":{"existing":{"command":"old","unknown":9007199254740993999}},"projects":{}}\n'
+    await fs.writeFile(file, original)
+    const service = new MCPManagementService()
+    expect((await service.addOrUpdateServer({ id: 'added', type: 'stdio', command: 'node', targetScope: 'global' })).success).toBe(true)
+    const changed = (await service.readClaudeConfig()).data!
+    changed.mcpServers!.existing.command = 'node'
+    expect((await service.saveClaudeConfig(changed)).success).toBe(true)
+    expect((await service.addOrUpdateServer({ id: 'project-server', type: 'stdio', command: 'node', targetScope: 'D:/legitimate/project' })).success).toBe(true)
+    expect((await service.deleteServer('added', 'global')).success).toBe(true)
+    const output = await fs.readFile(file, 'utf8')
+    expect(output).toContain('9007199254740993123')
+    expect(output).toContain('9007199254740993999')
+    expect(output).toContain('// keep native preferences')
+    expect((await service.getProjectServers('D:/legitimate/project')).data?.['project-server'].command).toBe('node')
+  })
+
+  it('legacy copy/import/export keep the complete selected native definition text', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    const file = path.join(tempHomeDir, '.claude.json')
+    const definition = '{"type":"stdio","command":"node","custom":9007199254740993999}'
+    await fs.writeFile(file, `{"mcpServers":{"source":${definition}}}`)
+    const service = new MCPManagementService()
+    expect((await service.duplicateServer('source', 'global', 'copy', 'global')).success).toBe(true)
+    expect((await service.exportServerConfig('copy', 'global')).data).toContain('9007199254740993999')
+    expect((await service.importServerConfig(definition, 'imported', 'D:/project')).success).toBe(true)
+    expect((await service.exportServerConfig('imported', 'D:/project')).data).toContain('9007199254740993999')
+    expect((await fs.readFile(file, 'utf8')).match(/9007199254740993999/g)).toHaveLength(3)
+  })
+
+  it('legacy toggle archives and restores raw values, and a failed native restore keeps the archive', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    const { mcpArchiveService } = await import('../../../src/main/services/mcp-archive.service')
+    const file = path.join(tempHomeDir, '.claude.json')
+    await fs.writeFile(file, '{"large":9007199254740993123,"mcpServers":{"source":{"command":"node","custom":9007199254740993999}}}')
+    const service = new MCPManagementService()
+    expect((await service.toggleServer('source', 'global')).data).toBe(true)
+    expect((await service.getGlobalServers()).data?.source).toBeUndefined()
+    expect((await mcpArchiveService.peekServer('source', 'global'))?.rawConfig).toContain('9007199254740993999')
+    const originalRename = fs.rename.bind(fs)
+    const failed = vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (String(to) === file) throw new Error('ENOSPC')
+      return originalRename(from, to)
+    })
+    expect((await service.toggleServer('source', 'global')).success).toBe(false)
+    expect(await mcpArchiveService.peekServer('source', 'global')).not.toBeNull()
+    failed.mockRestore()
+    expect((await service.toggleServer('source', 'global')).data).toBe(false)
+    expect(await mcpArchiveService.peekServer('source', 'global')).toBeNull()
+    const output = await fs.readFile(file, 'utf8')
+    expect(output).toContain('9007199254740993123')
+    expect(output).toContain('9007199254740993999')
+  })
+
+  it('a restore cleanup failure reports the native write and keeps the archived copy', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    const { mcpArchiveService } = await import('../../../src/main/services/mcp-archive.service')
+    await fs.writeFile(path.join(tempHomeDir, '.claude.json'), '{"mcpServers":{"source":{"command":"node"}}}')
+    const service = new MCPManagementService()
+    expect((await service.toggleServer('source', 'global')).success).toBe(true)
+    vi.spyOn(mcpArchiveService, 'confirmRestore').mockResolvedValueOnce({ success: false, error: 'disk is read-only' })
+    const result = await service.toggleServer('source', 'global')
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('已写入原生配置')
+    expect((await service.getGlobalServers()).data?.source.command).toBe('node')
+    expect(await mcpArchiveService.peekServer('source', 'global')).not.toBeNull()
+  })
+
+  it('a stale archive cannot overwrite a different live native server', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    const { mcpArchiveService } = await import('../../../src/main/services/mcp-archive.service')
+    const file = path.join(tempHomeDir, '.claude.json')
+    await fs.writeFile(file, '{"mcpServers":{"source":{"command":"old"}}}')
+    const service = new MCPManagementService()
+    expect((await service.toggleServer('source', 'global')).success).toBe(true)
+    const newer = '{"mcpServers":{"source":{"command":"newer"}},"outside":true}'
+    await fs.writeFile(file, newer)
+    expect((await service.toggleServer('source', 'global')).success).toBe(false)
+    expect(await fs.readFile(file, 'utf8')).toBe(newer)
+    expect(await mcpArchiveService.peekServer('source', 'global')).not.toBeNull()
+  })
+
+  it('external changes and backup failure keep current data intact', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    const file = path.join(tempHomeDir, '.claude.json')
+    const service = new MCPManagementService()
+    const current = (await service.readClaudeConfig()).data!
+    await fs.writeFile(file, '{"external":true}')
+    current.mcpServers = { source: { command: 'node' } }
+    expect((await service.saveClaudeConfig(current)).success).toBe(false)
+    expect(await fs.readFile(file, 'utf8')).toBe('{"external":true}')
+    vi.spyOn(fs, 'copyFile').mockRejectedValueOnce(new Error('backup denied'))
+    expect((await service.addOrUpdateServer({ id: 'source', type: 'stdio', command: 'node', targetScope: 'global' })).success).toBe(false)
+    expect(await fs.readFile(file, 'utf8')).toBe('{"external":true}')
+  })
+
+  it.each(['__proto__', 'constructor', 'prototype'])('rejects dangerous legacy keys %s without prototype changes or file writes', async key => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    const service = new MCPManagementService()
+    const file = path.join(tempHomeDir, '.claude.json')
+    await fs.writeFile(file, '{"mcpServers":{},"projects":{}}')
+    const before = await fs.readFile(file, 'utf8')
+    const jobs = [
+      service.addOrUpdateServer({ id: 'audit', type: 'stdio', command: 'node', targetScope: key }),
+      service.addOrUpdateServer({ id: key, type: 'stdio', command: 'node', targetScope: 'global' }),
+      service.deleteServer('audit', key), service.toggleServer('audit', key), service.duplicateServer('audit', 'global', 'copy', key),
+      service.importServerConfig('{"command":"node"}', 'audit', key), service.exportServerConfig('audit', key), service.getProjectServers(key), service.validateServerAvailability('audit', key)
+    ]
+    expect((await Promise.all(jobs)).every(result => !result.success)).toBe(true)
+    expect(await fs.readFile(file, 'utf8')).toBe(before)
+    expect(Object.hasOwn(Object.prototype, 'mcpServers')).toBe(false)
+    await fs.writeFile(file, `{"projects":{${JSON.stringify(key)}:{"mcpServers":{}}}}`)
+    expect((await service.readClaudeConfig()).success).toBe(false)
   })
 
   it('should allow saving remote MCP servers without command', async () => {
@@ -141,10 +259,7 @@ describe('MCPManagementService', () => {
       'utf8'
     )
 
-    electronMockState.fetch.mockResolvedValue({
-      ok: false,
-      status: 401
-    })
+    electronMockState.fetch.mockResolvedValue(new Response('', { status: 401 }))
 
     const result = await service.validateServerAvailability('remote', 'global')
 

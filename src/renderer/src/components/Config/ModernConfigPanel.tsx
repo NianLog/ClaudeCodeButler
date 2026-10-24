@@ -38,11 +38,11 @@ import {
 import { useConfigListStore } from '../../store/config-list-store'
 import { useConfigEditorStore } from '../../store/config-editor-store'
 import { ConfigFile } from '@shared/types'
-import type { ToolDefinition } from '@shared/tool-registry'
+
 import type { ConfigEditorDraft, ConfigSavePayload } from './ConfigEditor'
 const ConfigEditor = React.lazy(() => import('./ConfigEditor'))
 const ConfigImportModal = React.lazy(() => import('./ConfigImportModal'))
-const ToolConfigSetPanel = React.lazy(() => import('./ToolConfigSetPanel'))
+
 const CloudTemplateLibraryModal = React.lazy(() => import('./CloudTemplateLibraryModal'))
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
 import { useTranslation } from '../../locales/useTranslation'
@@ -61,7 +61,7 @@ const { Option } = Select
  * 现代化配置面板组件
  */
 const ModernConfigPanel: React.FC = () => {
-  const { t, language } = useTranslation()
+  const { t } = useTranslation()
   // v1.4.0：使用 App context 的 message/modal 替代静态 message/Modal.confirm/info，消除 antd 静态函数警告
   const { message, modal } = App.useApp()
 
@@ -93,35 +93,7 @@ const ModernConfigPanel: React.FC = () => {
   // hasBackup 用于检查备份状态，当前仅设置但未读取（预留为后续功能）
   const [, setHasBackup] = useState(false)
 
-  // 多工具配置管理：claude-code 走遗留工作区通道，其余 registry 工具走配置集通道
-  const [manageToolId, setManageToolId] = useState('claude-code')
-  const [configSetTools, setConfigSetTools] = useState<Array<{ toolId: string; label: string }>>([])
-  // Claude 面板的云模板库入口（共享弹窗，按 toolId=claude-code 过滤）
   const [cloudTemplateOpen, setCloudTemplateOpen] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const loadConfigSetTools = async (): Promise<void> => {
-      try {
-        const response = await window.electronAPI.toolRegistry.getSnapshot()
-        if (!response.success || !response.data || cancelled) return
-        setConfigSetTools(
-          response.data.tools
-            .filter((tool: ToolDefinition) => tool.artifacts.some((artifact) => artifact.configSet))
-            .map((tool: ToolDefinition) => ({
-              toolId: tool.toolId,
-              label: tool.displayName[language] || tool.toolId
-            }))
-        )
-      } catch {
-        // 快照加载失败时保留 claude-code 单工具视图，不阻塞配置页
-      }
-    }
-    void loadConfigSetTools()
-    return () => {
-      cancelled = true
-    }
-  }, [language])
 
   const [editorVisible, setEditorVisible] = useState(false)
   const [importVisible, setImportVisible] = useState(false)
@@ -391,7 +363,8 @@ const ModernConfigPanel: React.FC = () => {
     try {
       if (editorMode === 'edit' && editingConfig) {
         // 更新现有配置 - 直接保存纯内容和元数据
-        await window.electronAPI.config.save(editingConfig.path, configData.content, configData.metadata)
+        const response = await window.electronAPI.config.save(editingConfig.path, configData.content, configData.metadata)
+        if (!response.success) throw new Error(response.error || t('agentContext.saveFailed'))
       } else {
         // 创建新配置
         await createConfigWithData(configData)
@@ -417,6 +390,7 @@ const ModernConfigPanel: React.FC = () => {
       }
     } catch (error) {
       console.error('保存配置失败:', error)
+      throw error
     }
   }
 
@@ -514,7 +488,7 @@ const ModernConfigPanel: React.FC = () => {
     const now = new Date()
     const diff = now.getTime() - date.getTime()
     const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-    
+
     if (days === 0) return t('configPanel.time.today')
     if (days === 1) return t('configPanel.time.yesterday')
     if (days < 7) return t('configPanel.time.daysAgo', { days })
@@ -679,56 +653,6 @@ const ModernConfigPanel: React.FC = () => {
   /**
    * 工具选择下拉框：claude-code（遗留工作区配置）+ registry 声明 configSet 的工具
    */
-  const renderToolSelector = () => (
-    <Select
-      value={manageToolId}
-      style={{ width: 200 }}
-      onChange={(value) => setManageToolId(value)}
-    >
-      <Option value="claude-code">Claude Code</Option>
-      {configSetTools.map((tool) => (
-        <Option key={tool.toolId} value={tool.toolId}>
-          {tool.label}
-        </Option>
-      ))}
-    </Select>
-  )
-
-  // 非 claude-code 工具：渲染 registry 配置集面板（遗留 store 的错误不影响通用视图）
-  if (manageToolId !== 'claude-code') {
-    const activeTool = configSetTools.find((tool) => tool.toolId === manageToolId)
-    return (
-      <div className="modern-config-panel">
-        <div className="config-panel-toolbar">
-          <div className="toolbar-left">{renderToolSelector()}</div>
-        </div>
-        {activeTool ? (
-          <Suspense fallback={<Spin size="large" />}>
-            <ToolConfigSetPanel toolId={activeTool.toolId} toolLabel={activeTool.label} />
-          </Suspense>
-        ) : (
-          <div className="config-panel-empty">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <div>
-                  <div>{t('configPanel.empty')}</div>
-                  <Button
-                    type="primary"
-                    style={{ marginTop: 16 }}
-                    onClick={() => setManageToolId('claude-code')}
-                  >
-                    Claude Code
-                  </Button>
-                </div>
-              }
-            />
-          </div>
-        )}
-      </div>
-    )
-  }
-
   if (error) {
     return (
       <div className="config-panel-error">
@@ -761,10 +685,10 @@ const ModernConfigPanel: React.FC = () => {
             {t('configPanel.subtitle', { count: configs.length })}
           </Text>
         </div>
-        
+
         <div className="header-right">
           <Space wrap>
-            {renderToolSelector()}
+
             <Button
               icon={<ReloadOutlined />}
               onClick={async () => {
@@ -964,7 +888,7 @@ const ModernConfigPanel: React.FC = () => {
             flexDirection: 'column',
             overflow: 'hidden'
           }
-        }}
+        }} maskClosable={false}
       >
         <Alert
           message={t('configPanel.preview.alertTitle')}

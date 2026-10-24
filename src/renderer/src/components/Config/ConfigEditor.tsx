@@ -1,3 +1,5 @@
+import { useAgentDraftGuard } from '../../hooks/useAgentDraftGuard'
+import { useAgentContextStore } from '../../store/agent-context-store'
 /**
  * 配置编辑器组件
  * 提供配置文件的编辑功能
@@ -127,6 +129,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   const [isValid, setIsValid] = useState(true)
   const [previewVisible, setPreviewVisible] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [formDirty, setFormDirty] = useState(false)
   const [showUserImport, setShowUserImport] = useState(false)
   const [userConfigs, setUserConfigs] = useState<Array<Record<string, unknown>>>([])
   const [loadingUserConfigs, setLoadingUserConfigs] = useState(false)
@@ -134,7 +137,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   const [systemConfigConfirmVisible, setSystemConfigConfirmVisible] = useState(false)
   const [pendingSystemConfigAction, setPendingSystemConfigAction] = useState<{
     action: 'load' | 'save'
-    callback: () => void
+    callback: () => void | Promise<void>
   } | null>(null)
 
   const { editorContent, loadConfigContent } = useConfigEditorStore()
@@ -145,6 +148,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   useEffect(() => {
     let cancelled = false
     if (visible) {
+      setFormDirty(false)
       if (config) {
         // 编辑模式 - 设置表单字段
         form.setFieldsValue({
@@ -243,6 +247,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   // 处理内容变化
   const handleContentChange = (value: string) => {
     setContent(value)
+    setFormDirty(true)
   }
 
   // 处理验证变化
@@ -251,12 +256,17 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   }
 
   // 确认系统配置操作
-  const handleSystemConfigConfirm = () => {
-    if (pendingSystemConfigAction) {
-      pendingSystemConfigAction.callback()
+  const handleSystemConfigConfirm = async () => {
+    setIsSaving(true)
+    try {
+      await pendingSystemConfigAction?.callback()
+      setSystemConfigConfirmVisible(false)
+      setPendingSystemConfigAction(null)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('agentContext.saveFailed'))
+    } finally {
+      setIsSaving(false)
     }
-    setSystemConfigConfirmVisible(false)
-    setPendingSystemConfigAction(null)
   }
 
   // 取消系统配置操作
@@ -328,7 +338,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
   }
 
   // 保存配置（统一架构）
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     try {
       // 验证表单
       let values
@@ -348,12 +358,12 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         } else {
           message.error(t('configEditor.form.incomplete'))
         }
-        return
+        return false
       }
 
       if (!isValid) {
         message.error(t('configEditor.content.invalid'))
-        return
+        return false
       }
 
       setIsSaving(true)
@@ -372,7 +382,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
       } catch (error) {
         console.error('内容解析失败:', error)
         message.error(t('configEditor.content.parseFailed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
-        return
+        return false
       }
 
       // 构建配置数据：分离内容和元数据
@@ -392,13 +402,15 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
         setPendingSystemConfigAction({
           action: 'save',
           callback: async () => {
-            await window.electronAPI.config.save(config.path, actualContent)
+            const response = await window.electronAPI.config.save(config.path, actualContent)
+            if (!response.success) throw new Error(response.error || t('agentContext.saveFailed'))
             message.success(t('configEditor.save.systemSuccess'))
             // 系统配置保存后关闭编辑器，触发父组件刷新
             onClose()
           }
         })
         setSystemConfigConfirmVisible(true)
+        return false
       } else {
         // 非系统配置文件通过onSave处理
         await onSave(configData)
@@ -426,10 +438,12 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
 
         // 非系统配置保存成功后，关闭编辑器触发父组件刷新
         onClose()
+        return true
       }
     } catch (error) {
       console.error('Save failed:', error)
       message.error(t('configEditor.save.failed', { error: error instanceof Error ? error.message : t('common.unknownError') }))
+      return false
     } finally {
       setIsSaving(false)
     }
@@ -445,6 +459,9 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
     }
     return descriptions[type] || t('configEditor.typeDesc.custom')
   }
+
+  useAgentDraftGuard('claude-config-editor', { dirty: visible && formDirty, busy: isSaving,
+    save: config?.isSystemConfig ? undefined : handleSave, discard: onClose })
 
   return (
     <>
@@ -464,11 +481,11 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           </Space>
         }
         open={visible}
-        onCancel={onClose}
+        onCancel={() => useAgentContextStore.getState().requestChange(onClose)}
         destroyOnHidden
         width={900}
         footer={[
-          <Button key="cancel" onClick={onClose}>
+          <Button key="cancel" onClick={() => useAgentContextStore.getState().requestChange(onClose)}>
             {t('common.cancel')}
           </Button>,
           <Button
@@ -499,9 +516,9 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({
           >
             {t('common.save')}
           </Button>
-        ]}
+        ]} maskClosable={false}
       >
-        <Form
+        <Form onValuesChange={() => setFormDirty(true)}
           form={form}
           layout="vertical"
           initialValues={{

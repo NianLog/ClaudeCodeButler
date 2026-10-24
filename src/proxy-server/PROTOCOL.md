@@ -41,3 +41,6 @@ npm.cmd start --prefix src/proxy-server
 - [OpenRouter API](https://openrouter.ai/docs/api_reference/overview)：接口、Bearer 认证和消息格式。
 - [Gemini Content API](https://ai.google.dev/api/generate-content)、[API keys](https://ai.google.dev/gemini-api/docs/api-key)：内容接口、SSE 和密钥处理。
 - [Anthropic Streaming](https://platform.claude.com/docs/en/build-with-claude/streaming)：目标 SSE 事件序列。
+
+
+运行要求：Node ^24.22.1（构建统一 npm 12.2.1）；启动入口会拒绝不受支持版本。安装默认禁 lifecycle；原 accessToken、配置路径与协议子集保持。

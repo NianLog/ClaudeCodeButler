@@ -142,7 +142,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ visible, onClose, rule }) => {
       onCancel={onClose}
       footer={null}
       width={640}
-      destroyOnHidden
+      destroyOnHidden maskClosable={false}
     >
       <Form form={form} layout="vertical" onFinish={handleFinish} style={{ marginTop: 24 }}>
         <Form.Item name="name" label={t('automation.editor.nameLabel')} rules={[{ required: true, message: t('automation.editor.nameRequired') }]}>

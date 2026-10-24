@@ -11,11 +11,16 @@
 
 ## [Unreleased] - 1.5.1
 
-### 2026-10-25 工具链与运行时
+### 2026-10-25 全局管理与互导
 
-- 升级 Electron 45.0.0、React 19、AntD 6、Zustand 5、Vite 8、Vitest 5、ESLint 10、Tailwind 4、Monaco 0.57；Node 24.22.1 / npm 12.2.1 隔离构建，TypeScript 6.0.3 为解析器兼容例外。
-- 修复鉴权前解码、MCP 网络正文取消和解压转发头，临时关闭普通上游空闲连接复用。Brotli 经固定源码证明包含修复，保留 br；内嵌 Node 的其他厂商回补仍需核实。
-- 两套 .npmrc 禁 lifecycle、Git/任意 remote 包；CI Actions 按已核实稳定 SHA 升级，不改变签名与手动发布门禁。
+- 一个 header 选择 Claude Code、Codex CLI、Gemini CLI、Antigravity，统一配置/MCP/Skill/子 Agent；原生编辑、验证、备份与恢复保留在配置页，移除独立 AI 工具导航。
+- 六款新增只读来源：Cursor、Qoder、WorkBuddy、TRAE、Pi、OpenCode。选择、转换预览、逐项结果与恢复入口；冲突默认保留，不能等价的授权/模型/变量语义明确阻止，TRAE/Pi 通用子 Agent 暂不自动转换。
+- Skill 整包附件、JSONC 注释/大整数、TOML 未选字段保留；切换和扫描不创建目录，不搬用户数据。恢复复用受控来源与预览，备份快照变化会中止保存/删除。
+- 旧 MCP 与归档写入改为局部原文保存，拒绝原型字段；原生恢复成功后才移除归档，失败保留副本或报告部分完成。所有新旧资源写共用队列，来源/目标/规则/启停状态重验。
+- 四主题同步色阶、暗色字重、双环焦点、等宽数字与 reduced-motion；编辑抽屉不点蒙层关闭，失败保留草稿，离开模块/切换/退出统一处理未保存内容。草稿仅在进程内存保留。
+- Electron 45.0.0、React 19、AntD 6、Zustand 5、Vite 8、Vitest 5、ESLint 10、Tailwind 4、Monaco 0.57；隔离 Node 24.22.1 / npm 12.2.1，TypeScript 6.0.3 为解析器兼容例外。
+- 集成代理先鉴权后解码，MCP 探测 net.fetch 并取消正文，解压请求删除 Content-Encoding，普通上游临时关闭连接复用。Brotli 经固定源码证明包含修复，保留 br；其他内嵌 Node 厂商回补仍待核实。
+- 源码全量 52 files / 464 tests，通过；类型与双构建通过，lint 0 error / 16 warning。原生交互 11 项通过。当前候选包验收另行记录，暂不发布。
 
 
 ### Fixed
@@ -34,6 +39,8 @@
 - 新用户首次启动时规则执行日志通过公共原子写创建目录；适配 Electron 新 console-message 事件格式。
 
 ### Security / Build
+
+- 2026-10-25 静态构建：main 386.82 kB / preload 14.37 kB / renderer entry 219.72 kB；相对扩展前 318.05 / 13.58 / 202.84，增量 68.77 / 0.79 / 16.88 kB，来自原生资源转换、备份/IPC/退出保护与全局工作区。Monaco 3986.34 kB、vendor 1409.60 kB 为此次主版本迁移结果；均为未压缩静态尺寸，不能当作性能改善证据。
 
 - 静态构建：main 318.05 kB / preload 13.58 kB / renderer entry 202.84 kB；main 相比 C 批的 317.85 kB 增加 0.20 kB，来自托管设置校验、失败反馈、停止边界和监控过滤修复，已删除旧端口预判。C 批相对 A/B 的增量来自 Skill 暂存/回滚/导入校验。包体不作为性能提升证据。
 - Electron 从 40.10.6 升至已核对的受支持稳定版 44.9.3（Chromium 152.0.7977.167 / Node 24.22.0），补齐受损中间证书缓解及上游安全修复；镜像下载与官方校验值一致。启用打包 ASAR 完整性校验与 onlyLoadAppFromAsar，保留企业 CA 环境变量支持。

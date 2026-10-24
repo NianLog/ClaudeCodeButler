@@ -1,3 +1,6 @@
+import { useRef } from 'react'
+import { useAgentContextStore } from '../../store/agent-context-store'
+import { useAgentDraftGuard } from '../../hooks/useAgentDraftGuard'
 /**
  * @file src/renderer/src/components/AIToolManagement/AIToolManagementPanel.tsx
  * @description 展示 registry 驱动的 AI 工具检测与 capability-aware 配置资产管理界面。
@@ -23,8 +26,6 @@ import {
   Typography
 } from 'antd'
 import {
-  CheckCircleOutlined,
-  CloudSyncOutlined,
   FileSearchOutlined,
   HddOutlined,
   ReloadOutlined,
@@ -37,14 +38,13 @@ import type {
   ConfigArtifactDefinition,
   DiscoveredConfigArtifact,
   ToolDefinition,
-  ToolDetectionResult,
   ToolPlatform
 } from '@shared/tool-registry'
 import { useTranslation } from '../../locales/useTranslation'
 import './AIToolManagementPanel.css'
 
 const CodeEditor = React.lazy(() => import('../Common/CodeEditor'))
-const { Title, Text, Paragraph } = Typography
+const { Title, Text } = Typography
 
 const PANEL_TEXT = {
   'zh-CN': {
@@ -52,7 +52,7 @@ const PANEL_TEXT = {
     tools: '已注册工具', artifacts: '配置资产', detected: '已检测到', notDetected: '未检测到，可继续检查已存在的配置文件',
     scanArtifacts: '扫描配置', open: '打开', readOnly: '只读', validate: '校验', backup: '创建备份', emptyTools: '规则库中没有工具定义',
     backupHistory: '历史备份', emptyBackups: '没有可恢复的备份', restore: '恢复', restoreTitle: '确认恢复备份', restoreContent: '将使用 {time} 的备份覆盖当前配置，是否继续？',
-    emptyArtifacts: '未发现当前平台的配置文件', securityTitle: '规则驱动的本地管理', securityDescription: '路径和能力由 effective registry 限定；远程规则不能携带脚本，写入前会重新校验权限。',
+    emptyArtifacts: '未发现当前平台的配置文件', securityTitle: '编辑本机配置原文件', securityDescription: '这里的修改可能直接影响 Agent。请核对文件位置；保存和恢复前会按规则校验并备份。',
     confirmSaveTitle: '确认更新配置', confirmSaveContent: '将原子更新 {path}。如果规则声明 BACKUP，会先自动创建备份。',
     confirmSaveMultiTitle: '确认更新关联配置', confirmSaveMultiContent: '将依次原子更新以下关联文件（声明 BACKUP 的会先自动创建备份）：',
     toBeUpdated: '更新', toBeCreated: '新建', configSetTitle: '配置集', linkedEditTag: '关联编辑',
@@ -65,7 +65,7 @@ const PANEL_TEXT = {
     tools: 'Registered tools', artifacts: 'Configuration artifacts', detected: 'Detected', notDetected: 'Not detected; existing configuration files can still be scanned',
     scanArtifacts: 'Scan configs', open: 'Open', readOnly: 'Read only', validate: 'Validate', backup: 'Create backup', emptyTools: 'No tool definitions in the registry',
     backupHistory: 'Backup history', emptyBackups: 'No restorable backups', restore: 'Restore', restoreTitle: 'Confirm backup restore', restoreContent: 'This replaces the current configuration with the backup from {time}. Continue?',
-    emptyArtifacts: 'No configuration files found for this platform', securityTitle: 'Registry-driven local management', securityDescription: 'The effective registry constrains paths and capabilities. Remote rules cannot carry scripts, and permissions are revalidated before writes.',
+    emptyArtifacts: 'No configuration files found for this platform', securityTitle: 'Edit native configuration files', securityDescription: 'Changes here may affect your agent immediately. Check the file location; permissions and backups are checked before writes.',
     confirmSaveTitle: 'Confirm configuration update', confirmSaveContent: 'This atomically updates {path}. A backup is created first when the registry declares BACKUP.',
     confirmSaveMultiTitle: 'Confirm updating linked configurations', confirmSaveMultiContent: 'The following linked files are updated atomically in order (a backup is created first when BACKUP is declared):',
     toBeUpdated: 'Update', toBeCreated: 'Create', configSetTitle: 'Configuration set', linkedEditTag: 'Linked editing',
@@ -114,8 +114,9 @@ const AIToolManagementPanel: React.FC = () => {
     Object.entries(variables).reduce((result, [key, replacement]) => result.replace(`{${key}}`, replacement), value)
   const { message, modal } = App.useApp()
   const [tools, setTools] = useState<ToolDefinition[]>([])
-  const [detections, setDetections] = useState<Record<string, ToolDetectionResult>>({})
-  const [selectedToolId, setSelectedToolId] = useState<string>()
+  const selectedToolId = useAgentContextStore((state) => state.selectedToolId)
+  const alive = useRef(true)
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
   const [artifacts, setArtifacts] = useState<DiscoveredConfigArtifact[]>([])
   const [editorParts, setEditorParts] = useState<EditorPart[]>([])
   const [drafts, setDrafts] = useState<Record<string, string>>({})
@@ -126,6 +127,8 @@ const AIToolManagementPanel: React.FC = () => {
   const [loadingBackups, setLoadingBackups] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingArtifacts, setLoadingArtifacts] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const artifactReadVersion = useRef(0)
   const [saving, setSaving] = useState(false)
 
   const selectedTool = useMemo(
@@ -150,23 +153,15 @@ const AIToolManagementPanel: React.FC = () => {
   /** 加载 effective registry 与工具检测结果 */
   const loadTools = useCallback(async (): Promise<void> => {
     setLoading(true)
+    setLoadError('')
     try {
-      const [snapshotResponse, detectionResponse] = await Promise.all([
-        window.electronAPI.toolRegistry.getSnapshot(),
-        window.electronAPI.toolRegistry.detectTools()
-      ])
-      if (!snapshotResponse.success || !snapshotResponse.data) {
-        throw new Error(snapshotResponse.error || panelText.loadRegistryError)
-      }
-      if (!detectionResponse.success || !detectionResponse.data) {
-        throw new Error(detectionResponse.error || panelText.detectError)
-      }
+      const snapshotResponse = await window.electronAPI.toolRegistry.getSnapshot()
+      if (!alive.current) return
+      if (!snapshotResponse.success || !snapshotResponse.data) throw new Error(snapshotResponse.error || panelText.loadRegistryError)
       setTools(snapshotResponse.data.tools)
-      setDetections(Object.fromEntries(
-        detectionResponse.data.map((result) => [result.toolId, result])
-      ))
-      setSelectedToolId((current) => current ?? snapshotResponse.data?.tools[0]?.toolId)
     } catch (error) {
+      if (!alive.current) return
+      setLoadError(error instanceof Error ? error.message : String(error))
       message.error(error instanceof Error ? error.message : String(error))
     } finally {
       setLoading(false)
@@ -176,13 +171,17 @@ const AIToolManagementPanel: React.FC = () => {
   /** 加载当前工具已存在的配置资产 */
   const loadArtifacts = useCallback(async (toolId: string): Promise<void> => {
     setLoadingArtifacts(true)
+    setLoadError('')
     setEditorParts([])
     try {
       const response = await window.electronAPI.toolRegistry.discoverArtifacts(toolId)
+      if (!alive.current) return
       if (!response.success) throw new Error(response.error || panelText.discoverError)
       setArtifacts(response.data ?? [])
     } catch (error) {
+      if (!alive.current) return
       setArtifacts([])
+      setLoadError(error instanceof Error ? error.message : String(error))
       message.error(error instanceof Error ? error.message : String(error))
     } finally {
       setLoadingArtifacts(false)
@@ -202,6 +201,7 @@ const AIToolManagementPanel: React.FC = () => {
    * @param artifact 从 discovery 结果打开的配置资产
    */
   const openArtifact = async (artifact: DiscoveredConfigArtifact): Promise<void> => {
+    const readVersion = ++artifactReadVersion.current
     const tool = tools.find((candidate) => candidate.toolId === artifact.toolId)
     const definition = tool?.artifacts.find((item) => item.artifactId === artifact.artifactId)
     if (!tool || !definition) return
@@ -224,6 +224,7 @@ const AIToolManagementPanel: React.FC = () => {
           member.artifactId,
           discovered.path
         )
+        if (!alive.current || readVersion !== artifactReadVersion.current) return
         if (!response.success || !response.data) {
           message.error(response.error || panelText.readError)
           return
@@ -280,22 +281,10 @@ const AIToolManagementPanel: React.FC = () => {
    * 明确确认后保存全部未保存草稿：先统一校验，再按分组成员顺序原子写入各文件。
    * 每个文件独立走 per-artifact 授权/自动备份/原子替换，注释与原始格式天然保留。
    */
-  const saveDraft = (): void => {
-    if (!selectedToolId || dirtyParts.length === 0) return
-    const editableParts = dirtyParts.filter((part) => part.definition.capabilities.includes('EDIT'))
-    if (editableParts.length === 0) return
+  const persistDraft = async (): Promise<boolean> => {
     const toolId = selectedToolId
-    const fileList = editableParts
-      .map((part) => `${part.content ? panelText.toBeUpdated : panelText.toBeCreated} · ${part.content?.path ?? part.candidatePath}`)
-      .join('\n')
-    modal.confirm({
-      title: compositeMode ? panelText.confirmSaveMultiTitle : panelText.confirmSaveTitle,
-      content: compositeMode
-        ? `${panelText.confirmSaveMultiContent}\n${fileList}`
-        : formatPanelText(panelText.confirmSaveContent, { path: editableParts[0].content?.path ?? editableParts[0].candidatePath }),
-      okText: t('common.save'),
-      cancelText: t('common.cancel'),
-      onOk: async () => {
+    const editableParts = dirtyParts.filter((part) => part.definition.capabilities.includes('EDIT'))
+
         setSaving(true)
         try {
           for (const part of editableParts) {
@@ -328,13 +317,30 @@ const AIToolManagementPanel: React.FC = () => {
             applySavedContent(artifactId, response.data)
           }
           message.success(panelText.saved)
+          return true
         } catch (error) {
           message.error(error instanceof Error ? error.message : String(error))
-          throw error
+          return false
         } finally {
           setSaving(false)
         }
-      }
+  }
+
+  const saveDraft = (): void => {
+    if (!selectedToolId || dirtyParts.length === 0) return
+    const editableParts = dirtyParts.filter((part) => part.definition.capabilities.includes('EDIT'))
+    if (editableParts.length === 0) return
+    const fileList = editableParts
+      .map((part) => `${part.content ? panelText.toBeUpdated : panelText.toBeCreated} · ${part.content?.path ?? part.candidatePath}`)
+      .join('\n')
+    modal.confirm({
+      title: compositeMode ? panelText.confirmSaveMultiTitle : panelText.confirmSaveTitle,
+      content: compositeMode
+        ? `${panelText.confirmSaveMultiContent}\n${fileList}`
+        : formatPanelText(panelText.confirmSaveContent, { path: editableParts[0].content?.path ?? editableParts[0].candidatePath }),
+      okText: t('common.save'),
+      cancelText: t('common.cancel'),
+      onOk: async () => { if (!await persistDraft()) throw new Error(panelText.saveError) }
     })
   }
 
@@ -397,48 +403,26 @@ const AIToolManagementPanel: React.FC = () => {
     })
   }
 
+  useAgentDraftGuard('native-config', { dirty: dirtyParts.length > 0, busy: saving, save: persistDraft, discard: () => setEditorParts([]) })
+
   return (
     <div className="ai-tool-management-panel">
       <div className="ai-tool-header">
         <div>
-          <Title level={2}>{panelText.title}</Title>
-          <Paragraph type="secondary">{panelText.subtitle}</Paragraph>
+          <Title level={3}>{t('resources.nativeFiles')}</Title>
+
         </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void loadTools()} loading={loading}>
+        <Button icon={<ReloadOutlined />} onClick={() => void Promise.all([loadTools(), loadArtifacts(selectedToolId)])} loading={loading}>
           {t('common.refresh')}
         </Button>
       </div>
 
       <Alert showIcon type="info" message={panelText.securityTitle} description={panelText.securityDescription} />
+      {loadError && <Alert type="error" showIcon title={loadError} />}
 
       <Spin spinning={loading}>
         <Row gutter={[16, 16]}>
-          <Col xs={24} lg={8}>
-            <Card title={panelText.tools}>
-              <List
-                dataSource={tools}
-                locale={{ emptyText: <Empty description={panelText.emptyTools} /> }}
-                renderItem={(tool) => {
-                  const detection = detections[tool.toolId]
-                  const selected = tool.toolId === selectedToolId
-                  return (
-                    <List.Item
-                      className={selected ? 'ai-tool-list-item selected' : 'ai-tool-list-item'}
-                      onClick={() => setSelectedToolId(tool.toolId)}
-                    >
-                      <List.Item.Meta
-                        avatar={detection?.detected ? <CheckCircleOutlined className="detected-icon" /> : <CloudSyncOutlined />}
-                        title={tool.displayName[language]}
-                        description={detection?.detected ? panelText.detected : panelText.notDetected}
-                      />
-                    </List.Item>
-                  )
-                }}
-              />
-            </Card>
-          </Col>
-
-          <Col xs={24} lg={16}>
+          <Col span={24}>
             <Card
               title={selectedTool?.displayName[language] ?? panelText.artifacts}
               extra={selectedToolId && (
@@ -496,7 +480,8 @@ const AIToolManagementPanel: React.FC = () => {
         width="min(1100px, 92vw)"
         footer={null}
         destroyOnHidden
-        onCancel={() => setEditorParts([])}
+        maskClosable={false}
+        onCancel={() => useAgentContextStore.getState().requestChange(() => setEditorParts([]))}
       >
         {activePart && (
           <>

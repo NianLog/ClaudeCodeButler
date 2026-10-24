@@ -569,7 +569,7 @@ const EnvironmentCheckPanel: React.FC = () => {
         onOk={handleAddCustomCheck}
         onCancel={closeCustomCheckModal}
         width={600}
-        afterClose={() => customCheckForm.resetFields()}
+        afterClose={() => customCheckForm.resetFields()} maskClosable={false}
       >
         <Form
           form={customCheckForm}

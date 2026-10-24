@@ -4,13 +4,16 @@
  */
 
 import { promises as fs } from 'fs'
-import { net } from 'electron'
 import path from 'path'
 import os from 'os'
+import { net } from 'electron'
 import { mcpArchiveService } from './mcp-archive.service'
 import { terminalManagementService } from './terminal-management-service'
 import { logger } from '../utils/logger'
 import { writeTextAtomic } from '../utils/atomic-json-writer'
+import { assertSafeMcpKeys, createMcpDictionary, mcpJsonReviver } from '../utils/mcp-data'
+import { assertNoLinks, utf8 } from './agent-resource-files'
+import { editJsonSubtree, editRawJsonSubtree, extractJsonSubtree, parseJson, record } from './agent-resource-codecs'
 import type {
   ClaudeConfig,
   MCPServerConfig,
@@ -24,15 +27,47 @@ import type {
 
 const mcpLogger = logger.child('MCPManagementService')
 
+function invalidMcpKeys(...keys: unknown[]): MCPConfigResult<never> | undefined {
+  try { assertSafeMcpKeys(...keys); return undefined }
+  catch (error) { return { success: false, error: (error as Error).message } }
+}
+
+function parseNativeMcpObject(content: string): ClaudeConfig {
+  let value: unknown
+  try { value = JSON.parse(content.replace(/^\uFEFF/, ''), mcpJsonReviver) }
+  catch { value = JSON.parse(JSON.stringify(parseJson(content)), mcpJsonReviver) }
+  if (!record(value)) throw new Error('Claude 配置必须是 JSON 对象')
+  return value as ClaudeConfig
+}
+
 /**
  * MCP管理服务类
  */
 export class MCPManagementService {
   private configPath: string
+  private readonly readSnapshots = new WeakMap<ClaudeConfig, string>()
+  private readonly rawDefinitions = new WeakMap<ClaudeConfig, Array<{ path: string[]; content: string }>>()
 
   constructor() {
     // Claude配置文件路径: ~/.claude.json
     this.configPath = path.join(os.homedir(), '.claude.json')
+  }
+
+  private serverPath(serverId: string, scope: string): string[] {
+    assertSafeMcpKeys(serverId, scope)
+    return scope === 'global' ? ['mcpServers', serverId] : ['projects', scope, 'mcpServers', serverId]
+  }
+
+  private originalServerText(config: ClaudeConfig, serverId: string, scope: string): string | undefined {
+    const original = this.readSnapshots.get(config)
+    return original === undefined ? undefined : extractJsonSubtree(original, this.serverPath(serverId, scope))
+  }
+
+  private preserveServerText(config: ClaudeConfig, serverId: string, scope: string, content?: string): void {
+    if (content === undefined) return
+    const overrides = this.rawDefinitions.get(config) ?? []
+    overrides.push({ path: this.serverPath(serverId, scope), content })
+    this.rawDefinitions.set(config, overrides)
   }
 
   /**
@@ -42,10 +77,11 @@ export class MCPManagementService {
   async readClaudeConfig(): Promise<MCPConfigResult<ClaudeConfig>> {
     try {
       mcpLogger.info(`读取配置文件: ${this.configPath}`)
-      const content = await fs.readFile(this.configPath, 'utf-8')
+      const content = utf8(await fs.readFile(this.configPath))
       mcpLogger.debug('配置文件内容长度', { length: content.length })
 
-      const config = JSON.parse(content) as ClaudeConfig
+      const config = parseNativeMcpObject(content)
+      this.readSnapshots.set(config, content)
       mcpLogger.debug('配置解析成功，配置对象键', Object.keys(config))
 
       // 输出配置的关键信息(不输出敏感数据)
@@ -85,19 +121,28 @@ export class MCPManagementService {
 
     try {
       // 步骤1: 验证配置对象结构
-      if (!config || typeof config !== 'object') {
+      if (!config || typeof config !== 'object' || Array.isArray(config)) {
         return {
           success: false,
           error: '配置对象无效'
         }
       }
 
-      // 步骤2: 验证JSON序列化
+      await assertNoLinks(this.configPath)
+      await assertNoLinks(backupPath)
+      let original: string | undefined
+      try { original = utf8(await fs.readFile(this.configPath)) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      const snapshot = this.readSnapshots.get(config)
+      if (snapshot !== undefined && original !== snapshot) return { success: false, error: 'Claude 配置已被其他程序修改，请刷新后重试' }
+
+      // 只替换业务真正改变的叶字段；未变化的注释与大整数保持原始字节。
       let content: string
       try {
-        content = JSON.stringify(config, null, 2)
-        // 验证能否正确解析回来
-        JSON.parse(content)
+        const normalized = parseNativeMcpObject(JSON.stringify(config))
+        content = original === undefined ? JSON.stringify(config, null, 2) : editJsonSubtree(original, [], parseNativeMcpObject(original), normalized)
+        for (const override of this.rawDefinitions.get(config) ?? []) content = editRawJsonSubtree(content, override.path, override.content)
+        parseNativeMcpObject(content)
       } catch (jsonError: unknown) {
         return {
           success: false,
@@ -113,19 +158,22 @@ export class MCPManagementService {
         backupCreated = true
       } catch (accessError: unknown) {
         // 文件不存在,无需备份
-        if (
-          accessError instanceof Error &&
-          'code' in accessError &&
-          (accessError as { code?: unknown }).code !== 'ENOENT'
-        ) {
+        if ((accessError as NodeJS.ErrnoException).code !== 'ENOENT') {
           return {
             success: false,
-            error: `无法访问配置文件: ${accessError.message}`
+            error: `无法访问或备份配置文件: ${accessError instanceof Error ? accessError.message : String(accessError)}`
           }
         }
       }
+      let latest: string | undefined
+      try { latest = utf8(await fs.readFile(this.configPath)) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      if (latest !== original) return { success: false, error: 'Claude 配置在备份期间发生变化，未覆盖' }
+      await assertNoLinks(this.configPath)
 
       await writeTextAtomic(this.configPath, content)
+      this.readSnapshots.set(config, content)
+      this.rawDefinitions.delete(config)
 
       // 步骤5: 清理备份文件
       if (backupCreated) {
@@ -298,6 +346,9 @@ export class MCPManagementService {
   async getProjectServers(
     projectPath: string
   ): Promise<MCPConfigResult<Record<string, MCPServerConfig>>> {
+    const keyError = invalidMcpKeys(projectPath)
+    if (keyError) return keyError
+
     const configResult = await this.readClaudeConfig()
     if (!configResult.success || !configResult.data) {
       return { success: false, error: configResult.error }
@@ -318,6 +369,9 @@ export class MCPManagementService {
    * @returns 操作结果
    */
   async addOrUpdateServer(formData: MCPServerFormData): Promise<MCPConfigResult<void>> {
+    const keyError = invalidMcpKeys(formData?.id, formData?.targetScope)
+    if (keyError) return keyError
+
     // 验证表单数据
     const validation = this.validateServerFormData(formData)
     if (!validation.valid) {
@@ -340,7 +394,7 @@ export class MCPManagementService {
     let serverConfig: MCPServerConfig
     if (formData.rawConfig) {
       try {
-        serverConfig = JSON.parse(formData.rawConfig) as MCPServerConfig
+        serverConfig = parseNativeMcpObject(formData.rawConfig) as MCPServerConfig
       } catch {
         return { success: false, error: '原始配置 JSON 解析失败' }
       }
@@ -425,24 +479,26 @@ export class MCPManagementService {
     }
     } // 结束 else（结构化组装）
 
+    if (formData.rawConfig) this.preserveServerText(config, formData.id, formData.targetScope, editJsonSubtree(formData.rawConfig, [], parseNativeMcpObject(formData.rawConfig), serverConfig))
+
     // 根据目标范围添加到配置
     if (formData.targetScope === 'global') {
       // 添加到全局MCP服务器
       if (!config.mcpServers) {
-        config.mcpServers = {}
+        config.mcpServers = createMcpDictionary<MCPServerConfig>()
       }
       config.mcpServers[formData.id] = serverConfig
     } else {
       // 添加到项目级MCP服务器
       const projectPath = formData.targetScope
       if (!config.projects) {
-        config.projects = {}
+        config.projects = createMcpDictionary<NonNullable<ClaudeConfig['projects']>[string]>()
       }
       if (!config.projects[projectPath]) {
-        config.projects[projectPath] = {}
+        config.projects[projectPath] = createMcpDictionary<unknown>()
       }
       if (!config.projects[projectPath].mcpServers) {
-        config.projects[projectPath].mcpServers = {}
+        config.projects[projectPath].mcpServers = createMcpDictionary<MCPServerConfig>()
       }
       const mcpServers = config.projects[projectPath].mcpServers
       mcpServers[formData.id] = serverConfig
@@ -459,6 +515,9 @@ export class MCPManagementService {
    * @returns 操作结果
    */
   async deleteServer(serverId: string, scope: string): Promise<MCPConfigResult<void>> {
+    const keyError = invalidMcpKeys(serverId, scope)
+    if (keyError) return keyError
+
     const configResult = await this.readClaudeConfig()
     if (!configResult.success || !configResult.data) {
       return { success: false, error: configResult.error }
@@ -507,15 +566,17 @@ export class MCPManagementService {
    * @returns 操作结果,data为新的disabled状态
    */
   async toggleServer(serverId: string, scope: string): Promise<MCPConfigResult<boolean>> {
+    const keyError = invalidMcpKeys(serverId, scope)
+    if (keyError) return keyError
+
     try {
       // 检查服务器是否在 archive 中
       const isArchived = await mcpArchiveService.isArchived(serverId, scope)
 
       if (isArchived) {
         // 服务器在archive中,需要启用(从archive移回.claude.json)
-        const restoredConfig = scope === 'global'
-          ? await mcpArchiveService.restoreGlobalServer(serverId)
-          : await mcpArchiveService.restoreProjectServer(serverId, scope)
+        const archiveEntry = await mcpArchiveService.peekServer(serverId, scope)
+        const restoredConfig = archiveEntry?.config
 
         if (!restoredConfig) {
           return {
@@ -531,24 +592,31 @@ export class MCPManagementService {
         }
 
         const config = configResult.data
+        const existing = scope === 'global' ? config.mcpServers?.[serverId] : config.projects?.[scope]?.mcpServers?.[serverId]
+        if (existing && (this.originalServerText(config, serverId, scope) ?? JSON.stringify(existing)) !== (archiveEntry?.rawConfig ?? JSON.stringify(restoredConfig))) {
+          return { success: false, error: '原生配置已有不同的同名服务器，未用归档覆盖；请核对两份定义' }
+        }
+        this.preserveServerText(config, serverId, scope, archiveEntry?.rawConfig)
 
         // 添加到.claude.json
         if (scope === 'global') {
-          if (!config.mcpServers) config.mcpServers = {}
+          if (!config.mcpServers) config.mcpServers = createMcpDictionary<MCPServerConfig>()
           config.mcpServers[serverId] = restoredConfig
         } else {
           const projectPath = scope
-          if (!config.projects) config.projects = {}
-          if (!config.projects[projectPath]) config.projects[projectPath] = { mcpServers: {} }
-          if (!config.projects[projectPath].mcpServers) config.projects[projectPath].mcpServers = {}
+          if (!config.projects) config.projects = createMcpDictionary<NonNullable<ClaudeConfig['projects']>[string]>()
+          if (!config.projects[projectPath]) config.projects[projectPath] = { mcpServers: createMcpDictionary<MCPServerConfig>() }
+          if (!config.projects[projectPath].mcpServers) config.projects[projectPath].mcpServers = createMcpDictionary<MCPServerConfig>()
           config.projects[projectPath].mcpServers[serverId] = restoredConfig
         }
 
         // 保存配置
         const saveResult = await this.saveClaudeConfig(config)
         if (!saveResult.success) {
-          return { success: false, error: saveResult.error }
+          return { success: false, error: `原生启用失败，归档副本仍保留：${saveResult.error}` }
         }
+        const confirmed = await mcpArchiveService.confirmRestore(serverId, scope, archiveEntry?.revision ?? '')
+        if (!confirmed.success) return { success: false, error: `服务器已写入原生配置，但归档清理失败；请刷新核实，勿重复切换：${confirmed.error}` }
 
         return { success: true, data: false } // false = 已启用(not disabled)
       } else {
@@ -578,8 +646,8 @@ export class MCPManagementService {
 
         // 移动到archive
         const archiveResult = scope === 'global'
-          ? await mcpArchiveService.archiveGlobalServer(serverId, serverConfig)
-          : await mcpArchiveService.archiveProjectServer(serverId, scope, serverConfig)
+          ? await mcpArchiveService.archiveGlobalServer(serverId, serverConfig, this.originalServerText(config, serverId, scope))
+          : await mcpArchiveService.archiveProjectServer(serverId, scope, serverConfig, this.originalServerText(config, serverId, scope))
 
         if (!archiveResult.success) {
           return {
@@ -603,7 +671,7 @@ export class MCPManagementService {
         // 保存配置
         const saveResult = await this.saveClaudeConfig(config)
         if (!saveResult.success) {
-          return { success: false, error: saveResult.error }
+          return { success: false, error: `归档已保留，但原生停用失败，服务器可能仍启用；请刷新核实：${saveResult.error}` }
         }
 
         return { success: true, data: true } // true = 已禁用(disabled)
@@ -628,6 +696,9 @@ export class MCPManagementService {
     newServerId: string,
     targetScope: string
   ): Promise<MCPConfigResult<void>> {
+    const keyError = invalidMcpKeys(serverId, scope, newServerId, targetScope)
+    if (keyError) return keyError
+
     const configResult = await this.readClaudeConfig()
     if (!configResult.success || !configResult.data) {
       return { success: false, error: configResult.error }
@@ -653,11 +724,12 @@ export class MCPManagementService {
 
     // 复制服务器配置
     const newServerConfig = JSON.parse(JSON.stringify(sourceServerConfig)) as MCPServerConfig
+    this.preserveServerText(config, newServerId, targetScope, this.originalServerText(config, serverId, scope))
 
     // 添加到目标范围
     if (targetScope === 'global') {
       if (!config.mcpServers) {
-        config.mcpServers = {}
+        config.mcpServers = createMcpDictionary<MCPServerConfig>()
       }
       if (config.mcpServers[newServerId]) {
         return {
@@ -669,13 +741,13 @@ export class MCPManagementService {
     } else {
       const projectPath = targetScope
       if (!config.projects) {
-        config.projects = {}
+        config.projects = createMcpDictionary<NonNullable<ClaudeConfig['projects']>[string]>()
       }
       if (!config.projects[projectPath]) {
-        config.projects[projectPath] = {}
+        config.projects[projectPath] = createMcpDictionary<unknown>()
       }
       if (!config.projects[projectPath].mcpServers) {
-        config.projects[projectPath].mcpServers = {}
+        config.projects[projectPath].mcpServers = createMcpDictionary<MCPServerConfig>()
       }
       const mcpServers = config.projects[projectPath].mcpServers
       if (mcpServers[newServerId]) {
@@ -717,6 +789,9 @@ export class MCPManagementService {
     serverId: string,
     scope: string
   ): Promise<MCPConfigResult<MCPServerAvailabilityResult>> {
+    const keyError = invalidMcpKeys(serverId, scope)
+    if (keyError) return keyError
+
     const configResult = await this.readClaudeConfig()
     if (!configResult.success || !configResult.data) {
       return { success: false, error: configResult.error }
@@ -987,6 +1062,9 @@ export class MCPManagementService {
     serverId: string,
     scope: string
   ): Promise<MCPConfigResult<string>> {
+    const keyError = invalidMcpKeys(serverId, scope)
+    if (keyError) return keyError
+
     const configResult = await this.readClaudeConfig()
     if (!configResult.success || !configResult.data) {
       return { success: false, error: configResult.error }
@@ -1010,7 +1088,7 @@ export class MCPManagementService {
     }
 
     try {
-      const jsonString = JSON.stringify(serverConfig, null, 2)
+      const jsonString = this.originalServerText(config, serverId, scope) ?? JSON.stringify(serverConfig, null, 2)
       return { success: true, data: jsonString }
     } catch (error: unknown) {
       return {
@@ -1032,8 +1110,11 @@ export class MCPManagementService {
     serverId: string,
     targetScope: string
   ): Promise<MCPConfigResult<void>> {
+    const keyError = invalidMcpKeys(serverId, targetScope)
+    if (keyError) return keyError
+
     try {
-      const serverConfig = JSON.parse(jsonString) as MCPServerConfig
+      const serverConfig = parseNativeMcpObject(jsonString) as MCPServerConfig
 
       // v1.4.0 兼容性：放宽导入校验，只保留 JSON 格式校验（合法 JSON 对象），
       // 不再强制 type/command/url 字段，以兼容 Claude Code 原生的多种 MCP 格式（如 {url, headers}）
@@ -1050,23 +1131,24 @@ export class MCPManagementService {
       }
 
       const config = configResult.data
+      this.preserveServerText(config, serverId, targetScope, jsonString)
 
       // 添加到目标范围
       if (targetScope === 'global') {
         if (!config.mcpServers) {
-          config.mcpServers = {}
+          config.mcpServers = createMcpDictionary<MCPServerConfig>()
         }
         config.mcpServers[serverId] = serverConfig
       } else {
         const projectPath = targetScope
         if (!config.projects) {
-          config.projects = {}
+          config.projects = createMcpDictionary<NonNullable<ClaudeConfig['projects']>[string]>()
         }
         if (!config.projects[projectPath]) {
-          config.projects[projectPath] = {}
+          config.projects[projectPath] = createMcpDictionary<unknown>()
         }
         if (!config.projects[projectPath].mcpServers) {
-          config.projects[projectPath].mcpServers = {}
+          config.projects[projectPath].mcpServers = createMcpDictionary<MCPServerConfig>()
         }
         config.projects[projectPath].mcpServers[serverId] = serverConfig
       }

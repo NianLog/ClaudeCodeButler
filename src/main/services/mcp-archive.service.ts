@@ -1,320 +1,179 @@
-/**
- * MCP Archive Service
- * @description 管理被禁用的MCP服务器配置的存档服务
- * 将禁用的服务器配置从 .claude.json 移动到独立的 archive 文件
- */
-
-import { promises as fs } from 'fs'
-import * as path from 'path'
+/** 禁用的 MCP 先持久化到归档；恢复在 native 保存成功后才确认移除。 */
+import path from 'path'
 import { app } from 'electron'
-import { logger } from '../utils/logger'
 import type { MCPServerConfig } from '@shared/types/mcp'
+import { logger } from '../utils/logger'
+import { writeTextAtomic } from '../utils/atomic-json-writer'
+import { assertSafeMcpKeys, createMcpDictionary } from '../utils/mcp-data'
+import { assertNoLinks, digest, readBounded, utf8 } from './agent-resource-files'
+import { editJsonSubtree, editRawJsonSubtree, extractJsonSubtree, jsonEqual, parseJson, record } from './agent-resource-codecs'
 
-/**
- * Archive 条目接口
- */
-interface MCPArchiveEntry {
+export interface MCPArchiveEntry {
   config: MCPServerConfig
   archivedAt: number
+  rawConfig?: string
+  revision?: string
 }
-
-/**
- * Archive 文件结构接口
- */
 interface MCPArchiveFile {
   global: Record<string, MCPArchiveEntry>
   projects: Record<string, Record<string, MCPArchiveEntry>>
 }
+interface ArchiveResult { success: boolean; error?: string }
+interface ArchiveSnapshot { content: string; bytes?: Buffer; archive: MCPArchiveFile }
+const MAX_ARCHIVE_BYTES = 16 * 1024 * 1024
 
-/**
- * Archive 操作结果接口
- */
-interface ArchiveResult {
-  success: boolean
-  error?: string
-}
+export class MCPArchiveService {
+  private readonly archivePath = path.join(app.getPath('userData'), 'mcp-archive.json')
+  private pending: Promise<void> = Promise.resolve()
 
-/**
- * MCP Archive Service 类
- */
-class MCPArchiveService {
-  private archivePath: string
-
-  constructor() {
-    // Archive 文件存储在应用数据目录
-    const userDataPath = app.getPath('userData')
-    this.archivePath = path.join(userDataPath, 'mcp-archive.json')
+  // 不能嵌套资源公共队列：调用者已持有该队列；这里只串行化归档自身的读改写。
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.pending.then(operation)
+    this.pending = result.then(() => undefined, () => undefined)
+    return result
   }
 
-  /**
-   * 读取 Archive 文件
-   * @returns Archive 文件内容
-   */
-  async readArchive(): Promise<MCPArchiveFile> {
-    try {
-      const content = await fs.readFile(this.archivePath, 'utf-8')
-      const archive = JSON.parse(content) as MCPArchiveFile
-
-      // 确保结构完整
-      if (!archive.global) archive.global = {}
-      if (!archive.projects) archive.projects = {}
-
-      return archive
-    } catch (error: unknown) {
-      const errorCode = error instanceof Error && 'code' in error ? (error as { code?: unknown }).code : undefined
-      if (errorCode === 'ENOENT') {
-        // 文件不存在,返回空结构
-        logger.info('Archive 文件不存在,创建新的空 Archive')
-        return {
-          global: {},
-          projects: {}
+  private async snapshot(): Promise<ArchiveSnapshot> {
+    const bytes = await readBounded(this.archivePath, MAX_ARCHIVE_BYTES)
+    const content = bytes ? utf8(bytes) : '{"global":{},"projects":{}}\n'
+    const value = parseJson(content)
+    if (value.global !== undefined && !record(value.global) || value.projects !== undefined && !record(value.projects)) throw new Error('MCP 归档的 global/projects 必须是对象，未覆盖原文件')
+    const global = (value.global ?? createMcpDictionary<MCPArchiveEntry>()) as Record<string, MCPArchiveEntry>
+    const projects = (value.projects ?? createMcpDictionary<Record<string, MCPArchiveEntry>>()) as Record<string, Record<string, MCPArchiveEntry>>
+    const validate = (entries: Record<string, MCPArchiveEntry>, scope: string) => {
+      assertSafeMcpKeys(scope)
+      for (const [id, entry] of Object.entries(entries)) {
+        assertSafeMcpKeys(id)
+        if (!record(entry) || !record(entry.config) || typeof entry.archivedAt !== 'number' || !Number.isFinite(entry.archivedAt) || (entry.rawConfig !== undefined && typeof entry.rawConfig !== 'string')) throw new Error('MCP 归档条目损坏，未覆盖原文件')
+        if (entry.rawConfig !== undefined) {
+          if (!jsonEqual(parseJson(entry.rawConfig), entry.config)) throw new Error('MCP 归档原始定义与 config 不一致，保留原文件供核查')
         }
       }
-      logger.error('读取 Archive 文件失败:', error)
-      throw error
     }
+    validate(global, 'global')
+    for (const [project, entries] of Object.entries(projects)) {
+      if (!record(entries)) throw new Error('MCP 项目归档必须是对象')
+      validate(entries as Record<string, MCPArchiveEntry>, project)
+    }
+    return { content, bytes, archive: { global, projects } }
   }
 
-  /**
-   * 写入 Archive 文件
-   * @param archive Archive 文件内容
-   */
-  async writeArchive(archive: MCPArchiveFile): Promise<void> {
+  private keyPath(serverId: string, scope: string): string[] {
+    assertSafeMcpKeys(serverId, scope)
+    return scope === 'global' ? ['global', serverId] : ['projects', scope, serverId]
+  }
+
+  private entry(snapshot: ArchiveSnapshot, serverId: string, scope: string): MCPArchiveEntry | null {
+    const keys = this.keyPath(serverId, scope)
+    const collection = scope === 'global' ? snapshot.archive.global : snapshot.archive.projects[scope]
+    if (!collection || !Object.hasOwn(collection, serverId)) return null
+    const source = extractJsonSubtree(snapshot.content, keys)
+    const rawConfig = extractJsonSubtree(snapshot.content, [...keys, 'config'])
+    if (!source || !rawConfig) throw new Error('无法定位 MCP 归档原文')
+    if (collection[serverId].rawConfig !== undefined && collection[serverId].rawConfig !== rawConfig) throw new Error('MCP 归档原始定义与 config 不一致，保留原文件供核查')
+    return { ...collection[serverId], rawConfig, revision: digest(source) }
+  }
+
+  private async persist(snapshot: ArchiveSnapshot, next: string): Promise<void> {
+    if (Buffer.byteLength(next) > MAX_ARCHIVE_BYTES) throw new Error('MCP 归档超过 16 MiB，原文件未更改')
+    parseJson(next)
+    if (snapshot.bytes) {
+      await assertNoLinks(`${this.archivePath}.backup`)
+      await writeTextAtomic(`${this.archivePath}.backup`, snapshot.bytes)
+    }
+    const current = await readBounded(this.archivePath, MAX_ARCHIVE_BYTES)
+    if ((current ? digest(current) : undefined) !== (snapshot.bytes ? digest(snapshot.bytes) : undefined)) throw new Error('MCP 归档在备份期间发生变化，未覆盖')
+    await assertNoLinks(this.archivePath)
+    await writeTextAtomic(this.archivePath, next)
+  }
+
+  async readArchive(): Promise<MCPArchiveFile> { return (await this.snapshot()).archive }
+
+  private async archiveServer(serverId: string, scope: string, config: MCPServerConfig, rawConfig?: string): Promise<ArchiveResult> {
     try {
-      const content = JSON.stringify(archive, null, 2)
-      await fs.writeFile(this.archivePath, content, 'utf-8')
-      logger.info('Archive 文件写入成功')
+      return await this.enqueue(async () => {
+        const keys = this.keyPath(serverId, scope)
+        const raw = extractJsonSubtree(rawConfig ?? JSON.stringify(config), [])
+        if (!raw || !record(config) || !jsonEqual(parseJson(raw), config)) throw new Error('MCP 归档定义与原文不一致')
+        const snapshot = await this.snapshot()
+        const old = this.entry(snapshot, serverId, scope)
+        if (old) {
+          if (old.rawConfig !== raw) throw new Error('同名归档已有不同定义，请先核查，未覆盖安全副本')
+          return { success: true }
+        }
+        let next = editJsonSubtree(snapshot.content, keys, undefined, { config, archivedAt: Date.now(), rawConfig: raw })
+        next = editRawJsonSubtree(next, [...keys, 'config'], raw)
+        await this.persist(snapshot, next)
+        return { success: true }
+      })
     } catch (error) {
-      logger.error('写入 Archive 文件失败:', error)
-      throw error
+      const message = `归档 MCP 服务失败: ${error instanceof Error ? error.message : String(error)}`
+      logger.error(message)
+      return { success: false, error: message }
     }
   }
 
-  /**
-   * 存档全局服务器
-   * @param serverId 服务器ID
-   * @param config 服务器配置
-   * @returns 操作结果
-   */
-  async archiveGlobalServer(serverId: string, config: MCPServerConfig): Promise<ArchiveResult> {
-    try {
-      const archive = await this.readArchive()
-
-      // 添加到全局 archive
-      archive.global[serverId] = {
-        config,
-        archivedAt: Date.now()
-      }
-
-      await this.writeArchive(archive)
-      logger.info(`全局服务器 "${serverId}" 已存档`)
-
-      return { success: true }
-    } catch (error) {
-      const errorMessage = `存档全局服务器 "${serverId}" 失败: ${(error as Error).message}`
-      logger.error(errorMessage)
-      return { success: false, error: errorMessage }
-    }
+  archiveGlobalServer(serverId: string, config: MCPServerConfig, rawConfig?: string): Promise<ArchiveResult> {
+    return this.archiveServer(serverId, 'global', config, rawConfig)
   }
 
-  /**
-   * 存档项目级服务器
-   * @param serverId 服务器ID
-   * @param projectPath 项目路径
-   * @param config 服务器配置
-   * @returns 操作结果
-   */
-  async archiveProjectServer(
-    serverId: string,
-    projectPath: string,
-    config: MCPServerConfig
-  ): Promise<ArchiveResult> {
-    try {
-      const archive = await this.readArchive()
-
-      // 确保项目路径存在
-      if (!archive.projects[projectPath]) {
-        archive.projects[projectPath] = {}
-      }
-
-      // 添加到项目 archive
-      archive.projects[projectPath][serverId] = {
-        config,
-        archivedAt: Date.now()
-      }
-
-      await this.writeArchive(archive)
-      logger.info(`项目服务器 "${serverId}" (${projectPath}) 已存档`)
-
-      return { success: true }
-    } catch (error) {
-      const errorMessage = `存档项目服务器 "${serverId}" 失败: ${(error as Error).message}`
-      logger.error(errorMessage)
-      return { success: false, error: errorMessage }
-    }
+  archiveProjectServer(serverId: string, projectPath: string, config: MCPServerConfig, rawConfig?: string): Promise<ArchiveResult> {
+    return this.archiveServer(serverId, projectPath, config, rawConfig)
   }
 
-  /**
-   * 恢复全局服务器
-   * @param serverId 服务器ID
-   * @returns 服务器配置,如果不存在返回 null
-   */
+  async peekServer(serverId: string, scope: string): Promise<MCPArchiveEntry | null> {
+    this.keyPath(serverId, scope)
+    return this.entry(await this.snapshot(), serverId, scope)
+  }
+
+  /** 兼容旧内部调用的读取结果；此方法不再提前删除归档。 */
   async restoreGlobalServer(serverId: string): Promise<MCPServerConfig | null> {
-    try {
-      const archive = await this.readArchive()
-
-      const entry = archive.global[serverId]
-      if (!entry) {
-        logger.warn(`全局服务器 "${serverId}" 不在 archive 中`)
-        return null
-      }
-
-      // 从 archive 中移除
-      const config = entry.config
-      delete archive.global[serverId]
-      await this.writeArchive(archive)
-
-      logger.info(`全局服务器 "${serverId}" 已从 archive 恢复`)
-      return config
-    } catch (error) {
-      logger.error(`恢复全局服务器 "${serverId}" 失败:`, error)
-      throw error
-    }
+    return (await this.peekServer(serverId, 'global'))?.config ?? null
   }
 
-  /**
-   * 恢复项目级服务器
-   * @param serverId 服务器ID
-   * @param projectPath 项目路径
-   * @returns 服务器配置,如果不存在返回 null
-   */
   async restoreProjectServer(serverId: string, projectPath: string): Promise<MCPServerConfig | null> {
-    try {
-      const archive = await this.readArchive()
-
-      const projectArchive = archive.projects[projectPath]
-      if (!projectArchive || !projectArchive[serverId]) {
-        logger.warn(`项目服务器 "${serverId}" (${projectPath}) 不在 archive 中`)
-        return null
-      }
-
-      // 从 archive 中移除
-      const config = projectArchive[serverId].config
-      delete projectArchive[serverId]
-
-      // 如果项目 archive 为空,删除项目条目
-      if (Object.keys(projectArchive).length === 0) {
-        delete archive.projects[projectPath]
-      }
-
-      await this.writeArchive(archive)
-
-      logger.info(`项目服务器 "${serverId}" (${projectPath}) 已从 archive 恢复`)
-      return config
-    } catch (error) {
-      logger.error(`恢复项目服务器 "${serverId}" 失败:`, error)
-      throw error
-    }
+    return (await this.peekServer(serverId, projectPath))?.config ?? null
   }
 
-  /**
-   * 获取所有已存档的全局服务器
-   * @returns 已存档的全局服务器列表
-   */
-  async getArchivedGlobalServers(): Promise<Record<string, MCPArchiveEntry>> {
-    try {
-      const archive = await this.readArchive()
-      return archive.global
-    } catch (error) {
-      logger.error('获取已存档的全局服务器失败:', error)
-      return {}
-    }
-  }
+  async getArchivedGlobalServers(): Promise<Record<string, MCPArchiveEntry>> { return (await this.readArchive()).global }
 
-  /**
-   * 获取项目的所有已存档服务器
-   * @param projectPath 项目路径
-   * @returns 已存档的项目服务器列表
-   */
   async getArchivedProjectServers(projectPath: string): Promise<Record<string, MCPArchiveEntry>> {
+    assertSafeMcpKeys(projectPath)
+    return (await this.readArchive()).projects[projectPath] ?? createMcpDictionary<MCPArchiveEntry>()
+  }
+
+  async isArchived(serverId: string, scope: string): Promise<boolean> { return (await this.peekServer(serverId, scope)) !== null }
+
+  private async remove(serverId: string, scope: string, expectedRevision?: string): Promise<ArchiveResult> {
     try {
-      const archive = await this.readArchive()
-      return archive.projects[projectPath] || {}
+      return await this.enqueue(async () => {
+        const keys = this.keyPath(serverId, scope)
+        const snapshot = await this.snapshot()
+        const old = this.entry(snapshot, serverId, scope)
+        if (!old) throw new Error('MCP 服务不在归档中')
+        if (expectedRevision !== undefined && old.revision !== expectedRevision) throw new Error('MCP 归档条目在恢复期间发生变化，保留安全副本')
+        const collection = scope === 'global' ? snapshot.archive.global : snapshot.archive.projects[scope]
+        const next = scope !== 'global' && Object.keys(collection).length === 1
+          ? editJsonSubtree(snapshot.content, ['projects', scope], collection, undefined)
+          : editJsonSubtree(snapshot.content, keys, collection[serverId], undefined)
+        await this.persist(snapshot, next)
+        return { success: true }
+      })
     } catch (error) {
-      logger.error(`获取项目 "${projectPath}" 的已存档服务器失败:`, error)
-      return {}
+      const message = `移除 MCP 归档失败: ${error instanceof Error ? error.message : String(error)}`
+      logger.error(message)
+      return { success: false, error: message }
     }
   }
 
-  /**
-   * 检查服务器是否在 archive 中
-   * @param serverId 服务器ID
-   * @param scope 作用域(global 或项目路径)
-   * @returns 是否在 archive 中
-   */
-  async isArchived(serverId: string, scope: string): Promise<boolean> {
-    try {
-      const archive = await this.readArchive()
-
-      if (scope === 'global') {
-        return !!archive.global[serverId]
-      } else {
-        const projectArchive = archive.projects[scope]
-        return projectArchive ? !!projectArchive[serverId] : false
-      }
-    } catch (error) {
-      logger.error(`检查服务器 "${serverId}" 是否在 archive 中失败:`, error)
-      return false
-    }
+  confirmRestore(serverId: string, scope: string, expectedRevision: string): Promise<ArchiveResult> {
+    if (!/^[a-f0-9]{64}$/.test(expectedRevision)) return Promise.resolve({ success: false, error: '缺少有效归档版本，保留安全副本' })
+    return this.remove(serverId, scope, expectedRevision)
   }
 
-  /**
-   * 删除已存档的服务器
-   * @param serverId 服务器ID
-   * @param scope 作用域(global 或项目路径)
-   * @returns 操作结果
-   */
-  async deleteArchivedServer(serverId: string, scope: string): Promise<ArchiveResult> {
-    try {
-      const archive = await this.readArchive()
+  deleteArchivedServer(serverId: string, scope: string): Promise<ArchiveResult> { return this.remove(serverId, scope) }
 
-      if (scope === 'global') {
-        if (!archive.global[serverId]) {
-          return { success: false, error: `服务器 "${serverId}" 不在全局 archive 中` }
-        }
-        delete archive.global[serverId]
-      } else {
-        const projectArchive = archive.projects[scope]
-        if (!projectArchive || !projectArchive[serverId]) {
-          return { success: false, error: `服务器 "${serverId}" 不在项目 archive 中` }
-        }
-        delete projectArchive[serverId]
-
-        // 如果项目 archive 为空,删除项目条目
-        if (Object.keys(projectArchive).length === 0) {
-          delete archive.projects[scope]
-        }
-      }
-
-      await this.writeArchive(archive)
-      logger.info(`已存档的服务器 "${serverId}" (${scope}) 已永久删除`)
-
-      return { success: true }
-    } catch (error) {
-      const errorMessage = `删除已存档的服务器 "${serverId}" 失败: ${(error as Error).message}`
-      logger.error(errorMessage)
-      return { success: false, error: errorMessage }
-    }
-  }
-
-  /**
-   * 获取 archive 文件路径
-   * @returns archive 文件路径
-   */
-  getArchivePath(): string {
-    return this.archivePath
-  }
+  getArchivePath(): string { return this.archivePath }
 }
 
-// 导出单例实例
 export const mcpArchiveService = new MCPArchiveService()

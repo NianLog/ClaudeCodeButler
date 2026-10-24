@@ -1,7 +1,7 @@
 # CAPABILITIES.md — 能力清单与成熟度
 
 > 活文档。新增/修改用户可见功能、registry capability、adapter 时，必须在同一提交更新本文件。
-> 更新时间：2026-10-24（1.5.1 未发布候选；v1.5.0 已发布）。
+> 更新时间：2026-10-25（1.5.1 未发布候选；v1.5.0 已发布）。
 
 状态标记：`稳定`（v1.4.0 已发布且回归通过）｜`1.5.0 新增`（本版落地，待实机验收）｜`基础`（foundation 完成，能力受限）｜`规划`（未实现）。
 
@@ -9,17 +9,17 @@
 
 | 功能 | 说明 | 状态 |
 | --- | --- | --- |
-| 配置管理 | Claude Code 多类型配置（settings/claude.json/claude.md/项目配置）创建、编辑、复制、导入导出、备份、激活切换；Monaco 编辑器 + JSON/Markdown 校验；新建预填按 `USER_OVERRIDE > REGISTRY > EMBEDDED` 解析的 artifact 模板；v1.5.0 顶部工具下拉框可在该工作区通道与多工具配置集通道间切换 | 稳定（模板来源机制与工具下拉框 1.5.0 新增） |
+| 配置管理 | Claude Code 多类型配置（settings/claude.json/claude.md/项目配置）创建、编辑、复制、导入导出、备份、激活切换；Monaco 编辑器 + JSON/Markdown 校验；新建预填按 `USER_OVERRIDE > REGISTRY > EMBEDDED` 解析的 artifact 模板；1.5.1 header 全局选择器统一该工作区、配置集和资源管理目标 | 稳定（模板来源机制与工具下拉框 1.5.0 新增） |
 | 多工具配置集 | registry `configSet` 声明驱动的命名快照：创建（live 内容，缺失文件回退默认模板）、逐文件编辑、激活（全组校验后逐文件授权/备份/原子写）、删除、isInUse 比对、名称搜索；配置页与托盘快速切换菜单均可用，托管模式下激活被拦截 | 1.5.0 新增 |
 | 云模板库 | Claude 配置面板与配置集面板共用的签名云模板通道：仅显示/导入**当前所选工具**的模板（跨工具模板不可见不可导入），一键导入；`CONFIG_SET` 模板导入为本地配置集（不动生效配置），`ARTIFACT` 模板保存为 artifact 默认模板覆盖。清单与 item 均经 Ed25519 签名 + pinned origin + 哈希校验，导入复用既有写路径 | 1.5.0 新增 |
-| MCP 管理 | 全局/项目级 MCP server 管理，本地 command 型与远程 http 型，启用/禁用/复制/归档/可用性验证 | 稳定 |
-| 子 Agent / Skill 管理 | `.claude` 下 agents/skills 的清单与管理面板 | 稳定 |
+| MCP 管理 | 四管理目标的用户级原生定义 CRUD/互导；Claude 旧高级面板保留项目/启用禁用/复制/归档/探测 | 1.5.1 扩展，旧通道保留 |
+| 子 Agent / Skill 管理 | 四目标原生目录管理、互导与完整包恢复；Claude 高级面板保留 | 1.5.1 扩展 |
 | 项目管理 | Claude 项目关联与会话读取（路径校验防护） | 稳定 |
 | 统计分析 | Claude Code JSONL 日志流式解析，用量/模型/token 统计 | 稳定（生命周期竞态修复于 1.5.0） |
 | 自动化规则 | 时间/文件变化/应用事件触发的条件-动作规则；custom-command 经 command-executor 参数化执行 + 系统通知 | 稳定 |
 | 环境检查 | Claude Code 及相关工具版本检测 | 稳定 |
 | 托管模式 | 主应用为 accessToken 鉴权的 Anthropic 兼容本地代理、上游热切换、日志与诊断；独立包另有 4 类转换器及明确的协议子集 | 集成模式稳定；独立包 1.5.1 C 批修复，真实服务商待验 |
-| AI 工具配置面板 | registry 驱动的通用工具面板：检测、artifact 发现、raw 查看、校验、编辑、备份恢复，全部 capability-aware | 1.5.0 新增（懒加载） |
+| 原生配置文件（配置页） | 原 AI 工具面板迁入配置管理：检测、artifact 发现、raw 查看、校验、编辑、备份恢复，全部 capability-aware | 1.5.0 新增（懒加载） |
 | 设置 | 主题/语言/终端/编辑器偏好；registry 版本检查、确认安装与回滚；artifact 模板覆盖管理（三方 diff 预览） | 模板与 registry 控件 1.5.0 新增 |
 | 性能快照 | About/Performance 按需导出 per-process CPU/内存、renderer timings、watcher/scan runtimeMetrics | 1.5.0 新增（本地存储，不上传） |
 | 单实例运行 | CCB 仅允许一个进程：二次启动自动退出并恢复/聚焦已有窗口，弹系统通知提示 | 1.5.0 新增 |
@@ -27,7 +27,7 @@
 
 ## 2. Registry 能力模型（v1.5.0 核心）
 
-能力动词（allowlist 封闭集合，未知即拒绝）：`DISCOVER`、`READ`、`VALIDATE`、`EDIT`、`BACKUP`、`RESTORE`。
+能力动词（allowlist 封闭集合，未知即拒绝）：`DISCOVER`、`READ`、`VALIDATE`、`EDIT`、`BACKUP`、`RESTORE`；1.5.1 扩展 `MANAGE_MCP`、`MANAGE_DIRECTORY`。
 
 ### 2.1 内置 adapter 状态
 
@@ -92,4 +92,23 @@ C 批为独立 proxy 补上本地 accessToken 校验及按协议转发：Anthrop
 Skill 两种导入入口先暂存和校验，再备份替换；失败恢复原目录，恢复失败报告保留的备份位置。原路径、默认不覆盖及批量结果接口保持兼容。新增导入大小、文件数量、编码和链接限制，避免不完整或越界内容覆盖现有 Skill。
 
 
-2026-10-25 工具链已升级 Electron 45.0.0 与 React 19 / AntD 6；用户文件路径不变。完整依赖审计与运行时补丁验证分开，正式发布仍待厂商回补核实。
+## 6. 1.5.1 全局管理与跨工具导入（2026-10-25）
+
+Header 唯一全局目标：Claude Code / Codex CLI / Gemini CLI / Antigravity。配置管理保留旧工作区、配置快照、原生文件验证/编辑/备份/恢复；切换只读配置，不激活或搬迁数据。MCP、Skill、子 Agent 共用目标，不再各自选择。
+
+| 工具 | 管理 MCP / Skill / 子 Agent | 导入来源 | 边界 |
+| --- | --- | --- | --- |
+| Claude Code | 三类用户级原生资源 | 三类，另含项目来源 | 旧项目、归档、高级导入导出保留 |
+| Codex CLI | 三类；MCP/角色为 TOML | 三类 | 保留原 .codex 路径及现有 .agents Skill 候选 |
+| Gemini CLI | 三类 | 三类 | 原生 enablement/allowed/excluded 纳入判断；远程角色不强行转换 |
+| Antigravity | 三类 | 三类 | 保留现有原生目录候选；变量展开证据不足时提示 |
+| Cursor / Qoder / WorkBuddy | 无 | MCP / Skill / 子 Agent | WorkBuddy 只识别公开 CodeBuddy 文件 |
+| TRAE / Pi | 无 | MCP / Skill | 通用子 Agent 原生规范未核实，明确阻止 |
+
+OpenCode 也是只读导入来源，支持 MCP、Skill、子 Agent。项目/手选来源经主进程 picker 授权；TRAE 全局 MCP 需手选。十款来源的官方格式依据见 [.agents 导入记录](.agents/notes/implemented/feature/2026-10-25-agent-import-and-global-context.md)。
+
+导入按选择→差异/约束预览→逐项收据执行；冲突默认跳过，可显式备份替换或重命名。预览遮蔽已配置凭据，不读取系统环境秘密或迁移 OAuth 会话。不能等价的权限/认证/变量/模型/工具限制逐项阻止，不能理解为全部格式无损转换。“已配置”只确认定义存在，不代表真实运行通过。
+
+Skill/角色通过同一受控预览流程从本机备份恢复；MCP 复用原生文件历史备份，恢复为整文件覆盖。保存失败保留草稿；离开模块/切换/退出统一处理未保存内容，草稿仅保留在本进程内存，没有磁盘自动草稿。四主题 ID 与持久化保持，字重、数字、焦点、色阶及 reduced-motion 同步更新。
+
+新增 registry 能力仅供 minimumAppVersion>=1.5.1，旧自定义路径与权限保留；其他新来源不出现在写入目标中。用户路径、旧备份、用户数据均不迁移。实际十款客户端、账号和其他 OS 的运行仍未验收。

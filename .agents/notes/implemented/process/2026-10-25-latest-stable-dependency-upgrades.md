@@ -8,7 +8,7 @@ Last-verified: 2026-10-25
 
 用户要求把项目依赖升级到最新稳定兼容组合，并明确允许必要的 br 限制；同时保留 1.5.1 应用身份、用户数据和旧配置路径。2026-10-25 已批准方案。扩展前源码已存档 ed53f23，不修改全局 Node/npm，不自动升级用户的 AI CLI。
 
-既有结论分别见[受支持运行时与正式门禁](2026-10-19-supported-runtime-and-release-gates.md)、[持久化与代理失败边界](../bug-fix/2026-10-19-persistence-and-proxy-safety.md)。当前功能扩展见[导入与全局对象](../../proposed/feature/2026-10-25-agent-import-and-global-context.md)。保留历史验收事实；本记录取代当前工具链版本的描述。
+既有结论分别见[受支持运行时与正式门禁](2026-10-19-supported-runtime-and-release-gates.md)、[持久化与代理失败边界](../bug-fix/2026-10-19-persistence-and-proxy-safety.md)。当前功能扩展见[导入与全局对象](../../implemented/feature/2026-10-25-agent-import-and-global-context.md)。保留历史验收事实；本记录取代当前工具链版本的描述。
 
 ## Decision
 

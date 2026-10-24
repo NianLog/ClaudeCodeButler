@@ -30,7 +30,9 @@ export const TOOL_CAPABILITIES = [
   'BACKUP',
   'RESTORE',
   'ACTIVATE',
-  'WATCH'
+  'WATCH',
+  'MANAGE_MCP',
+  'MANAGE_DIRECTORY'
 ] as const
 
 /** 工具配置能力 */
@@ -43,7 +45,7 @@ export const TOOL_DETECTOR_TYPES = ['COMMAND_EXISTS', 'PATH_EXISTS'] as const
 export type ToolDetectorType = typeof TOOL_DETECTOR_TYPES[number]
 
 /** 首版允许的内置 handler 标识 */
-export const ARTIFACT_HANDLERS = ['JSON_FILE_V1', 'MARKDOWN_FILE_V1', 'TEXT_FILE_V1', 'TOML_FILE_V1'] as const
+export const ARTIFACT_HANDLERS = ['JSON_FILE_V1', 'MARKDOWN_FILE_V1', 'TEXT_FILE_V1', 'TOML_FILE_V1', 'SKILL_DIRECTORY_V1', 'SUBAGENT_DIRECTORY_V1'] as const
 
 /** 配置资产 handler 标识 */
 export type ArtifactHandler = typeof ARTIFACT_HANDLERS[number]

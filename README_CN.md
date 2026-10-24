@@ -27,7 +27,7 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 - **1.5.1 安全修复**：同路径排队原子写、配置集激活前完整校验、设置失败反馈、受限版本读取与上游断连取消；沿用现有配置路径和文件格式。
 - **收尾修复**：损坏或不可读的托管 settings 不再被覆盖，启停和恢复失败会返回错误；重启按钮实际执行服务重启，服务商切换成功后仅刷新状态。
 - **C 批修复**：独立代理强制 accessToken、按协议路由并转换 SSE；Skill 覆盖先校验暂存再替换，失败恢复原目录。独立代理的启动与协议支持范围见 [说明](src/proxy-server/PROTOCOL.md)。
-- **本地验收**：46 个测试文件 / 351 项全通过，两套生产依赖审计为 0；maximum 的 Windows Portable/NSIS/ZIP 候选已生成，ZIP 和 Portable 实际业务及正常退出通过。本地候选未签名、未发布。
+- **本地验收**：52 个测试文件 / 464 项全通过，无跳过；类型检查、双构建通过，lint 零错误（16 warning），原生 Electron 交互 11 项通过。此次扩展的候选包重建及最终校验另见安全报告，未发布。
 - **发布门禁**：两套生产依赖审计、预检、Authenticode 校验、ASAR 完整性、依赖 SBOM、SHA-256 和来源证明。本地未签名包仅供测试，验证记录及开发链告警见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
 产品名称继续使用 **Claude Code Butler**。名称用于记录项目起源，不再承担描述全部管理范围的职责；新增工具通过受约束 registry 与内置 capabilities 接入，`CCB`、`.ccb`、应用 identity 和仓库标识保持稳定。
@@ -103,7 +103,7 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 ### 环境要求
 
 - Node.js ^24.22.1 与 npm 12.2.1
-- npm >= 10.0.0
+- npm 12.2.1
 - 仅在执行本地 Semgrep 审计时需要 Python >= 3.10
 
 ### 安装
@@ -120,6 +120,9 @@ npm ci
 
 # 安装独立 proxy-server 依赖
 npm ci --prefix src/proxy-server
+
+# .npmrc 默认禁安装脚本，仅显式执行已审查的 Electron 下载器
+node node_modules/electron/install.js
 ```
 
 ### 开发模式
@@ -217,13 +220,13 @@ npm run dist:all
 - **Electron**: 45.0.0
 - **electron-vite**: 5.0.0
 - **Vite**: 7.3.6
-- **TypeScript**: 5.9.3
+- **TypeScript**: 6.0.3
 
 ### 渲染层（构建期打包，不进运行时 `dependencies`）
 
-- **React**: 18.3.1
-- **Ant Design**: 5.27.6
-- **Zustand**: 4.5.7
+- **React**: 19.3.1
+- **Ant Design**: 6.6.7
+- **Zustand**: 5.0.16
 - **Monaco Editor**: 0.55.1，搭配 `@monaco-editor/react` 4.7（按需加载运行时）
 - **Recharts**: 2.15.4
 - **react-markdown**: 9.1 / **remark-gfm**: 4.0.1
@@ -454,3 +457,8 @@ Made by NianSir
 
 
 工具链更新（2026-10-25）：Electron 45.0.0、React 19、AntD 6、Zustand 5；隔离 Node 24.22.1 / npm 12.2.1。TypeScript 保留解析器支持的 6.0.3；Electron 内嵌 Node 厂商回补仍为正式发布门禁，未发布。
+
+
+### 1.5.1 跨工具配置
+
+Header 统一管理目标；原“AI 配置工具”的原生文件、验证与备份恢复在配置页保留。导入按选择、脱敏预览、逐项结果执行；冲突默认跳过，不能等价的权限/认证/变量/模型明确阻止。TRAE、Pi 通用子 Agent 暂不自动转换。Skill/角色可从本机备份恢复，MCP 恢复整份原生文件。未保存草稿阻止切换和退出；草稿仅保留在本进程内存。配置路径和用户数据不迁移。

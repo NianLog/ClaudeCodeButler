@@ -23,8 +23,8 @@ CCB 是本地优先的 Electron 配置管理桌面应用。帮助用户查看、
 ## Capabilities and Constraints
 
 - 现有 registry 声明 Claude Code、Codex CLI、Gemini CLI 和 Antigravity CLI 的配置资产。
-- 现有 MCP、Skills、子 Agent 业务服务以 Claude Code 原生目录为基础；其他工具的完整资源管理尚未实现，不能由 registry 中存在工具名称推断出来。
-- 本轮新增需求是跨工具识别、转换和导入；取消独立的“AI 配置工具”界面，在内容区 header 统一选择管理对象。
+- 四款管理目标已接入 MCP、Skills、子 Agent 原生文件管理和互导；六新增工具只作为导入来源，不能等价的语义明确阻止。
+- 跨工具识别、转换和导入已有原生 IPC 实现；独立“AI 配置工具”导航已迁入配置管理，header 统一选择管理对象。
 - 切换管理对象应读取对应配置。配置的实际应用、覆盖和导入必须保持独立、明确的写入动作。
 - 所有文件系统和路径授权归主进程；renderer 保持 sandbox、contextIsolation 和现有导航限制。
 - 本轮保留“暂不发布”的约束；正式代码签名门禁继续保留。

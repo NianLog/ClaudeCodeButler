@@ -1,3 +1,5 @@
+import { useAgentDraftGuard } from '../../hooks/useAgentDraftGuard'
+import { useAgentContextStore } from '../../store/agent-context-store'
 /**
  * @file src/renderer/src/components/Config/ToolConfigSetPanel.tsx
  * @description Registry 驱动的多工具"配置集"面板（claude-code 之外工具的配置管理通道）：
@@ -181,8 +183,8 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
   }
 
   /** 保存草稿到快照目录（main 侧统一校验全部文件后原子写入，不触碰生效配置） */
-  const saveDrafts = async (): Promise<void> => {
-    if (!editingSet || !dirty) return
+  const saveDrafts = async (): Promise<boolean> => {
+    if (!editingSet || !dirty) return true
     setSaving(true)
     try {
       const response = await window.electronAPI.toolRegistry.saveConfigSetContent(
@@ -194,8 +196,10 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
       setBaselines({ ...drafts })
       message.success(panelText.saved)
       await loadSets()
+      return true
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error))
+      return false
     } finally {
       setSaving(false)
     }
@@ -270,6 +274,9 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
   }, [searchText, sets])
 
   const formatDate = (iso: string): string => new Date(iso).toLocaleString()
+
+  useAgentDraftGuard('config-set', { dirty: dirty || createOpen && !!createName, busy: saving || creating,
+    save: createOpen ? undefined : saveDrafts, discard: () => { closeEditor(); setCreateOpen(false); setCreateName('') } })
 
   return (
     <div className="tool-config-set-panel">
@@ -401,7 +408,7 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
         confirmLoading={creating}
         okText={panelText.create}
         cancelText={language === 'zh-CN' ? '取消' : 'Cancel'}
-        centered
+        centered maskClosable={false}
       >
         <Space direction="vertical" style={{ width: '100%', padding: '12px 0' }}>
           <Input
@@ -420,12 +427,13 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
       <Modal
         title={formatPanelText(panelText.editTitle, { name: editingSet?.name ?? '' })}
         open={editingSet !== null}
-        onCancel={closeEditor}
+        maskClosable={false}
+        onCancel={() => useAgentContextStore.getState().requestChange(closeEditor)}
         width={920}
         centered
         styles={{ body: { height: '560px', display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}
         footer={[
-          <Button key="cancel" onClick={closeEditor}>
+          <Button key="cancel" onClick={() => useAgentContextStore.getState().requestChange(closeEditor)}>
             {language === 'zh-CN' ? '关闭' : 'Close'}
           </Button>,
           <Button
