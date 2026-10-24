@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'crypto'
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises'
+import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
 import path from 'path'
 import type {
   ConfigArtifactDefinition,
@@ -23,6 +23,7 @@ import { toolArtifactManagementService } from './tool-artifact-management-servic
 import { pathManager } from '../utils/path-manager'
 import { ensurePathWithinBase } from '../utils/path-security'
 import { logger } from '../utils/logger'
+import { writeJsonAtomic, writeTextAtomic } from '../utils/atomic-json-writer'
 
 /** 单个配置集文件内容上限（与 artifact 读取限制对齐） */
 const CONFIG_SET_MAX_FILE_BYTES = 1024 * 1024
@@ -257,7 +258,8 @@ export class ToolConfigSetService {
       if (!member) throw new Error(`配置集不包含该文件: ${file.artifactId}`)
       this.assertContentSize(file.content)
       if (member.capabilities.includes('VALIDATE')) {
-        await this.managementService.validateArtifact(toolId, file.artifactId, '', file.content)
+        const validation = await this.managementService.validateArtifact(toolId, file.artifactId, '', file.content)
+        if (!validation.valid) throw new Error(`配置校验失败: ${validation.errors.join('; ')}`)
       }
     }
     for (const file of files) {
@@ -278,7 +280,8 @@ export class ToolConfigSetService {
 
     // 先全部校验，再逐文件写；任何一步失败中止（已写文件保留各自备份可恢复）
     for (const file of content.files) {
-      await this.managementService.validateArtifact(toolId, file.artifactId, '', file.content)
+      const validation = await this.managementService.validateArtifact(toolId, file.artifactId, '', file.content)
+      if (!validation.valid) throw new Error(`配置校验失败: ${validation.errors.join('; ')}`)
     }
     for (const file of content.files) {
       await this.managementService.editArtifact(toolId, file.artifactId, '', file.content)
@@ -453,10 +456,7 @@ export class ToolConfigSetService {
   ): Promise<void> {
     this.assertContentSize(content)
     const targetPath = this.getSetFilePath(toolId, setId, artifactId)
-    const tempPath = `${targetPath}.${randomUUID().slice(0, 8)}.tmp`
-    await mkdir(path.dirname(targetPath), { recursive: true })
-    await writeFile(tempPath, content, 'utf8')
-    await rename(tempPath, targetPath)
+    await writeTextAtomic(targetPath, content)
   }
 
   private async writeSetMetadataAtomic(
@@ -465,9 +465,7 @@ export class ToolConfigSetService {
     metadata: StoredConfigSetMetadata
   ): Promise<void> {
     const targetPath = this.getSetMetadataPath(toolId, setId)
-    const tempPath = `${targetPath}.${randomUUID().slice(0, 8)}.tmp`
-    await writeFile(tempPath, JSON.stringify(metadata, null, 2), 'utf8')
-    await rename(tempPath, targetPath)
+    await writeJsonAtomic(targetPath, metadata)
   }
 
   private assertContentSize(content: string): void {

@@ -18,6 +18,7 @@ import { PATHS, CONFIG_FILES } from '@shared/constants'
 import { logger } from '../utils/logger'
 import { ConfigMigrationService } from './config-migration'
 import { pathManager } from '../utils/path-manager'
+import { writeTextAtomic } from '../utils/atomic-json-writer'
 import {
   ensurePathAllowed,
   ensurePathWithinBase,
@@ -308,12 +309,13 @@ export class ConfigService {
 
       // 如果是系统配置文件，创建备份
       if (isSystemConfig) {
-        try {
+        const exists = await fs.stat(resolvedPath).then(() => true, (error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return false
+          throw error
+        })
+        if (exists) {
           await this.createBackup(resolvedPath)
           logger.info(`系统配置文件备份已创建: ${resolvedPath}`)
-        } catch (backupError) {
-          logger.warn(`创建系统配置备份失败: ${resolvedPath}`, backupError)
-          // 备份失败不阻止保存操作
         }
       }
 
@@ -322,11 +324,11 @@ export class ConfigService {
       if (resolvedPath.endsWith('.md') || resolvedPath.endsWith('CLAUDE.md')) {
         // MD文件保存为纯文本
         const contentString = typeof normalizedContent === 'string' ? normalizedContent : String(normalizedContent)
-        await fs.writeFile(resolvedPath, contentString, 'utf8')
+        await writeTextAtomic(resolvedPath, contentString)
       } else {
         // JSON文件保存为JSON格式
         const jsonString = JSON.stringify(normalizedContent, null, 2)
-        await fs.writeFile(resolvedPath, jsonString, 'utf8')
+        await writeTextAtomic(resolvedPath, jsonString)
       }
 
       // 非系统配置文件：同时保存元数据到.meta文件
@@ -371,7 +373,7 @@ export class ConfigService {
         lastModified: new Date().toISOString()
       }
 
-      await fs.writeFile(metaPath, JSON.stringify(finalMetadata, null, 2), 'utf8')
+      await writeTextAtomic(metaPath, JSON.stringify(finalMetadata, null, 2))
       logger.info(`元数据文件已更新: ${metaPath}`)
 
     } catch (error) {
@@ -573,7 +575,7 @@ export class ConfigService {
 
       // 复制文件
       const content = await fs.readFile(resolvedPath)
-      await fs.writeFile(backupPath, content)
+      await writeTextAtomic(backupPath, content)
 
       const backupMetadata: BackupMetadata = {
         id: backupId,
@@ -582,7 +584,7 @@ export class ConfigService {
         createdAt: new Date().toISOString(),
         description: `自动备份 - ${new Date().toLocaleString()}`
       }
-      await fs.writeFile(backupMetadataPath, JSON.stringify(backupMetadata, null, 2), 'utf8')
+      await writeTextAtomic(backupMetadataPath, JSON.stringify(backupMetadata, null, 2))
 
       const backupInfo: BackupInfo = {
         id: backupId,
@@ -619,7 +621,7 @@ export class ConfigService {
           const configPath = this.validateConfigPath(metadata.originalPath, '备份恢复目标路径')
           const content = await fs.readFile(backupPath)
 
-          await fs.writeFile(configPath, content)
+          await writeTextAtomic(configPath, content)
           logger.info(`配置已从备份恢复: ${configPath}`)
           return
         }
@@ -641,7 +643,7 @@ export class ConfigService {
       )
 
       // 恢复文件
-      await fs.writeFile(configPath, content)
+      await writeTextAtomic(configPath, content)
 
       logger.info(`配置已从备份恢复: ${configPath}`)
 
@@ -824,7 +826,7 @@ export class ConfigService {
             temperature: 0.7
           }
         }
-        await fs.writeFile(configPath, JSON.stringify(defaultSettings, null, 2), 'utf8')
+        await writeTextAtomic(configPath, JSON.stringify(defaultSettings, null, 2))
       } else if (configPath.endsWith('.claude.json')) {
         // 创建默认的.claude.json
         const defaultClaudeConfig = {
@@ -842,7 +844,7 @@ export class ConfigService {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
-        await fs.writeFile(configPath, JSON.stringify(defaultClaudeConfig, null, 2), 'utf8')
+        await writeTextAtomic(configPath, JSON.stringify(defaultClaudeConfig, null, 2))
       } else if (configPath.endsWith('CLAUDE.md')) {
         // 创建默认的CLAUDE.md
         const defaultMemory = `# Claude 用户记忆配置
@@ -865,7 +867,7 @@ export class ConfigService {
 ---
 *此文件由CCB自动创建于 ${new Date().toLocaleString()}*
 `
-        await fs.writeFile(configPath, defaultMemory, 'utf8')
+        await writeTextAtomic(configPath, defaultMemory)
       }
     } catch (error) {
       logger.error(`创建默认系统配置文件失败 ${configPath}:`, error)

@@ -35,7 +35,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: 24.22.0
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -52,16 +52,22 @@ jobs:
             ${{ runner.os }}-electron-cache-
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install proxy-server dependencies
-        run: npm ci --prefix src/proxy-server
+        run: npm ci --ignore-scripts --prefix src/proxy-server
 
-      - name: Audit production dependencies
-        # 生产依赖 0 漏洞为发布门禁（开发链已知项单独跟踪，见 CHANGELOG Release blockers 一节）。
-        run: |
-          npm audit --omit=dev
-          npm audit --omit=dev --prefix src/proxy-server
+      - name: Audit root production dependencies
+        run: npm audit --omit=dev
+
+      - name: Audit proxy production dependencies
+        run: npm audit --omit=dev --prefix src/proxy-server
+
+      - name: Release preflight (blocking)
+        run: npm run release:preflight
+
+      - name: Install verified Electron runtime
+        run: node node_modules/electron/install.js
 
       - name: Type check
         run: npm run type-check
@@ -101,6 +107,8 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout code
@@ -109,7 +117,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: 24.22.0
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -126,10 +134,24 @@ jobs:
             ${{ runner.os }}-electron-cache-
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install proxy-server dependencies
-        run: npm ci --prefix src/proxy-server
+        run: npm ci --ignore-scripts --prefix src/proxy-server
+
+      - name: Verify tag and signing configuration
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag does not match package version' }
+          if (!$env:CSC_LINK) { throw 'CSC_LINK is required for a signed release' }
+
+      - name: Release preflight (blocking)
+        run: npm run release:preflight
+
+      - name: Install verified Electron runtime
+        run: node node_modules/electron/install.js
 
       - name: Build proxy-server
         run: npm run build --prefix src/proxy-server
@@ -138,7 +160,26 @@ jobs:
         run: npm run build
 
       - name: Package Windows artifacts
-        run: npx electron-builder --win portable zip nsis --publish=never
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npx --no-install electron-builder --win portable zip nsis --publish=never --config.forceCodeSigning=true
+
+      - name: Verify Authenticode and ZIP application
+        run: ./scripts/verify-release.ps1
+
+      - name: Generate dependency SBOMs and SHA-256 manifest
+        run: npm run release:metadata
+
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            release/*.exe
+            release/*.zip
+            release/*.cdx.json
+            release/build-metadata.json
+            release/SHA256SUMS.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -147,6 +188,9 @@ jobs:
           path: |
             release/*.exe
             release/*.zip
+            release/*.cdx.json
+            release/build-metadata.json
+            release/SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -155,6 +199,9 @@ jobs:
           files: |
             release/*.exe
             release/*.zip
+            release/*.cdx.json
+            release/build-metadata.json
+            release/SHA256SUMS.txt
           # RC 安全惯例：先以 draft 创建，维护者按本地验收清单完成手动验收后再手动 publish。
           draft: true
           prerelease: false

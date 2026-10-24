@@ -1,6 +1,6 @@
 {
   "name": "ccb",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Claude Code Butler - 多 AI Agent 配置管理工具",
   "main": "out/main/index.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "registry:sign": "node scripts/sign-registry-bundle.cjs",
     "release:preflight": "node scripts/release-preflight.cjs",
     "release:preflight:preview": "node scripts/release-preflight.cjs --allow-preview-registry",
+    "release:metadata": "node scripts/release-metadata.cjs",
     "pack": "npm run clean:release && electron-builder",
     "pack:dir": "npm run clean:release && electron-builder --dir",
     "pack:portable": "npm run clean:release && electron-builder --win portable",
@@ -34,8 +35,7 @@
     "pack:all": "npm run clean:release && electron-builder --win --mac --linux",
     "dist:mac": "npm run clean:release && electron-builder --mac --publish=never",
     "dist:linux": "npm run clean:release && electron-builder --linux --publish=never",
-    "dist:all": "npm run clean:release && electron-builder --win --mac --linux --publish=never",
-    "postinstall": "patch-package"
+    "dist:all": "npm run clean:release && electron-builder --win --mac --linux --publish=never"
   },
   "keywords": [
     "claude-code",
@@ -58,12 +58,12 @@
     "url": "https://github.com/NianLog/ClaudeCodeButler/issues"
   },
   "dependencies": {
-    "chokidar": "^3.5.3",
+    "chokidar": "^4.0.3",
     "express": "^5.1.0",
     "https-proxy-agent": "^7.0.6",
     "js-yaml": "^4.1.1",
     "node-cron": "^4.6.0",
-    "smol-toml": "^1.8.0"
+    "smol-toml": "^1.9.1"
   },
   "devDependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -77,19 +77,18 @@
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",
     "@vitejs/plugin-react": "^4.2.0",
-    "@vitest/coverage-v8": "^4.0.17",
+    "@vitest/coverage-v8": "^4.1.12",
     "antd": "^5.12.0",
     "autoprefixer": "^10.4.0",
     "baseline-browser-mapping": "^2.9.17",
     "cross-env": "^7.0.3",
     "dayjs": "^1.11.10",
-    "electron": "^40.0.0",
-    "electron-builder": "^26.5.0",
+    "electron": "44.9.3",
+    "electron-builder": "^26.17.0",
     "electron-vite": "^5.0.0",
     "eslint": "^8.57.0",
     "eslint-plugin-import": "^2.29.1",
     "monaco-editor": "^0.55.1",
-    "patch-package": "^8.0.0",
     "postcss": "^8.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -102,19 +101,23 @@
     "typescript": "^5.3.0",
     "vite": "^7.3.1",
     "vite-plugin-monaco-editor": "^1.1.0",
-    "vitest": "^4.0.17",
+    "vitest": "^4.1.12",
     "zustand": "^4.4.0"
   },
   "overrides": {
     "@electron/rebuild": "^4.0.2",
-    "brace-expansion@^1.1.7": "1.1.18",
-    "brace-expansion@^2.0.1": "2.1.4",
-    "dompurify": "3.4.14"
+    "brace-expansion@^1.1.7": "1.1.21",
+    "brace-expansion@^2.0.1": "2.1.7",
+    "dompurify": "3.4.17"
   },
   "build": {
     "appId": "com.claudecode.butler",
     "productName": "CCB",
     "compression": "maximum",
+    "electronFuses": {
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
     "electronLanguages": [
       "zh-CN",
       "en-US"
@@ -138,7 +141,7 @@
           ]
         }
       ],
-      "icon": "resources/icons/icon.png"
+      "icon": "resources/icons/icon.ico"
     },
     "mac": {
       "target": [
@@ -204,5 +207,8 @@
         "to": "resources"
       }
     ]
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

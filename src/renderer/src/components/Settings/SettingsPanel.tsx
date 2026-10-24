@@ -178,8 +178,8 @@ const SettingsPanel: React.FC = () => {
   const advancedSettings = useAdvancedSettings()
   const windowSettings = useWindowSettings()
   const settingsInitialized = useSettingsStore((state) => state.isInitialized)
-  const { isSaving, saveSettings, resetSettings: resetAppSettings, initialize } = useSettingsStore()
-  const { setTabSettings, markTabSaved } = useSettingsActions()
+  const { isSaving, lastError, saveSettings, resetSettings: resetAppSettings, exportSettings: exportAppSettings, importSettings: importAppSettings, initialize } = useSettingsStore()
+  const { setTabSettings } = useSettingsActions()
   const unsavedChanges = useUnsavedChanges()
 
   const { version } = useAppStore()
@@ -321,9 +321,6 @@ const SettingsPanel: React.FC = () => {
       }
       console.debug('[SettingsPanel] tabData snapshot:', tabData)
 
-      // 先获取当前表单值
-      const currentFormValues = form.getFieldsValue()
-
       // 先更新store中的设置
       if (tab === 'basic') {
         // 对于basic标签页，分别更新basic和window设置
@@ -337,9 +334,6 @@ const SettingsPanel: React.FC = () => {
 
       // 然后保存
       await saveSettings(tabKey)
-
-      // 保存成功后，确保表单显示最新的值
-      form.setFieldsValue(currentFormValues)
 
       // 如果是basic标签页且有window设置，也需要单独保存window设置
       if (tab === 'basic' && values.window) {
@@ -355,10 +349,8 @@ const SettingsPanel: React.FC = () => {
         }
         setTabSettings('window', completeWindowSettings as unknown as Record<string, unknown>)
         await saveSettings('window')
-        markTabSaved('window')
       }
 
-      markTabSaved(tabKey)
       message.success(t('message.settings.saved', { tab: getTabName(tab) }))
     } catch (error) {
       message.error(t('message.settings.saveFailed', { tab: getTabName(tab) }))
@@ -384,7 +376,7 @@ const SettingsPanel: React.FC = () => {
 
   const handleExport = async () => {
     try {
-      const content = await window.electronAPI.settings.export()
+      const content = await exportAppSettings()
 
       // 创建下载链接
       const blob = new Blob([content], { type: 'application/json' })
@@ -409,12 +401,15 @@ const SettingsPanel: React.FC = () => {
       input.type = 'file'
       input.accept = '.json'
       input.onchange = async (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0]
-        if (file) {
-          const content = await file.text()
-          await window.electronAPI.settings.import(content, false) // 不合并，完全替换
-          await initialize() // 重新加载设置
-          message.success(t('message.settings.imported'))
+        try {
+          const file = (e.target as HTMLInputElement).files?.[0]
+          if (file) {
+            const content = await file.text()
+            await importAppSettings(content, false)
+            message.success(t('message.settings.imported'))
+          }
+        } catch {
+          message.error(t('message.settings.importFailed'))
         }
       }
       input.click()
@@ -1159,9 +1154,11 @@ const SettingsPanel: React.FC = () => {
         </Space>
       </div>
 
+      {lastError && <Alert type="error" showIcon message={lastError} />}
+
       {/* 设置内容 */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <Form form={form} layout="vertical" style={{ height: '100%' }}>
+        <Form form={form} layout="vertical" disabled={loading || isSaving} style={{ height: '100%' }}>
           <Tabs
             activeKey={activeTab}
             onChange={setActiveTab}

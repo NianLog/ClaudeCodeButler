@@ -11,8 +11,10 @@
  * 4. 错误码映射
  */
 
+import { toChatRequest, fromChatResponse } from './chat-completions.js'
+import { createNativeStream } from './stream.js'
 import { BaseTransformer } from './base.js'
-import type { ApiProvider, ClaudeRequest, ClaudeResponse } from '../types'
+import type { ApiProvider, ClaudeRequest, ClaudeResponse } from '../types.js'
 
 export class DeepSeekTransformer extends BaseTransformer {
   name = 'deepseek'
@@ -52,183 +54,23 @@ export class DeepSeekTransformer extends BaseTransformer {
    * 转换请求格式
    */
   async transformRequest(request: ClaudeRequest, _provider: ApiProvider): Promise<unknown> {
-    // 转换为通用对象以便自由调整DeepSeek特有字段
-    const transformed: Record<string, unknown> = JSON.parse(JSON.stringify(request))
-
-    // 映射模型名称
-    if (this.modelMapping[request.model]) {
-      transformed.model = this.modelMapping[request.model]
-    }
-
-    // DeepSeek不支持Claude的某些参数，需要移除
-    delete transformed.stream // DeepSeek使用不同的流式参数
-    delete transformed.temperature // 如果DeepSeek不支持
-
-    // DeepSeek特定的参数调整
-    if (transformed.max_tokens && typeof transformed.max_tokens === 'number') {
-      // DeepSeek的max_tokens限制可能不同
-      transformed.max_tokens = Math.min(transformed.max_tokens as number, 4096)
-    }
-
-    // 处理消息格式
-    if (transformed.messages) {
-      transformed.messages = (transformed.messages as Array<Record<string, unknown>>).map((msg: Record<string, unknown>) => {
-        const newMsg: Record<string, unknown> = {
-          role: msg.role === 'assistant' ? 'assistant' : 'user',
-          content: msg.content
-        }
-
-        // 处理内容格式
-        if (Array.isArray(msg.content)) {
-          // 将Claude的多模态内容转换为DeepSeek支持的格式
-          const textContent = (msg.content as Array<Record<string, unknown>>)
-            .filter((item: Record<string, unknown>) => item.type === 'text')
-            .map((item: Record<string, unknown>) => item.text as string)
-            .join('\n')
-
-          newMsg.content = textContent
-        }
-
-        return newMsg
-      })
-    }
-
-    // DeepSeek的流式参数
-    if (request.stream) {
-      transformed.stream = true
-    }
-
-    return transformed
+    const result = toChatRequest(request, this.modelMapping[request.model] || request.model)
+    result.thinking = { type: 'disabled' } // 原生推理状态不能无损往返 Anthropic 消息。
+    return result
   }
 
   /**
    * 转换响应格式
    */
   async transformResponse(response: unknown, _provider: ApiProvider): Promise<ClaudeResponse> {
-    const resp = response as Record<string, unknown>
-    const choices = resp.choices as Array<Record<string, unknown>> | undefined
-    const firstChoice = choices?.[0]
-    const usage = resp.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
-
-    const transformed: ClaudeResponse = {
-      id: (resp.id as string) || `msg_${Date.now()}`,
-      type: 'message',
-      role: 'assistant',
-      content: [],
-      model: (resp.model as string) || 'deepseek-chat',
-      stop_reason: this.mapStopReason(firstChoice?.finish_reason as string | undefined),
-      stop_sequence: (firstChoice?.stop_sequence as string | null | undefined) || null,
-      usage: {
-        input_tokens: usage?.prompt_tokens || 0,
-        output_tokens: usage?.completion_tokens || 0
-      }
-    }
-
-    // 处理内容
-    if (choices && choices.length > 0) {
-      const choice = choices[0]
-      const message = (choice.message as Record<string, unknown>) || {}
-
-      // 确保role总是'assistant'
-      transformed.role = 'assistant'
-
-      // 处理内容
-      if (message.content) {
-        if (typeof message.content === 'string') {
-          transformed.content = [{
-            type: 'text',
-            text: message.content
-          }]
-        } else if (Array.isArray(message.content)) {
-          // 处理多模态内容（DeepSeek可能不支持）
-          transformed.content = (message.content as Array<Record<string, unknown>>).map((item: Record<string, unknown>) => {
-            if (item.type === 'text') {
-              return {
-                type: 'text',
-                text: item.text as string
-              }
-            }
-            // DeepSeek可能不支持图像，忽略非文本内容
-            return null
-          }).filter(Boolean) as Array<{ type: string; text?: string; [key: string]: unknown }>
-        }
-      }
-
-      // 设置停止原因
-      transformed.stop_reason = this.mapStopReason(choice.finish_reason as string | undefined)
-      transformed.stop_sequence = (choice.stop_sequence as string | null | undefined) ?? null
-    }
-
-    // 处理使用情况信息
-    if (usage) {
-      transformed.usage = {
-        input_tokens: usage.prompt_tokens || 0,
-        output_tokens: usage.completion_tokens || 0
-      }
-    }
-
-    // 保留DeepSeek特定的元数据
-    if (resp.model) {
-      transformed.model = resp.model as string
-    }
-
-    return transformed
+    return fromChatResponse(response)
   }
 
   /**
    * 转换流式响应数据块
    */
-  transformStreamChunk(chunk: string, _provider: ApiProvider): string | null {
-    try {
-      // DeepSeek的SSE格式与OpenAI基本兼容
-      if (chunk.startsWith('data: ')) {
-        const data = chunk.slice(6)
-
-        if (data === '[DONE]') {
-          return 'data: [DONE]\n\n'
-        }
-
-        const parsed = JSON.parse(data) as Record<string, unknown>
-        const transformed: Record<string, unknown> = {}
-
-        // 处理choices
-        const parsedChoices = parsed.choices as Array<Record<string, unknown>> | undefined
-        if (parsedChoices && parsedChoices.length > 0) {
-          const choice = parsedChoices[0]
-          transformed.choices = [{
-            index: choice.index,
-            delta: choice.delta || {},
-            finish_reason: this.mapStopReason(choice.finish_reason as string | undefined)
-          }]
-        }
-
-        // 处理usage
-        const parsedUsage = parsed.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
-        if (parsedUsage) {
-          transformed.usage = {
-            prompt_tokens: parsedUsage.prompt_tokens,
-            completion_tokens: parsedUsage.completion_tokens,
-            total_tokens: parsedUsage.total_tokens
-          }
-        }
-
-        // 处理模型信息
-        if (parsed.model) {
-          transformed.model = parsed.model
-        }
-
-        // 处理ID和时间戳
-        if (parsed.id) transformed.id = parsed.id
-        if (parsed.created) transformed.created = parsed.created
-
-        return `data: ${JSON.stringify(transformed)}\n\n`
-      }
-
-      return chunk
-    } catch (error) {
-      console.error('DeepSeek stream chunk transform error:', error)
-      return chunk
-    }
+  createStreamTransformer(model: string) {
+    return createNativeStream('chat', model)
   }
 
   /**
@@ -281,21 +123,6 @@ export class DeepSeekTransformer extends BaseTransformer {
         message: (err.message as string) || 'Unknown DeepSeek error'
       }
     }
-  }
-
-  /**
-   * 映射停止原因
-   */
-  private mapStopReason(finishReason?: string): string | null {
-    const mapping: Record<string, string> = {
-      'stop': 'end_turn',
-      'length': 'max_tokens',
-      'content_filter': 'stop_sequence',
-      'tool_calls': 'tool_use',
-      'function_call': 'tool_use'
-    }
-
-    return mapping[finishReason || ''] || null
   }
 
   /**

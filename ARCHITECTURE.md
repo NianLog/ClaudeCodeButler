@@ -1,11 +1,11 @@
 # ARCHITECTURE.md — 架构现状与演进计划
 
 > 活文档。新增/移动模块、改变分层边界、引入新依赖或新数据流时，必须在同一提交更新本文件。
-> 更新时间：2026-09-05（分支 `wip/v1.5.0-migration`）。
+> 更新时间：2026-10-24（1.5.1 未发布候选，分支 `codex/safety-reliability-ab`）。
 
 ## 1. 产品与架构定位
 
-CCB（Claude Code Butler）是本地优先的 Windows 桌面应用（Electron 40 + React 18 + TS），核心价值是把分散在用户主目录的 AI CLI 工具配置（`~/.claude/settings.json`、MCP 注册表、Codex `config.toml` 等）纳入统一的生命周期管理：发现、校验、编辑、备份、恢复、模板化。
+CCB（Claude Code Butler）是本地优先的 Windows 桌面应用（Electron 44.9.3 + React 18 + TS），核心价值是把分散在用户主目录的 AI CLI 工具配置（`~/.claude/settings.json`、MCP 注册表、Codex `config.toml` 等）纳入统一的生命周期管理：发现、校验、编辑、备份、恢复、模板化。
 
 v1.4.0 及以前是"Claude Code 专用管理器"：路径、格式、业务逻辑硬编码在各 service 中。v1.5.0 起演进为**规则驱动的多工具配置控制平面**：工具能力以 declarative JSON registry 声明，应用侧只实现有限的、审计过的内置 capability handler。这是典型的 Strangler 渐进迁移，而非重写。
 
@@ -134,7 +134,7 @@ template 解析      = USER_OVERRIDE > REGISTRY > EMBEDDED
 
 按"先收尾、再优化、后扩张"排序：
 
-1. **收尾 v1.5.0 发布链**：production publisher key 离线仪式、实机性能与业务验收。这是当前最高优先级，任何新特性让路。
+1. **完成 1.5.1 安全发布验收**：有效代码签名、真实安装升级与性能验收；保留 publisher key 离线备份任务。v1.5.0 已发布，不能继续把旧候选计划写成当前状态。
 2. **D1/D2 偿还**：ManagedModeService 第二轮拆分（log-rotation、transformer 路由、process lifecycle 各自成模块）；ipc-handlers 分域注册。
 3. **性能二次优化（数据驱动）**：依据实机 PERF-01~07 baseline，按 top contributor 决定是否做 service 懒初始化分级（`BOOT_CRITICAL`/`AFTER_RENDERER_READY`/`ON_DEMAND`）、config scan 定向化、watcher 去重、locale 拆分。
 4. **测试体系升级**：核心服务覆盖率到 40%+ 后开启 Vitest thresholds 硬门禁；为 registry 安装/回滚、模板迁移补集成级测试。
@@ -153,3 +153,25 @@ template 解析      = USER_OVERRIDE > REGISTRY > EMBEDDED
 - 品牌保留 `Claude Code Butler`，名称记录起源不限制架构。
 - v1.5.0 不做物理目录迁移、不接受未测量性能结论、远程规则不携带代码。
 - v1.4.0 遗留决策：移除无鉴权传统代理 fallback（P0），只保留 accessToken 集成模式。
+
+## 8. 1.5.1 持久化、请求与发布约束
+
+- `writeTextAtomic` / `writeJsonAtomic` 统一写入：按规范绝对路径在单进程排队；独占随机临时文件、文件 sync、rename；失败抛错，仅清理自己的临时文件，POSIX 保留原 mode。配置、MCP、规则、配置集、备份与恢复复用该入口。它保证单文件替换，不提供多文件事务或与外部 CLI 的并发合并。
+- Settings IPC 复用一个 `SettingsService`；读写排队，完整校验后一次写入，成功才提交内存快照；renderer 依 success 返回值更新保存状态，保存期间的新编辑保持未保存。
+- 托管 settings 读取只忽略 ENOENT，损坏或非对象拒绝覆盖；备份目录权限错误、写入与还原失败传回 IPC。UI 重启实际调用服务，服务商切换后仅刷新状态。启动/停止与配置写入不是事务，部分完成时返回真实错误和状态，不声称全部回滚。
+- 集成代理直接 listen 并处理 EADDRINUSE，删除基于健康请求的端口预判；stop 在 3 秒宽限后关闭剩余连接，等待真实 close 回调，再释放运行引用或继续 restart。
+- Registry 配置创建允许不存在的父目录，创建后重新授权路径链；已有目标先完成备份再覆盖。配置集先检查全部 VALIDATE 结果，再逐文件激活。
+- `postUpstream` 普通请求总超时覆盖正文，成功 SSE 只限制响应头阶段；下游 aborted/close 经 AbortSignal 取消上游。`readBodyStream` 还限制正文时长、字节数和不完整关闭。
+- `system:fetchUrl` 保留旧参数形式，但主进程仅接受固定版本 HTTPS URL，复用有 15 秒时限、64 KiB 上限和拒绝重定向的 net.fetch 客户端。
+- Electron 固定 44.9.3；构建启用 ASAR integrity validation + onlyLoadAppFromAsar。保留 Node 环境变量 fuse 的默认值，兼容企业 `NODE_EXTRA_CA_CERTS`。
+- 两种配置 watcher 复用 `utils/watch-path-filter.ts`，只忽略监控根目录内部的隐藏项；`.ccb` 等隐藏祖先不导致整个目录被排除。保持现有事件契约，不新增 renderer 自动刷新。
+- 正式 tag 发布先过 quality/preflight，要求代码签名凭据、forceCodeSigning 及 Authenticode 有效；ZIP 的 exe 和 ASAR 与已验证目录比对。SBOM 是有明确边界的 npm 依赖图，校验清单与 GitHub provenance 绑定最终产物。
+- 架构决策见 [.agents 持久化记录](.agents/notes/implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md) 与 [发布门禁记录](.agents/notes/implemented/process/2026-10-19-supported-runtime-and-release-gates.md)。
+
+## 9. 1.5.1 独立代理与 Skill 导入保护（C 批）
+
+- 独立 `src/proxy-server` 保留原启动方式、配置路径与已有 axios 依赖，不并入主应用。只监听回环地址；`/v1` 在解析正文前校验原配置的 accessToken，缺凭据拒绝启动，重复或冲突认证头拒绝请求。健康检查保持公开。配置与 token 在启动时读取，轮换后须重启独立进程。
+- `transport.ts` 按 transformer 选择 Anthropic Messages、Chat Completions 或 Gemini Content 地址与头；未知 transformer 拒绝，不从请求接受任意上游地址，不跟随重定向。主应用仍使用原集成代理，不因此获得原生转换能力。
+- 请求与响应转换复用 `transformers/chat-completions.ts`、`gemini-content.ts`；`stream.ts` 为每个请求创建独立 SSE 帧缓冲，UTF-8 解码保留分段状态。普通请求时限覆盖正文，成功 SSE 清除响应头时限，下游断开取消上游，不自动重试。支持范围见 [独立包说明](src/proxy-server/PROTOCOL.md)。
+- Skill 目录与文件列表导入共用 `commitSkillImport` 队列：根目录及链接检查 → 独占暂存 → 完整文件/元数据校验 → 原目录 rename 为备份 → 暂存目录替换 → 清理。安装失败恢复原目录；恢复也失败则保留备份路径并报告。只清理本次 mkdtemp 创建的目录。双 rename 不是断电事务，也不锁外部 CLI。
+- 所有 Skill 仍位于 `~/.claude/skills`，默认不覆盖，IPC 签名不变；不执行导入的 SKILL.md 或脚本。拒绝 traversal、UNC、ADS、保留名、重复路径、链接、无效 Base64/UTF-8；导入上限为 2000 项（目录导入含子目录）、单文件 10 MiB、总计 50 MiB、深度 32。

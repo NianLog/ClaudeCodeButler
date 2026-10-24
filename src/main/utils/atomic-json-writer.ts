@@ -12,6 +12,49 @@
 
 import { promises as fs } from 'fs'
 import path from 'path'
+import { randomUUID } from 'crypto'
+
+const pendingWrites = new Map<string, Promise<void>>()
+
+/** 同路径按调用顺序替换；失败不阻塞后续保存。 */
+export function writeTextAtomic(filePath: string, content: string | Buffer): Promise<void> {
+  const resolvedPath = path.resolve(filePath)
+  const key = process.platform === 'win32' ? resolvedPath.toLowerCase() : resolvedPath
+  const previous = pendingWrites.get(key) ?? Promise.resolve()
+  const result = previous.then(() => replaceFile(resolvedPath, content))
+  const settled = result.then(() => undefined, () => undefined)
+  pendingWrites.set(key, settled)
+  void settled.then(() => {
+    if (pendingWrites.get(key) === settled) pendingWrites.delete(key)
+  })
+  return result
+}
+
+async function replaceFile(filePath: string, content: string | Buffer): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
+  const existing = await fs.lstat(filePath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (existing?.isSymbolicLink()) throw new Error(`拒绝替换符号链接: ${filePath}`)
+  const tempPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${randomUUID()}.tmp`)
+  let created = false
+  try {
+    const handle = await fs.open(tempPath, 'wx', existing ? existing.mode & 0o777 : 0o600)
+    created = true
+    try {
+      if (existing && process.platform !== 'win32') await handle.chmod(existing.mode & 0o777)
+      await handle.writeFile(content, 'utf8')
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+    await fs.rename(tempPath, filePath)
+  } catch (error) {
+    if (created) await fs.unlink(tempPath).catch(() => undefined)
+    throw error
+  }
+}
 
 /** 写入选项 */
 export interface WriteJsonOptions {
@@ -33,24 +76,8 @@ export async function writeJsonAtomic(
 ): Promise<void> {
   const indent = options?.indent ?? 2
   const content = JSON.stringify(value, null, indent)
-  const tempPath = `${filePath}.tmp`
-
-  try {
-    // 确保目标目录存在
-    await fs.mkdir(path.dirname(filePath), { recursive: true })
-    // 先写临时文件
-    await fs.writeFile(tempPath, content, 'utf8')
-    // 原子替换
-    await fs.rename(tempPath, filePath)
-  } catch (error) {
-    // 失败时清理残留临时文件
-    try {
-      await fs.unlink(tempPath)
-    } catch {
-      // 临时文件不存在，忽略
-    }
-    throw error
-  }
+  if (content === undefined) throw new Error('配置内容不能序列化为 JSON')
+  await writeTextAtomic(filePath, content)
 }
 
 /**

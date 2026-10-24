@@ -248,21 +248,21 @@ export class ToolArtifactDiscoveryService {
    */
   private async assertNoSymbolicLinks(
     resolvedPath: string,
-    tolerateMissingFinalSegment = false
+    tolerateMissingSegments = false
   ): Promise<void> {
     const platform = this.detectionService.getPlatform()
     const pathImplementation = platform === 'WINDOWS' ? path.win32 : path.posix
     const parsedPath = pathImplementation.parse(resolvedPath)
     const segments = resolvedPath.slice(parsedPath.root.length).split(pathImplementation.sep).filter(Boolean)
     let currentPath = parsedPath.root
-    for (const [index, segment] of segments.entries()) {
+    for (const segment of segments) {
       currentPath = pathImplementation.join(currentPath, segment)
       let metadata
       try {
         metadata = await lstat(currentPath)
       } catch (error) {
         const nodeError = error as NodeJS.ErrnoException
-        if (tolerateMissingFinalSegment && nodeError.code === 'ENOENT' && index === segments.length - 1) {
+        if (tolerateMissingSegments && nodeError.code === 'ENOENT') {
           return
         }
         throw error

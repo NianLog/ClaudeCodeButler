@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto'
 import { constants as fsConstants } from 'fs'
-import { copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, stat } from 'fs/promises'
+import { copyFile, lstat, mkdir, readFile, readdir, rm, stat } from 'fs/promises'
 import path from 'path'
 import type {
   ConfigArtifactBackup,
@@ -23,6 +23,7 @@ import {
 } from './tool-artifact-codec-service'
 import { pathManager } from '../utils/path-manager'
 import { ensurePathWithinBase } from '../utils/path-security'
+import { writeTextAtomic } from '../utils/atomic-json-writer'
 
 /** 持久化 backup metadata */
 interface StoredArtifactBackup extends ConfigArtifactBackup {
@@ -121,9 +122,15 @@ export class ToolArtifactManagementService {
       if (!validation.valid) throw new Error(`配置校验失败: ${validation.errors.join('; ')}`)
     }
     if (authorization.artifact.capabilities.includes('BACKUP')) {
-      await this.createBackup(toolId, artifactId, authorization.resolvedPath)
+      const exists = await lstat(authorization.resolvedPath).then(() => true, (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return false
+        throw error
+      })
+      if (exists) await this.createBackup(toolId, artifactId, authorization.resolvedPath)
     }
-    await this.writeTextAtomic(authorization.resolvedPath, content)
+    await mkdir(path.dirname(authorization.resolvedPath), { recursive: true })
+    await this.discoveryService.authorizeArtifact(toolId, artifactId, authorization.resolvedPath, 'EDIT')
+    await writeTextAtomic(authorization.resolvedPath, content)
     return this.discoveryService.readArtifact(toolId, artifactId, authorization.resolvedPath)
   }
 
@@ -188,7 +195,7 @@ export class ToolArtifactManagementService {
     }
     await copyFile(resolvedPath, contentPath, fsConstants.COPYFILE_EXCL)
     try {
-      await this.writeTextAtomic(metadataPath, JSON.stringify(backup, null, 2))
+      await writeTextAtomic(metadataPath, JSON.stringify(backup, null, 2))
     } catch (error) {
       await rm(contentPath, { force: true })
       throw error
@@ -290,7 +297,7 @@ export class ToolArtifactManagementService {
       const validation = this.codecService.validate(authorization.artifact.format, content)
       if (!validation.valid) throw new Error(`备份配置校验失败: ${validation.errors.join('; ')}`)
     }
-    await this.writeTextAtomic(authorization.resolvedPath, content)
+    await writeTextAtomic(authorization.resolvedPath, content)
     return this.discoveryService.readArtifact(
       backup.toolId,
       backup.artifactId,
@@ -402,28 +409,6 @@ export class ToolArtifactManagementService {
     if (typeof content !== 'string') throw new Error('配置内容必须是 string')
     if (Buffer.byteLength(content, 'utf8') > CONFIG_ARTIFACT_MAX_BYTES) {
       throw new Error(`配置内容超过限制: ${CONFIG_ARTIFACT_MAX_BYTES} bytes`)
-    }
-  }
-
-  /**
-   * 在目标目录内写入随机 temp file 并原子替换。
-   * @param targetPath 目标绝对路径
-   * @param content UTF-8 文本
-   */
-  private async writeTextAtomic(targetPath: string, content: string): Promise<void> {
-    const tempPath = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.${randomUUID()}.tmp`)
-    const fileHandle = await open(tempPath, 'wx')
-    try {
-      await fileHandle.writeFile(content, 'utf8')
-      await fileHandle.sync()
-    } finally {
-      await fileHandle.close()
-    }
-    try {
-      await rename(tempPath, targetPath)
-    } catch (error) {
-      await rm(tempPath, { force: true })
-      throw error
     }
   }
 

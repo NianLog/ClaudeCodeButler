@@ -79,6 +79,14 @@ afterEach(async () => {
 })
 
 describe('ToolArtifactManagementService', () => {
+  it('应创建尚不存在且声明 BACKUP 的文件和父目录', async () => {
+    await rm(path.dirname(configPath), { recursive: true, force: true })
+    const service = createService(createTool(['READ', 'VALIDATE', 'EDIT', 'BACKUP', 'RESTORE']))
+    const created = await service.editArtifact('example-tool', 'settings', '', '{}')
+    expect(created.content).toBe('{}')
+    await expect(readFile(configPath, 'utf8')).resolves.toBe('{}')
+  })
+
   it('应拒绝 invalid JSON 且不修改原文件', async () => {
     const service = createService(createTool(['READ', 'VALIDATE', 'EDIT']))
 

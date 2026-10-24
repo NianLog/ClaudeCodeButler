@@ -24,6 +24,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}): Record<string,
       build: {
         appId: 'com.claudecode.butler',
         productName: 'CCB',
+        electronFuses: { enableEmbeddedAsarIntegrityValidation: true, onlyLoadAppFromAsar: true },
         portable: { artifactName: 'CCB-Portable-${version}.exe' },
         nsis: { artifactName: 'CCB-Setup-${version}.exe' }
       }
@@ -42,7 +43,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}): Record<string,
     ].join('\n'),
     readmeEn: '`1.5.0`',
     readmeZh: '`1.5.0`',
-    changelog: '[Unreleased] - 1.5.0',
+    changelog: '## [Unreleased] - 1.5.0',
     trackedFiles: [],
     allowPreviewRegistry: false,
     ...overrides
@@ -50,6 +51,29 @@ function createSnapshot(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('release preflight', () => {
+  it('拒绝关闭打包资源完整性检查', () => {
+    const snapshot = createSnapshot({ allowPreviewRegistry: true })
+    const pkg = JSON.parse(snapshot.packageJson as string)
+    pkg.build.electronFuses.enableEmbeddedAsarIntegrityValidation = false
+    expect(auditReleaseSnapshot({ ...snapshot, packageJson: JSON.stringify(pkg) }).errors.join('\n'))
+      .toContain('ASAR integrity')
+  })
+  it.each(['## [Unreleased] - 1.5.0', '## [1.5.0] - 2026-09-05'])(
+    '接受当前候选或已发布版本的首个正式条目：%s', changelog => {
+      const result = auditReleaseSnapshot(createSnapshot({ changelog, allowPreviewRegistry: true }))
+      expect(result.errors).toEqual([])
+    }
+  )
+
+  it.each([
+    '## [1.4.0] - 2026-09-05\n\n## [Unreleased] - 1.5.0',
+    'mention [Unreleased] - 1.5.0',
+    '## [1.5.0] - pending'
+  ])('拒绝旧版本、正文提及或缺少发布日期：%s', changelog => {
+    const result = auditReleaseSnapshot(createSnapshot({ changelog, allowPreviewRegistry: true }))
+    expect(result.errors.join('\n')).toContain('最新版本条目')
+  })
+
   it('production mode 应将空 publisher trust map 视为 blocker', () => {
     const result = auditReleaseSnapshot(createSnapshot())
 

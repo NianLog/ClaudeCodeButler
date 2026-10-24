@@ -6,6 +6,7 @@
 import { promises as fs } from 'fs';
 import { pathManager } from '../utils/path-manager';
 import { logger } from '../utils/logger';
+import { writeJsonAtomic } from '../utils/atomic-json-writer';
 
 export interface RuleExecutionLog {
   id: string;
@@ -47,8 +48,7 @@ class LogStorageService {
 
   public async writeLogs(logs: RuleExecutionLog[]): Promise<void> {
     try {
-      const data = JSON.stringify(logs, null, 2);
-      await fs.writeFile(this.storagePath, data, 'utf-8');
+      await writeJsonAtomic(this.storagePath, logs);
     } catch (error) {
       logger.error('写入规则执行日志文件失败:', error);
     }

@@ -5,8 +5,8 @@
  * - 返回 IncomingMessage 原始流，与 axios responseType:'stream' 等价，
  *   流式分支可直接 pipe，语义不变。
  * - 不跟随重定向：托管代理对上游 3xx 透明转发，不替客户端决定重定向目标。
- * - 超时语义与 axios 对齐：仅在「建连到响应头返回」阶段计时（socket 空闲超时），
- *   响应开始后清除计时器，SSE 长流不会被静默期误杀。
+ * - 普通请求使用覆盖建连和正文的总时限；成功 SSE 在响应头后解除时限。
+ * - 调用方断连通过 AbortSignal 取消上游，不自动重试。
  * - 网络错误保留 Node 原生 code（ECONNREFUSED/ENOTFOUND 等），超时统一 ECONNABORTED，
  *   与既有错误映射（504/500 分支）保持一致。
  * - 网络代理走 https-proxy-agent 的 CONNECT 隧道（显式 root 依赖，不再依赖 axios 传递解析）。
@@ -20,8 +20,10 @@ export interface UpstreamRequestOptions {
   headers: Record<string, string>
   /** 请求体对象（JSON 序列化后发送，自动设置 content-length） */
   body: unknown
-  /** 响应头返回前的超时（毫秒） */
+  /** 普通请求总时限；stream=true 时仅限制响应头阶段（毫秒） */
   timeoutMs: number
+  stream?: boolean
+  signal?: AbortSignal
   /** 形如 http://host:port 的 CONNECT 代理地址 */
   proxyUrl?: string
 }
@@ -55,7 +57,7 @@ export class UpstreamTimeoutError extends Error {
   public readonly code = 'ECONNABORTED'
 
   constructor(timeoutMs: number) {
-    super(`请求超时（${timeoutMs}ms 内未收到上游响应）`)
+    super(`请求超时（超过 ${timeoutMs}ms）`)
   }
 }
 
@@ -83,6 +85,7 @@ export function postUpstream(opts: UpstreamRequestOptions): Promise<UpstreamResp
     const options = {
       method: 'POST' as const,
       headers,
+      signal: opts.signal,
       ...(opts.proxyUrl ? { agent: new HttpsProxyAgent(opts.proxyUrl) } : {})
     }
 
@@ -94,17 +97,25 @@ export function postUpstream(opts: UpstreamRequestOptions): Promise<UpstreamResp
       return
     }
 
-    request.setTimeout(opts.timeoutMs, () => {
-      request.destroy(new UpstreamTimeoutError(opts.timeoutMs))
-    })
+    let response: IncomingMessage | undefined
+    const deadline = setTimeout(() => {
+      const error = new UpstreamTimeoutError(opts.timeoutMs)
+      response?.destroy(error)
+      request.destroy(error)
+    }, opts.timeoutMs)
 
     request.on('error', (error: Error & { code?: string }) => {
+      clearTimeout(deadline)
+      response?.destroy(error)
       reject(error)
     })
 
     request.on('response', (incoming: IncomingMessage) => {
-      // 响应头已返回，停止建连阶段计时；流式长响应由调用方自行管理生命周期
-      request.setTimeout(0)
+      response = incoming
+      incoming.on('error', () => clearTimeout(deadline))
+      incoming.once('end', () => clearTimeout(deadline))
+      incoming.once('close', () => clearTimeout(deadline))
+      if (opts.stream && (incoming.statusCode ?? 0) < 400) clearTimeout(deadline)
       resolve({
         status: incoming.statusCode ?? 0,
         headers: incoming.headers,
@@ -119,15 +130,17 @@ export function postUpstream(opts: UpstreamRequestOptions): Promise<UpstreamResp
 /**
  * 读取响应体并限制最大字节数，超限立即中断下载（避免缓冲超大响应占满内存）
  */
-export function readBodyStream(stream: IncomingMessage, maxBytes: number): Promise<Buffer> {
+export function readBodyStream(stream: IncomingMessage, maxBytes: number, timeoutMs = 120_000): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     let total = 0
     let settled = false
+    const deadline = setTimeout(() => fail(new UpstreamTimeoutError(timeoutMs)), timeoutMs)
 
     const fail = (error: Error): void => {
       if (settled) return
       settled = true
+      clearTimeout(deadline)
       stream.destroy()
       reject(error)
     }
@@ -143,8 +156,13 @@ export function readBodyStream(stream: IncomingMessage, maxBytes: number): Promi
     stream.on('end', () => {
       if (settled) return
       settled = true
+      clearTimeout(deadline)
       resolve(Buffer.concat(chunks))
     })
     stream.on('error', (error: Error) => fail(error))
+    stream.on('close', () => {
+      if (!stream.complete) fail(new Error('上游响应未完整接收'))
+    })
+    if (stream.destroyed && !stream.complete) fail(new Error('上游响应已中断'))
   })
 }

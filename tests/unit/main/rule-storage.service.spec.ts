@@ -74,8 +74,7 @@ describe('RuleStorageService', () => {
 
   it('writeRules 失败应抛出错误，不再静默吞错（P0 修复验证）', async () => {
     const { ruleStorageService } = await import('../../../src/main/services/rule-storage.service')
-    // rule-storage 内部使用 fs.promises.writeFile，与此处的 fs 同一引用
-    vi.spyOn(fs, 'writeFile').mockRejectedValueOnce(new Error('ENOSPC: no space left'))
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('ENOSPC: no space left'))
 
     await expect(ruleStorageService.writeRules([])).rejects.toThrow('写入规则文件失败')
   })

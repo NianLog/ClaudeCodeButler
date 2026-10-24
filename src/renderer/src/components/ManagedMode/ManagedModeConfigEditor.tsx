@@ -53,7 +53,7 @@ interface ManagedModeConfigEditorProps {
   managedModeConfig: ManagedModeConfig | null
   configs: ConfigFile[]
   onConfigChange: (config: Record<string, unknown>) => void
-  onRestartService: () => Promise<void>
+  onStatusRefresh: () => Promise<void>
 }
 
 /**
@@ -97,7 +97,7 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
   managedModeConfig,
   configs: _configs,
   onConfigChange,
-  onRestartService
+  onStatusRefresh
 }) => {
   const message = useMessage()
   const { t } = useTranslation()
@@ -215,14 +215,12 @@ const ManagedModeConfigEditor: React.FC<ManagedModeConfigEditorProps> = ({
       }
 
       // 切换到该provider（会自动重启服务）
-      await window.electronAPI.managedMode.switchProvider(providerId)
-
+      const result = await window.electronAPI.managedMode.switchProvider(providerId)
+      if (!result.success) {
+        throw new Error(result.error || t('common.unknownError'))
+      }
+      await onStatusRefresh()
       message.success(t('managedMode.config.switch.success', { name: selectedProvider.name }))
-
-      // 等待服务重启完成后刷新状态
-      setTimeout(() => {
-        onRestartService()
-      }, 1000)
     } catch (error) {
       console.error('切换配置失败:', error)
         message.error(t('managedMode.config.switch.failed'))

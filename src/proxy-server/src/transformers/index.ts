@@ -30,7 +30,7 @@ registerBuiltinTransformers()
 /**
  * 获取转换器
  * @param name 转换器名称
- * @returns 转换器实例,如果不存在则返回Anthropic转换器(默认)
+ * @returns 转换器实例；未知名称拒绝处理，避免把凭据发往错误协议
  */
 export function getTransformer(name?: string): Transformer {
   if (!name) {
@@ -39,8 +39,7 @@ export function getTransformer(name?: string): Transformer {
 
   const transformer = transformerRegistry.get(name)
   if (!transformer) {
-    console.warn(`转换器 "${name}" 不存在,使用默认转换器(anthropic)`)
-    return getTransformerByName('anthropic')
+    throw new Error(`未注册的转换器: ${name}`)
   }
 
   return transformer

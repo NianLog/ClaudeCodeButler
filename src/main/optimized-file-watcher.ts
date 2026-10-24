@@ -3,12 +3,13 @@
  * 提供更好的性能和内存管理
  */
 
-import chokidar from 'chokidar'
+import chokidar, { type FSWatcher } from 'chokidar'
 import { EventEmitter } from 'events'
 import { basename, extname } from 'path'
 import { ConfigChangeEvent } from '@shared/types'
 import { CONFIG_FILES } from '@shared/constants'
 import { logger } from './utils/logger'
+import { isHiddenWatchPath } from './utils/watch-path-filter'
 
 interface FileChangeEvent {
   path: string
@@ -17,7 +18,7 @@ interface FileChangeEvent {
 }
 
 export class OptimizedFileWatcher extends EventEmitter {
-  private watcher: chokidar.FSWatcher | null = null
+  private watcher: FSWatcher | null = null
   private watchPath: string
   private isRunning = false
   private changeQueue: FileChangeEvent[] = []
@@ -43,7 +44,7 @@ export class OptimizedFileWatcher extends EventEmitter {
       // 创建文件监控实例，优化配置
       this.watcher = chokidar.watch(this.watchPath, {
         ignored: [
-          /(^|[/\\])\../,  // 忽略隐藏文件
+          (candidate) => isHiddenWatchPath(this.watchPath, candidate),
           /node_modules/,
           /.*\.log$/,
           /.*\.tmp$/,

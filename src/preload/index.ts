@@ -173,15 +173,15 @@ interface SettingsAPI {
   // 获取特定标签页设置
   getTab: (tab: string) => Promise<any>
   // 保存特定标签页设置
-  saveTab: (tab: string, data: any, options?: any) => Promise<void>
+  saveTab: (tab: string, data: any, options?: any) => Promise<{ success: boolean; error?: string }>
   // 保存所有设置
-  saveAll: (data: any) => Promise<void>
+  saveAll: (data: any) => Promise<{ success: boolean; error?: string }>
   // 重置设置
-  reset: (tab?: string) => Promise<void>
+  reset: (tab?: string) => Promise<{ success: boolean; error?: string }>
   // 导出设置
-  export: (filePath?: string) => Promise<string>
+  export: (filePath?: string) => Promise<{ success: boolean; data?: string; error?: string }>
   // 导入设置
-  import: (content: string, merge?: boolean) => Promise<void>
+  import: (content: string, merge?: boolean) => Promise<{ success: boolean; error?: string }>
   // 加载设置
   loadSettings: () => Promise<any>
 }

@@ -33,6 +33,18 @@ vi.mock('@shared/constants', () => ({
 describe('MCPManagementService', () => {
   let tempHomeDir = ''
 
+  it('原子替换失败时保留原配置和备份，返回失败而非恢复覆盖', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    const configPath = path.join(tempHomeDir, '.claude.json')
+    const before = await fs.readFile(configPath, 'utf8')
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('ENOSPC'))
+    const result = await new MCPManagementService().saveClaudeConfig({ mcpServers: {} })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('ENOSPC')
+    expect(await fs.readFile(configPath, 'utf8')).toBe(before)
+    expect(await fs.readFile(`${configPath}.backup`, 'utf8')).toBe(before)
+  })
+
   /**
    * 为每个用例准备独立的临时 HOME 目录和空白 Claude 配置
    */

@@ -212,6 +212,10 @@ const ManagedModePanel: React.FC = () => {
   const handleRestartService = async () => {
     setLoading(true)
     try {
+      const result = await window.electronAPI.managedMode.restart()
+      if (!result.success) {
+        throw new Error(result.error || t('common.unknownError'))
+      }
       message.success(t('managedMode.messages.restartSuccess'))
       await loadData()
     } catch (error) {
@@ -738,7 +742,7 @@ const ManagedModePanel: React.FC = () => {
           managedModeConfig={config}
           configs={configs}
           onConfigChange={handleConfigChange}
-          onRestartService={handleRestartService}
+            onStatusRefresh={loadData}
         />
       </div>
     )

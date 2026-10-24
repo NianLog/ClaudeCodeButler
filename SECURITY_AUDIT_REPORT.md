@@ -1,5 +1,174 @@
 # Semgrep 安全审计与改进报告
 
+## 2026-10-24：1.5.1 收尾与本地候选验收
+
+本轮沿用 A/B/C 修复和旧配置路径，补齐托管模式错误反馈、实际重启、连接关闭及配置目录监控。1.6 路线已写入 DDE proposed 提案，本版未实施这些新功能。签名按用户要求暂缓，继续不 tag、不上传、不发布；本地候选不等于生产上线或正式发布验收。
+
+### 本轮新增修复
+
+- 托管 settings 仅在 ENOENT 时从空对象创建；损坏 JSON、非对象和读取失败不再被空配置覆盖。备份目录不可读不被当成无备份。启用/重启写入失败、停止/禁用还原失败均向调用方返回错误，保留可核对的实际状态。
+- UI 重启按钮实际调用并检查 IPC；切换服务商也检查结果，成功后只刷新状态。服务停止不再以 3 秒计时结束伪装成已关闭，而是在宽限后关闭剩余 HTTP 连接并等待 close；端口占用由 listen 判断，删除可能复用旧连接的健康预判。
+- 真实采样发现 watcher ready 但监控目录/条目为零。隐藏项现在按监控根目录的相对路径过滤，允许 `.ccb` 等隐藏祖先，继续排除内部隐藏项；两个实现共用小 helper。保持各自事件契约，不因此增加 renderer 自动刷新。
+- 复核新公告后固定 Electron 44.9.3，更新两包 body-parser 2.4.0、独立包 follow-redirects 1.16.1、root Vite 7.3.7、fast-uri 3.1.9，以及锁内 qs 6.16.1。没有升级 Tailwind 主版本或关闭 TLS。[Electron 官方版本](https://releases.electronjs.org/release/v44.9.3)、[中间证书缓解公告](https://github.com/advisories/GHSA-jr5w-w6x2-84p9)、[body-parser 修复](https://github.com/expressjs/body-parser/releases/tag/v2.4.0)。
+- Electron 镜像归档与 GitHub 官方 SHASUMS256.txt 独立比对，win32-x64 ZIP 的 SHA-256 为 `41a1ffa0541cb0f2c9b9fe920dd2cef1793ad0ea2ada1a9582958880f4d1b23c`，匹配通过。
+
+### 已验证结果
+
+| 检查 | 当前结果与边界 |
+| --- | --- |
+| 完整回归 | 46 files / 351 tests，全通过，无跳过；包含本地 production-key rehearsal 与模板 staging |
+| 类型 / lint / 构建 | type-check、全量 ESLint、root/proxy 双构建通过；未把 lint:changed 对未提交修改的跳过当成证据 |
+| 最终文档与预检 | production preflight、DDE 5 篇笔记 verify/index/index --check、Git diff --check 全部通过 |
+| 覆盖率 | statements 37.98%、branches 38.77%、functions 38.41%、lines 38.03%；仅 main/proxy/shared，不是全仓覆盖率 |
+| 依赖审计 | root/proxy 生产均 0；proxy 全依赖 0；root 全依赖 3 moderate、0 high、0 critical，详见下述延期项 |
+| 本地业务 | 实际生产构建验证 JSON/Markdown 编辑、备份/原文还原、配置切换、设置持久化、MCP、Agent、Skill 无效覆盖保护及二进制保留、Codex 配置集校验与激活、模板覆盖/回退 |
+| 实际界面 | 重启后服务处于运行状态；损坏 JSON 重启显示错误且不新增成功提示，原文不变；后续切换、重启、禁用及设置准确恢复通过 |
+| 旧版数据 | 本地 1.5.0 副本写出标记配置和 light 主题，1.5.1 使用同一隔离用户目录读取并完成业务回归；原安装与快捷方式未覆盖。这是数据兼容证明，不是真实 NSIS 覆盖升级证明 |
+| 独立代理 | 编译入口实际启动；未鉴权 401 且上游零调用，合法请求 200、上游一次，原配置哈希不变；缺 token 退出 1 |
+| 监控 | 两项真实文件系统测试在旧实现失败，修复后通过；最终候选同时断言 active watcher、目录和条目非零 |
+| 构建内容 | 47 个 out/ 文件与 ASAR 内对应内容逐字节一致；应用版本 1.5.1、Electron 44.9.3 |
+| 运行时安全 | 实际运行验证无 Node globals、带用户手势的新窗口被拒、跨 document 导航被拒、同 document hash 导航可用；ASAR 两项 fuse 为 enabled |
+| 篡改拒绝 | 隔离复制最终应用，保持 ASAR 结构合法但修改 header integrity；native 明确报 integrity failure 并退出，未创建应用 settings |
+| 用户配置 | 完成包级回归后核对原有 4 个关键配置文件 SHA-256，与本轮开始一致；不据此声称整台机器文件系统零写入 |
+
+### 性能与交付记录
+
+最终候选为 Windows x64、Electron 44.9.3。三次启动复用同一份保留数据的隔离 profile，每轮可见空闲 60 秒、托盘隐藏 60 秒，每 10 秒采样；没有并行打包或完整测试，没有打开 DevTools 前端，仅使用回环 CDP 驱动既有 IPC。隐藏样本直接采集，不含恢复窗口扰动。Windows 11 build 26200、平衡电源模式；OS 文件缓存未清空，不与 1.5.0 作性能对比。
+
+| 指标 | 三轮中位数 |
+| --- | ---: |
+| 启动至 did-finish-load | 1226.985 ms |
+| Renderer 初始化 | 457.900 ms |
+| 可见空闲工作集 / 隐藏工作集 | 501.926 / 500.992 MiB |
+| 可见空闲 CPU / 隐藏 CPU | 0.009613% / 0.005929% |
+| Active watcher / 目录 / 条目 | 1 / 2 / 23，三轮及隐藏前后稳定 |
+| 最近扫描 | 37 ms，14 files / 14 configs，三轮均成功 |
+
+启动值由 main 的 did-finish-load 日志时间与 native snapshot 的 capturedAt/process.uptime 推算起点，受时钟与日志精度限制；renderer 初始化直接取白名单 measure。CPU 为每轮六个 native process CPU 总值的中位数，再取三轮中位数。原始异常值保留，未用包体或旧样本推断“更快”。
+
+第 3 轮隐藏工作集为 638.375 MiB，高于前两轮的 497.223 / 500.992 MiB。进程列表显示该轮隐藏后多出一个约 145.445 MiB 的 GPU 进程，主进程工作集基本不变；额外 GPU 进程的触发原因未确定，保留原样作为目标显卡环境复核项，未删除样本或据此宣称内存泄漏。
+
+maximum 配置的 Portable / NSIS / ZIP 已全部生成。ZIP 完整性与 NSIS 内嵌应用归档校验通过，两者的 CCB.exe 和 app.asar 均与已验收目录一致；ZIP 与 Portable 实际运行完整业务 smoke 并通过 app.quit 正常退出（exit 0）。ASAR 未包含私钥文件，已装入 body-parser 2.4.0。未签名状态按用户要求保留，正式校验器仍明确拒绝 NotSigned，未放宽 CI 门禁。
+
+| 最终资产 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| CCB-Portable-1.5.1.exe | 104576871 | `692c12b8153a5d42dd054713b7c73fc4130ce5135dbb267d95d7020900e2906a` |
+| CCB-Setup-1.5.1.exe | 104756013 | `a030e53eb59f9d5c54d40ba307e2cc3e70373e70b5556eb0daaadcb375eb1b64` |
+| CCB-1.5.1-win.zip | 145713946 | `622be9e8929ab13426e91f5235981910f01ff64a92f3926176782e8180622123` |
+
+同目录附两份 CycloneDX（root 构建依赖 956 个组件、proxy 生产依赖 107 个组件）、build-metadata.json 和 SHA256SUMS.txt，清单 6 项均重新计算匹配。构建元数据明确 sourceDirty=true，未把未提交源码冒充为 HEAD 的可复现正式发布；本地依赖图也不等同于云端来源证明或完整 Chromium 原生组件清单。
+
+此前 Electron 44.9.0 或监控条目为零的样本只作诊断，不计入最终验收。原始日志、fixture、自检脚本和 JSON 位于本机 `C:\Users\nianl\.codex\visualizations\2026\10\19\01a1549d-3784-77f2-87a8-68255dc1aa1a\ccb-151-release-completion`，最终包在 `packages-release-20261024`，性能汇总为 performance-summary.json / .md，不推送生成产物。
+
+### 保留的验证边界
+
+root 剩余 3 项中危由同一 [PostCSS 选择器解析问题](https://github.com/advisories/GHSA-rj75-hqrm-r3gf)沿 postcss-selector-parser / postcss-nested / Tailwind 依赖链传播，位于构建链。当前构建输入为仓库受控 CSS，应用不在运行时使用该解析器处理用户配置；npm 建议的完整修复跨 Tailwind 4 主版本。为控制本次兼容风险暂缓，2026-11-03 复核；不运行 audit fix --force，不声称全依赖零告警。10 月 20 日的 21 项数字只代表当时公告与锁文件状态，不能作为本轮结论。
+
+真实目标机安装/覆盖升级/卸载、企业 CA/系统代理、真实付费服务商和云端 workflow/provenance 尚无本轮证据；未重跑 Semgrep。本轮未提供可用的隔离 Windows 安装环境，本机已有 1.5.0，未为验收改动其安装注册和快捷方式。签名本轮已获用户明确暂缓，不作为本地候选交付的阻塞项；正式发布的既有校验保留。
+
+---
+
+## 2026-10-20：1.5.1 C 批修复与验证
+
+继续在 `codex/safety-reliability-ab` 实施独立代理鉴权、协议兼容和 Skill 覆盖导入保护。1.5.1 仍未发布，沿用配置路径、IPC 参数和文件格式，没有新增依赖或大范围拆分。下节 A/B 的安装包和桌面证明只覆盖当时快照，不含 C 批。
+
+### 修复与支持边界
+
+- 独立代理读取原 `~/.ccb/managed-mode-config.json` 的 accessToken，缺失时拒绝启动；只监听回环，`/v1` 在解析正文前校验 Bearer/x-api-key，重复、冲突和错误凭据返回 401，不能触发上游。`/health` 仅公开状态、版本和时间。启动读取一次，切换服务商或轮换凭据须重启独立进程。
+- 上游地址和凭据由配置中的 transformer 决定，不按域名猜测：Anthropic Messages 保留兼容网关与 beta 头；DeepSeek/OpenRouter 使用 Chat Completions、Bearer 和 system/函数工具转换；Gemini 使用原生 Content action 与 x-goog-api-key，不把密钥放进 URL。未知协议拒绝，不跟随重定向。上游地址仍由已有本地服务商配置者信任，HTTP 调用方不能替换地址。
+- 每个原生流独立持有 SSE 帧状态，UTF-8 解码保留跨块字节，发出 Anthropic message/content block/delta/stop；并行工具参数收齐后按块输出。错误、非法 JSON、无效工具参数和截断流明确失败，不伪造完成。普通响应时限覆盖正文，成功 SSE 允许静默，下游断开取消上游，不自动重试。JSON 错误限长、保留状态并脱敏，HTML 等原文不透传，不记录请求正文或密钥。
+- Gemini 原生工具/推理、所有原生转换的 cache_control、Chat Completions 的 top_k 及其他不能无损映射的高级字段明确拒绝。DeepSeek 显式关闭原生 thinking。保留有限历史模型别名，但不保证退役模型可用；Gemini 使用明确或已配置的原生模型 ID。完整接口和限制见 [PROTOCOL.md](src/proxy-server/PROTOCOL.md)。这些转换不属于主应用内置集成代理。
+- Skill 目录/文件列表导入共用暂存、完整校验、原目录备份 rename 和替换；复制、写盘或安装失败保留/恢复原目录，恢复也失败则原内容保留在报告的备份路径。导入串行；只清理本次独占临时目录。拒绝 traversal、UNC、ADS、链接、Windows 保留名、重复路径、无效 Base64/UTF-8；限 2000 项（目录导入含子目录）、单文件 10 MiB、总计 50 MiB、深度 32。SKILL.md 与附带脚本作为数据保存，不执行。
+
+### 本地验证结果
+
+| 检查 | 结果 | 范围 |
+| --- | --- | --- |
+| 修复前复现 | 2 files / 8 failed / 1 passed | 无凭据可请求、错误上游地址、导入失败丢失旧文件等，全部使用 fixture 与临时目录 |
+| 最终完整回归 | 45 files / 337 tests，全通过，无跳过 | 比 A/B 新增 48 项；启用本地 production-key rehearsal 与 web staging，未打印或提交私钥 |
+| 类型 / lint | type-check、全量 ESLint 零错误 | lint:changed 也运行；当前修改未提交，该脚本只比较提交并显示跳过，以全量 lint 为本轮证据 |
+| 双构建 | root / 独立 proxy 均通过 | main 317.85 kB / preload 13.58 kB / renderer entry 202.84 kB；main 比 A/B 增加 2.93 kB，体积不代表性能 |
+| 独立入口实际启动 | 通过 | 运行编译后的 dist/index.js：缺认证 401 且零上游调用、合法请求 200、原配置 SHA-256 不变、缺 token 启动退出 1；隔离 USERPROFILE |
+| 根 / proxy 生产审计 | 均 0 | 本轮实时 npm audit --omit=dev；锁文件未在 C 批变更 |
+| proxy 全依赖审计 | 0 | 独立包单独查询 |
+| 根全依赖审计 | 21：11 high / 10 moderate / 0 critical | 与 A/B 相同的已披露开发链风险，audit 返回非零，没有忽略或强制覆盖依赖 |
+| 覆盖率 | statements 35.42%，branches 37.18%，lines 35.35% | 仅 main/proxy/shared，大量现有路径仍未覆盖，不视为完整安全证明 |
+| 预检与文档 | production preflight、DDE verify / index / index --check、git diff --check 通过 | 三份活文档、双语 README、CHANGELOG、协议说明和决策记录同步；DEVELOPMENT.md 与 docs/ 依仓库规则仅本地维护 |
+| 用户数据核对 | 4 个已有关键配置 SHA-256 均未改变 | 设置、Claude 配置和托管配置的前后快照；Skill 数据保护另以临时目录中的原文件/二进制故障注入证明 |
+
+新增测试包括并行流隔离、晚到 usage、UTF-8 字节拆分、CRLF 多帧、上游错误/截断、无重定向、超时/断连/长静默，以及导入复制/写入/安装/恢复失败、同名并发、二进制保留、编码/数量/大小/路径/链接边界。没有调用真实付费提供商。
+
+### 尚未验收
+
+C 批只做源码回归和双构建，没有重打安装包、签名、上传或发布；现有 A/B 验证包不能用作包含 C 批的发行版。真实服务商/Claude Code 各高级能力、企业 CA/代理、目标 Windows 安装升级卸载和三轮性能仍需对应环境验收。Skill 双 rename 提供异常回滚与可定位备份，不承诺断电原子性或与外部 CLI 的跨进程事务。保留 D 批大清理和开发链 21 个告警，未重跑 Semgrep。
+
+协议实现核对 [DeepSeek Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion/)、[OpenRouter API](https://openrouter.ai/docs/api_reference/overview)、[Gemini Content API](https://ai.google.dev/api/generate-content) / [API keys](https://ai.google.dev/gemini-api/docs/api-key) 与 [Anthropic Streaming](https://platform.claude.com/docs/en/build-with-claude/streaming)。本地最终日志位于 `ccb-implementation-c`；它们证明 fixture 与故障边界，不替代生产验收。
+
+## 2026-10-19～20：1.5.1 A、B 批修复与验证
+
+当前是未发布的 1.5.1 候选，分支 `codex/safety-reliability-ab`，修复基线 `a6625f2`。下文较早审计中的“全依赖零漏洞”等数字只代表当时状态，不能作为当前结论。
+
+### 修复范围
+
+- 原子写改为独占随机临时文件、文件同步、同路径排队、rename 替换，失败不改原文件。Config/MCP/规则/配置集/设置及备份恢复复用此实现；系统设置备份失败即中止覆盖。
+- 配置集保存及激活读取 `VALIDATE.valid`，全组校验通过后才逐文件写入；首次创建可补父目录并重新检查路径链。保持 LEGACY_COMPAT、现有目录与文件格式，不迁移用户数据。
+- Settings IPC 共用服务队列，完整保存只写一次，成功后才提交内存；renderer 检查 success，错误可见，草稿保留。面板导入导出复用 store，导入后重新读文件；保存期间禁用表单，避免异步覆盖新输入。
+- 普通代理响应使用覆盖正文的总时限；成功 SSE 保持长静默，下游断连取消上游；不自动重试 POST。版本读取限定固定 HTTPS URL，15 秒、64 KiB、拒绝重定向。
+- Electron 固定 44.9.0，修复生产依赖，启用 ASAR integrity validation / onlyLoadAppFromAsar。Windows 使用原 PNG 生成的多尺寸 ICO，避开本机原生图标工具退出崩溃。
+- CI 两套生产审计分开阻塞，加入正式预检、tag 版本核对、签名凭据检查、forceCodeSigning、Authenticode、ZIP 与目录中 exe/ASAR 一致性、依赖 SBOM、SHA-256 和 GitHub provenance。所有 Action 固定 commit。证书只从 secrets 提供。
+
+### 自动化结果
+
+| 检查 | 本轮结果 | 证据边界 |
+| --- | --- | --- |
+| 修复前复现 | 5 个测试文件出现 9 项失败 | 在隔离用户目录复现并发写、无效配置仍保存、缺失文件、错误反馈等，不操作真实配置 |
+| 最终完整回归 | 42 files / 289 tests，全通过，无跳过 | 本地已启用 production-key rehearsal 和 web staging，密钥未进入源码或产物 |
+| 类型与 lint | type-check / 全量 ESLint 零错误 | lint:changed 已运行；当前改动未提交，该脚本仅比较提交，因此显示跳过，全量 lint 才覆盖本次工作区 |
+| 双构建 | root 与独立 proxy 通过 | main 314.92 kB / preload 13.58 kB / renderer entry 202.84 kB；体积不是性能指标 |
+| 干净依赖安装 | 两套 npm ci --ignore-scripts 通过 | 在外部空目录验证两份锁文件，不破坏工作区已有运行时 |
+| 发布预检 | production release:preflight 通过 | 候选/已发布条目、版本、应用身份、沙箱、ASAR 配置、生产 registry trust map、tracked 私钥检查 |
+| 文档门禁 | DDE verify、index、index --check 通过 | 两条 implemented Note，与三份活文档、双语 README、CHANGELOG 同步 |
+| 根生产依赖 | 0 漏洞 | npm audit --omit=dev 实时查询；不是全依赖或最终原生组件的无漏洞证明 |
+| 独立代理依赖 | 生产与全依赖均 0 | 单独安装、构建、审计，没有顺带改其鉴权/协议 |
+| 根全依赖 | 21 个告警：11 high / 10 moderate / 0 critical | 修复前本轮快照为 37 个；剩余见下节，未使用 audit fix --force |
+| 覆盖率 | statements 31.36%，branches 31.11%，lines 31.43% | 聚焦 main/proxy/shared；未据此声称 UI 或全部行为已充分覆盖 |
+
+### 桌面与供应链验证
+
+Electron ZIP SHA-256：`88e08039d0ef359bab9f674e8051fa103bd8628ea7c5a5e1daaa610a8a0c6931`，实际下载文件、官方 SHASUMS256、镜像 SHASUMS256 与 npm 包内 checksums 一致。TLS 校验保持开启。
+
+隔离用户目录启动了真实 Electron 44.9.0 / Chromium 152.0.7977.167 / Node 24.22.0。页面有实际 DOM，renderer 无 require，sandbox=true、contextIsolation=true、nodeIntegration=false；设置通过真实 IPC 保存后重新读取成功。打包应用也完成隔离启动，renderer 带 --enable-sandbox；本次检查的真实 .claude/settings.json、.claude.json 与 APPDATA/CCB/settings.json 校验和未改变。
+
+从打包 EXE 读取到两个 ASAR fuse 均启用。另建完整隔离副本，仅改 ASAR header 中一个字节，应用立即拒绝启动，stderr 明确报告 header integrity check failed。未修改用于交付验证的原包。此验证证明完整性检查生效，不代替 Authenticode 身份验证。
+
+最终源码的 Portable、NSIS、ZIP 三种本地验证包全部生成。此轮明确使用 `forceCodeSigning=false` 与 `compression=store`；正式配置仍为 `maximum`，此前高压缩验证未完成，不将其写成通过。打包 ASAR 内的 47 个构建文件与当前 out 逐文件 SHA-256 一致，未发现 .keys、.env、私钥或 PFX 文件。ZIP 内 EXE 与 ASAR 均与目录产物哈希一致。
+
+最终 Portable 隔离启动 15 秒，存在带 --enable-sandbox 的 renderer，检查的三个真实用户关键文件均未改变。NSIS 仅验证构建，未进行真实安装/卸载。
+
+两份实际 CycloneDX 1.5 SBOM 分别含 root 构建图 956 个组件、proxy 生产图 106 个组件；三种资产、两份 SBOM 和构建元数据共 6 项 SHA256SUMS 均独立复核。运行发布校验脚本时，未签名 Portable 被明确拒绝为 NotSigned；另以 forceCodeSigning=true 实际打包目录，因缺证书而失败，失败原因与预期一致。
+
+正式证书正向路径和 GitHub workflow/provenance 尚未执行，不能把本地未签名包视为已签名正式发行版。候选目录、哈希和完整日志见本地审查交付目录 `ccb-implementation-ab`，没有上传或发布。
+
+### 剩余告警与发布前置条件
+
+根开发链剩余告警集中在三组：Tailwind 3 的 braces/chokidar 3/micromatch/fast-glob/PostCSS；typescript-eslint 7 的 globby 链；electron-builder 26 的 @electron/get 4/global-agent/roarr/sprintf-js 链。直接运行时 chokidar 已是 4.0.3。告警中的工具链版本与 renderer 构建依赖需要分别评估，生产依赖 audit 双零不能替代全图分析。
+
+继续清零需要单独评估 lint 规则迁移、Tailwind 主版本或构建器传递依赖升级。此次保留现有 UI 构建体系，未做强制大版本覆盖；告警未隐藏，也未声称无风险。
+
+仍需维护者配置受控 Windows 签名证书并执行云端 workflow、验证正式签名正向路径和 provenance，完成人工安装/卸载/旧数据升级、企业 CA/系统代理及三轮实机性能验收。跨文件激活仍逐文件写入，依赖既有备份恢复；单进程队列不合并外部 CLI 同时编辑。
+
+A/B 当时未实施 C 批独立代理鉴权/协议与 Skill 覆盖导入；其后已按本报告最新 C 批一节实施。D 批模块大清理仍未实施。本轮未重跑 Semgrep，也未把历史扫描结果当作本轮证明。
+
+### 对照的一手资料
+
+- [Electron 44.9.0 官方发行记录](https://releases.electronjs.org/release/v44.9.0)：确认受支持运行时及 Chromium/Node 版本。
+- [Electron 安全建议](https://www.electronjs.org/docs/latest/tutorial/security)：保持沙箱、隔离、受限能力与受支持版本。
+- [electron-builder Windows 签名](https://www.electron.build/docs/features/code-signing/code-signing-win/)：正式发布要求真实签名，缺凭据时阻止发行。
+- [GitHub 产物证明](https://docs.github.com/en/actions/concepts/security/artifact-attestations)：来源证明与文件 digest 绑定；不把证明当作测试通过的替代物。
+
+---
+
+
 ## 审计记录
 
 ### 2026-07-12：首次基线审计与整改

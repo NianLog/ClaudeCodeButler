@@ -32,11 +32,18 @@ function auditReleaseSnapshot(input) {
   if (!input.readmeEn.includes(`\`${version}\``) || !input.readmeZh.includes(`\`${version}\``)) {
     errors.push('双语 README 未声明当前 package version')
   }
-  if (!input.changelog.includes(`[Unreleased] - ${version}`)) {
-    errors.push('CHANGELOG Unreleased version 与 package version 不一致')
+  const latestEntry = input.changelog.match(/^## \[([^\]]+)\] - ([^\r\n]+)$/m)
+  const candidate = latestEntry?.[1] === 'Unreleased' && latestEntry[2] === version
+  const released = latestEntry?.[1] === version && /^\d{4}-\d{2}-\d{2}$/.test(latestEntry[2])
+  if (!candidate && !released) {
+    errors.push('CHANGELOG 最新版本条目与 package version 不一致（需候选或带日期的发布条目）')
   }
   if (packageJson.build?.appId !== 'com.claudecode.butler' || packageJson.build?.productName !== 'CCB') {
     errors.push('Installer identity 与兼容 contract 不一致')
+  }
+  if (packageJson.build?.electronFuses?.enableEmbeddedAsarIntegrityValidation !== true ||
+      packageJson.build?.electronFuses?.onlyLoadAppFromAsar !== true) {
+    errors.push('打包应用必须启用 ASAR integrity validation 与 onlyLoadAppFromAsar')
   }
   if (!String(packageJson.build?.portable?.artifactName).includes('${version}') ||
       !String(packageJson.build?.nsis?.artifactName).includes('${version}')) {

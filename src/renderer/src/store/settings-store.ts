@@ -162,6 +162,7 @@ const createSettingsStore: SettingsStoreCreator = (set, get) => ({
           if (window.electronAPI?.settings?.loadSettings) {
             console.log('🔧 [loadSettings] 调用 IPC')
             const response = await window.electronAPI.settings.loadSettings()
+            if (response?.success === false) throw new Error(response.error || '加载设置失败')
             console.log('🔧 [loadSettings] IPC响应:', JSON.stringify(response, null, 2))
 
             // 检查响应格式，提取data字段（IPC返回格式为 { success, data }）
@@ -235,6 +236,7 @@ const createSettingsStore: SettingsStoreCreator = (set, get) => ({
             isLoading: false,
             lastError: error instanceof Error ? error.message : String(error)
           }))
+          throw error
         }
       },
 
@@ -248,47 +250,29 @@ const createSettingsStore: SettingsStoreCreator = (set, get) => ({
           if (tab) {
             // 保存特定标签页
             if (window.electronAPI?.settings?.saveTab) {
-              await window.electronAPI.settings.saveTab(tab, { [tab]: currentSettings[tab] }, options)
-              get().markTabSaved(tab)
+              const result = await window.electronAPI.settings.saveTab(tab, { [tab]: currentSettings[tab] }, options)
+              if (!result.success) throw new Error(result.error || '保存设置失败')
+              if (get().settings[tab] === currentSettings[tab]) get().markTabSaved(tab)
               console.log(`${tab} 设置保存成功`)
             } else {
               // 后备方案：保存到 localStorage
-              try {
-                const settingsKey = `ccb-settings-${tab}`
-                localStorage.setItem(settingsKey, JSON.stringify(currentSettings[tab]))
-                get().markTabSaved(tab)
-                console.log(`${tab} 设置保存成功（使用 localStorage 后备方案）`)
-              } catch (localError) {
-                console.warn('localStorage 保存失败:', localError)
-                // 即使保存失败，也不抛出错误，只是标记为已保存
-                get().markTabSaved(tab)
-                console.log(`${tab} 设置已标记为已保存`)
-              }
+              const settingsKey = `ccb-settings-${tab}`
+              localStorage.setItem(settingsKey, JSON.stringify(currentSettings[tab]))
+              get().markTabSaved(tab)
             }
           } else {
             // 保存所有设置
             if (window.electronAPI?.settings?.saveAll) {
-              await window.electronAPI.settings.saveAll(currentSettings)
-              set(() => ({
-                unsavedChanges: new Set()
+              const result = await window.electronAPI.settings.saveAll(currentSettings)
+              if (!result.success) throw new Error(result.error || '保存设置失败')
+              set((state) => ({
+                unsavedChanges: new Set([...state.unsavedChanges].filter(key => state.settings[key] !== currentSettings[key]))
               }))
               console.log('所有设置保存成功')
             } else {
               // 后备方案：保存到 localStorage
-              try {
-                localStorage.setItem('ccb-settings', JSON.stringify(currentSettings))
-                set(() => ({
-                  unsavedChanges: new Set()
-                }))
-                console.log('所有设置保存成功（使用 localStorage 后备方案）')
-              } catch (localError) {
-                console.warn('localStorage 保存失败:', localError)
-                // 即使保存失败，也不抛出错误
-                set(() => ({
-                  unsavedChanges: new Set()
-                }))
-                console.log('设置已标记为已保存')
-              }
+              localStorage.setItem('ccb-settings', JSON.stringify(currentSettings))
+              set({ unsavedChanges: new Set() })
             }
           }
 
@@ -318,7 +302,8 @@ const createSettingsStore: SettingsStoreCreator = (set, get) => ({
           get().setError(null)
 
           if (window.electronAPI?.settings?.reset) {
-            await window.electronAPI.settings.reset(tab)
+            const result = await window.electronAPI.settings.reset(tab)
+            if (!result.success) throw new Error(result.error || '重置设置失败')
 
             if (tab) {
               // 重新加载该标签页设置
@@ -369,10 +354,12 @@ const createSettingsStore: SettingsStoreCreator = (set, get) => ({
       // 导入导出
       exportSettings: async () => {
         try {
+          get().setError(null)
           if (window.electronAPI?.settings?.export) {
-            const content = await window.electronAPI.settings.export()
+            const result = await window.electronAPI.settings.export()
+            if (!result.success || result.data === undefined) throw new Error(result.error || '导出设置失败')
             console.log('设置导出成功')
-            return content
+            return result.data
           } else {
             throw new Error('ElectronAPI 不可用')
           }
@@ -391,7 +378,8 @@ const createSettingsStore: SettingsStoreCreator = (set, get) => ({
           get().setError(null)
 
           if (window.electronAPI?.settings?.import) {
-            await window.electronAPI.settings.import(content, merge)
+            const result = await window.electronAPI.settings.import(content, merge)
+            if (!result.success) throw new Error(result.error || '导入设置失败')
 
             // 重新加载设置
             await get().loadSettings()

@@ -37,7 +37,7 @@ import {
   ensurePathWithinBase,
   sanitizeFileName
 } from './utils/path-security'
-import { ensureExternalUrl } from './utils/ssrf-guard'
+import { updateService } from './services/update-service'
 
 
 // 服务实例
@@ -540,31 +540,7 @@ function setupSystemHandlers(): void {
   })
   ipcMain.handle('system:fetchUrl', async (_, url: string) => {
     try {
-      const safeUrl = ensureAllowedUrl(url, ['http:', 'https:'], '抓取地址')
-      // v1.4.0 SSRF 防护：拒绝内网/环回/链路本地地址，防止渲染进程探测内网服务或云元数据端点
-      await ensureExternalUrl(safeUrl, '抓取地址')
-      const https = await import('https')
-      const http = await import('http')
-
-      return new Promise((resolve) => {
-        const client = safeUrl.protocol === 'https:' ? https : http
-
-        client.get(safeUrl.toString(), (res) => {
-          let data = ''
-          res.on('data', (chunk) => {
-            data += chunk
-          })
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              resolve({ success: true, data })
-            } else {
-              resolve({ success: false, error: `HTTP ${res.statusCode}` })
-            }
-          })
-        }).on('error', (error) => {
-          resolve({ success: false, error: error.message })
-        })
-      })
+      return { success: true, data: await updateService.fetchVersionText(url) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -645,20 +621,12 @@ function setupSettingsHandlers(): void {
 
   // 保存特定标签页设置
   ipcMain.handle('settings:saveTab', createSimpleHandler(async (tab: string, data: Parameters<typeof settingsService.saveSettings>[1], options?: Parameters<typeof settingsService.saveSettings>[2]) => {
-    const newSettingsService = new SettingsService() // 创建新实例以更新设置
-    await newSettingsService.loadSettings() // 先加载现有设置
-    await newSettingsService.saveSettings(tab as Parameters<typeof newSettingsService.saveSettings>[0], data, options)
+    await settingsService.saveSettings(tab as Parameters<typeof settingsService.saveSettings>[0], data, options)
   }))
 
-  // 保存所有设置
+  // 保存所有设置：先校验完整快照，再一次替换文件。
   ipcMain.handle('settings:saveAll', createSimpleHandler(async (data: Parameters<typeof settingsService.saveSettings>[1]) => {
-    const newSettingsService = new SettingsService() // 创建新实例以更新设置
-    await newSettingsService.loadSettings() // 先加载现有设置
-    await newSettingsService.saveSettings('basic', data)
-    await newSettingsService.saveSettings('editor', data)
-    await newSettingsService.saveSettings('notifications', data)
-    await newSettingsService.saveSettings('advanced', data)
-    await newSettingsService.saveSettings('window', data)
+    await settingsService.saveAllSettings(data)
   }))
 
   // 重置设置

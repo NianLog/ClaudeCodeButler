@@ -235,19 +235,19 @@ export class WindowManager {
     })
 
     // 控制台消息
-    this.mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-      const payload = { line, source: sourceId }
+    this.mainWindow.webContents.on('console-message', ({ level, message, lineNumber, sourceId }) => {
+      const payload = { line: lineNumber, source: sourceId }
       switch (level) {
-        case 0:
+        case 'debug':
           logger.debug(`[Renderer] ${message}`, payload)
           break
-        case 1:
+        case 'info':
           logger.info(`[Renderer] ${message}`, payload)
           break
-        case 2:
+        case 'warning':
           logger.warn(`[Renderer] ${message}`, payload)
           break
-        case 3:
+        case 'error':
           logger.error(`[Renderer] ${message}`, payload)
           break
         default:

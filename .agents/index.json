@@ -1,0 +1,384 @@
+{
+  "version": 1,
+  "schema": "dde-agent-index/1",
+  "generatedAt": "2026-10-24T14:14:33.686Z",
+  "generator": "npx tsx scripts/notes.ts index",
+  "disclaimer": "本索引是笔记库的派生快照，用于快速导航与关系检索，不是事实源。\n凡涉及代码修改、实现细节核对、或笔记 freshness.state 为 stale/undated 时，\n必须回读 source.path/lines 指向的源文件与相关代码，避免被过期记录误导。",
+  "usage": {
+    "retrieve": "npx tsx scripts/notes.ts query --scope <代码路径> | --topic <关键词> | --related <笔记路径> [--json]",
+    "refreshIndex": "npx tsx scripts/notes.ts index",
+    "verify": "npx tsx scripts/notes.ts verify",
+    "updateNote": "直接编辑 notes[].path 指向的文件（行号锚点见 lines），然后 refreshIndex",
+    "markRechecked": "npx tsx scripts/notes.ts touch <笔记路径>   # 刷新 Last-verified 元数据"
+  },
+  "stats": {
+    "activeNotes": 5,
+    "archivedNotes": 0,
+    "modules": 0,
+    "relations": 4,
+    "byLifecycle": {
+      "proposed": 1,
+      "implemented": 4
+    },
+    "staleNotes": []
+  },
+  "notes": [
+    {
+      "id": "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+      "path": ".agents/notes/proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+      "anchor": "// Note: .agents/notes/proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+      "title": "先完成 1.5.1，再做可解释、可恢复的配置管理",
+      "lifecycle": "proposed",
+      "class": "feature",
+      "date": "2026-10-20",
+      "scope": [
+        "src/shared/tool-registry.ts",
+        "src/main/services/**",
+        "src/renderer/src/components/**"
+      ],
+      "supersedes": null,
+      "supersededBy": [],
+      "cites": [
+        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+      ],
+      "citedBy": [
+        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+      ],
+      "lastVerified": "2026-10-20",
+      "archivedDate": null,
+      "freshness": {
+        "state": "fresh",
+        "monthsSinceVerify": 0.2,
+        "rule": "最近复核 2026-10-20"
+      },
+      "summary": "1.6 优先支持 Claude Code、Codex 的 Windows/WSL 场景，围绕“发现问题 → 解释来源 → 修改预览 → 核对结果 → 恢复”组织现有能力，复用 registry、配置集、备份和路径 facade。",
+      "bodySha256": "7356644adbb1facf",
+      "lines": {
+        "title": 1,
+        "status": 3,
+        "scope": [
+          4
+        ],
+        "supersedes": null,
+        "lastVerified": 5,
+        "archived": null,
+        "sections": [
+          {
+            "title": "Problem",
+            "line": 7
+          },
+          {
+            "title": "Proposal",
+            "line": 13
+          },
+          {
+            "title": "Evidence and uncertainty",
+            "line": 29
+          },
+          {
+            "title": "Follow-up",
+            "line": 41
+          },
+          {
+            "title": "Alternatives considered",
+            "line": 48
+          },
+          {
+            "title": "Acceptance criteria",
+            "line": 55
+          },
+          {
+            "title": "Risks",
+            "line": 63
+          }
+        ]
+      },
+      "updateHint": "编辑 .agents/notes/proposed/feature/2026-10-20-configuration-reliability-roadmap.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
+    },
+    {
+      "id": "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+      "path": ".agents/notes/implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+      "anchor": "// Note: .agents/notes/implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+      "title": "配置写入与代理失败边界",
+      "lifecycle": "implemented",
+      "class": "bug-fix",
+      "date": "2026-10-19",
+      "scope": [
+        "src/main/**",
+        "src/renderer/src/store/settings-store.ts",
+        "tests/unit/**"
+      ],
+      "supersedes": null,
+      "supersededBy": [],
+      "cites": [],
+      "citedBy": [],
+      "lastVerified": "2026-10-24",
+      "archivedDate": null,
+      "freshness": {
+        "state": "fresh",
+        "monthsSinceVerify": 0,
+        "rule": "最近复核 2026-10-24"
+      },
+      "summary": "沿用所有配置路径和落盘格式。原子写使用随机独占临时文件、文件同步和同路径写入队列，失败只清理自己的临时文件。配置集检查全部校验结果后再写，首次创建只跳过不存在文件的备份。旧配置与设置复用同一写入工具，备份失败阻止覆盖，UI 仅在主进程报告成功后清除草稿标记。代理通过 AbortSignal 传播取消，普通响应设置总时限，SSE 保持长流并回收断开的连接，不自动重试 POST。",
+      "bodySha256": "6fb47cead9222d20",
+      "lines": {
+        "title": 1,
+        "status": 3,
+        "scope": [
+          4
+        ],
+        "supersedes": null,
+        "lastVerified": 5,
+        "archived": null,
+        "sections": [
+          {
+            "title": "Problem",
+            "line": 7
+          },
+          {
+            "title": "Decision",
+            "line": 11
+          },
+          {
+            "title": "Alternatives considered",
+            "line": 19
+          },
+          {
+            "title": "Verification",
+            "line": 25
+          },
+          {
+            "title": "Consequences",
+            "line": 29
+          },
+          {
+            "title": "Test evidence",
+            "line": 33
+          }
+        ]
+      },
+      "updateHint": "编辑 .agents/notes/implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
+    },
+    {
+      "id": "implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md",
+      "path": ".agents/notes/implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md",
+      "anchor": "// Note: .agents/notes/implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md",
+      "title": "独立代理协议与 Skill 覆盖保护",
+      "lifecycle": "implemented",
+      "class": "bug-fix",
+      "date": "2026-10-20",
+      "scope": [
+        "src/proxy-server/src/**",
+        "src/main/services/skills-management-service.ts",
+        "tests/unit/**"
+      ],
+      "supersedes": null,
+      "supersededBy": [],
+      "cites": [],
+      "citedBy": [],
+      "lastVerified": "2026-10-24",
+      "archivedDate": null,
+      "freshness": {
+        "state": "fresh",
+        "monthsSinceVerify": 0,
+        "rule": "最近复核 2026-10-24"
+      },
+      "summary": "独立代理读取原 managed-mode-config.json 的 accessToken，缺 token 拒绝启动，错误认证在解析正文和请求上游前拒绝。按转换器选择协议地址和认证头，保持 Anthropic 兼容网关；普通与流式返回均转换为 Anthropic contract。不支持的内容明确报错，不删除输入语义，不跟随重定向，不自动重试。DeepSeek 明确禁用原生推理；Gemini 原生工具/推理与各原生协议的 cache_control 拒绝，不伪造能力。导入先",
+      "bodySha256": "e4ab12bcd4b4ec21",
+      "lines": {
+        "title": 1,
+        "status": 3,
+        "scope": [
+          4
+        ],
+        "supersedes": null,
+        "lastVerified": 5,
+        "archived": null,
+        "sections": [
+          {
+            "title": "Problem",
+            "line": 7
+          },
+          {
+            "title": "Decision",
+            "line": 11
+          },
+          {
+            "title": "Alternatives considered",
+            "line": 15
+          },
+          {
+            "title": "Verification",
+            "line": 21
+          },
+          {
+            "title": "Consequences",
+            "line": 25
+          }
+        ]
+      },
+      "updateHint": "编辑 .agents/notes/implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
+    },
+    {
+      "id": "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md",
+      "path": ".agents/notes/implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md",
+      "anchor": "// Note: .agents/notes/implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md",
+      "title": "隐藏祖先目录不应禁用配置监控",
+      "lifecycle": "implemented",
+      "class": "bug-fix",
+      "date": "2026-10-24",
+      "scope": [
+        "src/main/file-watcher.ts",
+        "src/main/optimized-file-watcher.ts",
+        "src/main/utils/watch-path-filter.ts",
+        "tests/unit/main/file-watcher.spec.ts"
+      ],
+      "supersedes": null,
+      "supersededBy": [],
+      "cites": [
+        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+      ],
+      "citedBy": [
+        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+      ],
+      "lastVerified": "2026-10-24",
+      "archivedDate": null,
+      "freshness": {
+        "state": "fresh",
+        "monthsSinceVerify": 0,
+        "rule": "最近复核 2026-10-24"
+      },
+      "summary": "两种 watcher 共用 isHiddenWatchPath(watchRoot, candidate)，只按相对监控根目录的路径片段判断隐藏项。根目录和它的隐藏祖先允许监控，根目录内的隐藏项继续忽略。其他忽略规则、路径、深度、事件名和批量处理保持原样。helper 只处理过滤，不承担路径授权或文件读写。",
+      "bodySha256": "87a8ad0acf8fb671",
+      "lines": {
+        "title": 1,
+        "status": 3,
+        "scope": [
+          4
+        ],
+        "supersedes": null,
+        "lastVerified": 5,
+        "archived": null,
+        "sections": [
+          {
+            "title": "Problem",
+            "line": 7
+          },
+          {
+            "title": "Decision",
+            "line": 11
+          },
+          {
+            "title": "Verification",
+            "line": 15
+          },
+          {
+            "title": "Alternatives considered",
+            "line": 19
+          },
+          {
+            "title": "Consequences",
+            "line": 25
+          }
+        ]
+      },
+      "updateHint": "编辑 .agents/notes/implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
+    },
+    {
+      "id": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+      "path": ".agents/notes/implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+      "anchor": "// Note: .agents/notes/implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+      "title": "受支持运行时与正式发布门禁",
+      "lifecycle": "implemented",
+      "class": "process",
+      "date": "2026-10-19",
+      "scope": [
+        "package.json",
+        "package-lock.json",
+        "src/proxy-server/package.json",
+        "src/proxy-server/package-lock.json",
+        ".github/workflows/release.yml",
+        "scripts/**"
+      ],
+      "supersedes": null,
+      "supersededBy": [],
+      "cites": [
+        "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+        "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md"
+      ],
+      "citedBy": [
+        "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+        "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md"
+      ],
+      "lastVerified": "2026-10-24",
+      "archivedDate": null,
+      "freshness": {
+        "state": "fresh",
+        "monthsSinceVerify": 0,
+        "rule": "最近复核 2026-10-24"
+      },
+      "summary": "当前版本是未发布的 1.5.1 修复候选，保留应用身份、配置路径与文件格式。使用已核对的 Electron 44.9.3，并优先采用兼容现有调用的依赖修复，删除未使用的代理依赖。版本抓取改为主进程固定 HTTPS 地址、正文上限、超时和拒绝重定向；保留旧 fetchUrl 方法签名但只接受这个固定地址，兼容现有调用并拒绝任意 URL。",
+      "bodySha256": "3bc0cfe338159b4e",
+      "lines": {
+        "title": 1,
+        "status": 3,
+        "scope": [
+          4
+        ],
+        "supersedes": null,
+        "lastVerified": 5,
+        "archived": null,
+        "sections": [
+          {
+            "title": "Problem",
+            "line": 7
+          },
+          {
+            "title": "Decision",
+            "line": 11
+          },
+          {
+            "title": "Alternatives considered",
+            "line": 23
+          },
+          {
+            "title": "Verification",
+            "line": 29
+          },
+          {
+            "title": "Consequences",
+            "line": 33
+          },
+          {
+            "title": "Local validation boundary",
+            "line": 37
+          }
+        ]
+      },
+      "updateHint": "编辑 .agents/notes/implemented/process/2026-10-19-supported-runtime-and-release-gates.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
+    }
+  ],
+  "modules": [],
+  "relations": [
+    {
+      "type": "cite",
+      "from": "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+      "to": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md",
+      "to": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+      "to": "proposed/feature/2026-10-20-configuration-reliability-roadmap.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+      "to": "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md"
+    }
+  ]
+}

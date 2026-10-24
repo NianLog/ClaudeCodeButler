@@ -79,6 +79,8 @@ export interface LoggingConfig {
  * 托管模式配置
  */
 export interface ManagedModeConfig {
+  /** 与主应用共用的本地调用凭据；缺失时独立代理拒绝启动 */
+  accessToken?: string
   /** 是否启用托管模式 */
   enabled: boolean
   /** 代理服务端口,默认8487 */
@@ -115,7 +117,7 @@ export interface ClaudeRequest {
   top_p?: number
   top_k?: number
   stream?: boolean
-  system?: string
+  system?: string | Array<{ type: string; text: string; [key: string]: unknown }>
   stop_sequences?: string[]
   [key: string]: unknown
 }
@@ -175,6 +177,12 @@ export interface Transformer {
   transformResponse: (response: unknown, provider: ApiProvider) => Promise<ClaudeResponse>
   /** 转换流式响应 */
   transformStreamChunk?: (chunk: string, provider: ApiProvider) => string | null
+  createStreamTransformer?: (model: string) => StreamTransformer
+}
+
+export interface StreamTransformer {
+  push: (chunk: string) => string
+  end: () => string
 }
 
 /**

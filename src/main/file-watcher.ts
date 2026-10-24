@@ -3,12 +3,13 @@
  * 负责监控配置文件的变化
  */
 
-import chokidar from 'chokidar'
+import chokidar, { type FSWatcher } from 'chokidar'
 import { EventEmitter } from 'events'
 import { join, basename, extname } from 'path'
 import { ConfigChangeEvent, ConfigType } from '@shared/types'
 import { CONFIG_FILES } from '@shared/constants'
 import { logger } from './utils/logger'
+import { isHiddenWatchPath } from './utils/watch-path-filter'
 import {
   RuntimePerformanceTelemetry,
   runtimePerformanceTelemetry
@@ -16,7 +17,7 @@ import {
 
 /** 配置文件 watcher，并被动上报当前 topology 计数。 */
 export class FileWatcher extends EventEmitter {
-  private watcher: chokidar.FSWatcher | null = null
+  private watcher: FSWatcher | null = null
   private watchPath: string
   private isRunning = false
   private readonly telemetryId = Symbol('file-watcher')
@@ -47,7 +48,7 @@ export class FileWatcher extends EventEmitter {
       // 创建文件监控实例
       this.watcher = chokidar.watch(this.watchPath, {
         ignored: [
-          /(^|[/\\])\../,  // 忽略隐藏文件
+          (candidate) => isHiddenWatchPath(this.watchPath, candidate),
           /node_modules/,
           /.*\.log$/,
           /.*\.tmp$/
@@ -93,7 +94,7 @@ export class FileWatcher extends EventEmitter {
   /**
    * 设置事件监听器
    */
-  private setupEventListeners(watcher: chokidar.FSWatcher): void {
+  private setupEventListeners(watcher: FSWatcher): void {
     // 文件添加
     watcher.on('add', (path) => {
       if (this.watcher !== watcher) return

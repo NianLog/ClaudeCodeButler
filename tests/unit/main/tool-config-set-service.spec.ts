@@ -17,6 +17,7 @@ import { ToolDetectionService } from '../../../src/main/services/tool-detection-
 import { ToolArtifactDiscoveryService } from '../../../src/main/services/tool-artifact-discovery-service'
 import type { ToolArtifactManagementService } from '../../../src/main/services/tool-artifact-management-service'
 import { ToolConfigSetService } from '../../../src/main/services/tool-config-set-service'
+import { toolArtifactCodecService } from '../../../src/main/services/tool-artifact-codec-service'
 
 let tempDirectory: string
 let baseDirectory: string
@@ -87,10 +88,7 @@ function createManagementService(): ToolArtifactManagementService {
   return {
     validateArtifact: async (_toolId: string, artifactId: string, _path: string, content: string) => {
       calls.push({ kind: 'validate', artifactId, content })
-      if (artifactId === 'alpha-config') {
-        JSON.parse(content)
-      }
-      return { valid: true, errors: [] }
+      return toolArtifactCodecService.validate(artifactId === 'alpha-config' ? 'JSON' : 'TEXT', content)
     },
     editArtifact: async (toolId: string, artifactId: string, _path: string, content: string) => {
       calls.push({ kind: 'edit', artifactId, content })

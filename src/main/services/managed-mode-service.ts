@@ -27,6 +27,7 @@ import { managedModeLogRotationService } from './managed-mode-log-rotation.servi
 import { ManagedModeConfigStore } from './managed-mode-config-store'
 import { logger } from '../utils/logger'
 import { pathManager } from '../utils/path-manager'
+import { writeTextAtomic } from '../utils/atomic-json-writer'
 
 const managedModeLogger = logger.child('ManagedModeService')
 
@@ -39,7 +40,7 @@ const UPSTREAM_RESPONSE_MAX_BYTES = 64 * 1024 * 1024
  * 集成模式下代理进程的实际形态
  * @description 传统模式下为子进程，集成模式下为 Express http.Server，二者对外暴露不同的关闭接口
  */
-type ProxyProcessLike = ChildProcess | { close: (callback?: (err?: Error) => void) => void; once: (event: string, listener: (...args: unknown[]) => void) => void }
+type ProxyProcessLike = ChildProcess | { close: (callback?: (err?: Error) => void) => void; closeAllConnections?: () => void; once: (event: string, listener: (...args: unknown[]) => void) => void }
 
 /**
  * Anthropic Messages API 请求体结构
@@ -255,12 +256,6 @@ export class ManagedModeService extends EventEmitter {
       throw new Error('托管模式未启用')
     }
 
-    // 检查端口是否被占用
-    const isPortInUse = await this.checkPortInUse(this.config.port)
-    if (isPortInUse) {
-      throw new Error(`端口 ${this.config.port} 已被占用`)
-    }
-
     // 记录启动时间
     this.startTime = Date.now()
     managedModeLogger.info(`托管模式服务启动时间: ${new Date(this.startTime).toISOString()}`)
@@ -268,11 +263,14 @@ export class ManagedModeService extends EventEmitter {
     // 启动前备份系统设置（只在首次启动时备份，避免覆盖原始配置）
     const hasBackup = await this.hasSystemSettingsBackup()
     if (!hasBackup) {
-      try {
+      const userSettingsPath = path.join(os.homedir(), '.claude', 'settings.json')
+      const exists = await fs.stat(userSettingsPath).then(() => true, (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return false
+        throw error
+      })
+      if (exists) {
         await this.backupSystemSettings()
         managedModeLogger.info('托管模式启动：系统设置已备份（首次启动）')
-      } catch (backupError) {
-        managedModeLogger.warn('托管模式启动：备份系统设置失败，但继续启动', backupError)
       }
     } else {
       managedModeLogger.info('托管模式启动：检测到已有备份，跳过备份步骤（避免覆盖原始配置）')
@@ -328,13 +326,14 @@ export class ManagedModeService extends EventEmitter {
       // 集成模式：关闭 Express 服务器（异步操作，需 await 确保 port 释放后再 restart）
       const proxy = this.proxyProcess
       if (proxy && 'close' in proxy) {
-        await new Promise<void>((resolve) => {
-          // Express http.Server.close(callback) 在所有连接断开后回调
-          let resolved = false
-          const done = () => { if (!resolved) { resolved = true; resolve() } }
-          proxy.close(done)
-          // 3s 超时兜底：即使连接未完全断开也放行（防止 restart 卡死）
-          setTimeout(done, 3000)
+        await new Promise<void>((resolve, reject) => {
+          // 给现有请求 3 秒结束，随后关闭连接；只在 server 真正关闭后继续重启。
+          const timeout = setTimeout(() => proxy.closeAllConnections?.(), 3000)
+          proxy.close(error => {
+            clearTimeout(timeout)
+            if (error) reject(error)
+            else resolve()
+          })
         })
       }
       this.isIntegrated = false
@@ -387,6 +386,7 @@ export class ManagedModeService extends EventEmitter {
         managedModeLogger.info('托管模式停止：系统设置已还原')
       } catch (restoreError) {
         managedModeLogger.warn('托管模式停止：还原系统设置失败', restoreError)
+        throw restoreError
       }
     } else {
       managedModeLogger.info('重启操作：跳过还原settings，保持托管配置')
@@ -431,10 +431,11 @@ export class ManagedModeService extends EventEmitter {
       if (writeResult.success) {
         managedModeLogger.info('重启操作：已覆写settings配置，保持托管模式')
       } else {
-        managedModeLogger.error('重启操作：覆写settings配置失败', writeResult.error)
+        throw new Error(`代理服务已启动，但系统 settings 写入失败: ${writeResult.error || '未知错误'}`)
       }
     } catch (error: unknown) {
       managedModeLogger.error('重启操作：应用settings配置失败', error)
+      throw error
     }
   }
 
@@ -553,8 +554,7 @@ export class ManagedModeService extends EventEmitter {
       // 将托管配置写入系统 settings.json
       const writeResult = await this.updateSettingsConfig(managedConfigData)
       if (!writeResult.success) {
-        managedModeLogger.error('写入托管配置到 settings.json 失败', writeResult.error)
-        // 不抛出错误，因为服务已经启动了
+        throw new Error(`代理服务已启动，但系统 settings 写入失败: ${writeResult.error || '未知错误'}`)
       }
 
       managedModeLogger.info('托管模式已启用，配置已写入 settings.json')
@@ -586,7 +586,7 @@ export class ManagedModeService extends EventEmitter {
           managedModeLogger.info('托管模式禁用：系统设置已还原')
         } catch (restoreError) {
           managedModeLogger.warn('托管模式禁用：还原系统设置失败', restoreError)
-          // 还原失败不应该阻止禁用操作
+          throw restoreError
         }
       }
 
@@ -754,20 +754,10 @@ export class ManagedModeService extends EventEmitter {
       // 确保备份目录存在
       await fs.mkdir(backupDir, { recursive: true })
 
-      // 检查原始文件是否存在
-      try {
-        await fs.access(userSettingsPath)
-
-        // 读取并备份原文件
-        const originalContent = await fs.readFile(userSettingsPath, 'utf8')
-        await fs.writeFile(backupPath, originalContent, 'utf8')
-
-        managedModeLogger.info(`系统设置已备份到: ${backupPath}`)
-        return backupPath
-      } catch (error) {
-        managedModeLogger.warn(`原始系统设置文件不存在: ${userSettingsPath}`)
-        throw new Error('系统设置文件不存在，无法备份')
-      }
+      const originalContent = await fs.readFile(userSettingsPath, 'utf8')
+      await writeTextAtomic(backupPath, originalContent)
+      managedModeLogger.info(`系统设置已备份到: ${backupPath}`)
+      return backupPath
     } catch (error: unknown) {
       managedModeLogger.error('备份系统设置失败', error)
       throw new Error(`备份系统设置失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -808,7 +798,7 @@ export class ManagedModeService extends EventEmitter {
       const backupContent = await fs.readFile(backupPath, 'utf8')
 
       // 还原到原位置
-      await fs.writeFile(userSettingsPath, backupContent, 'utf8')
+      await writeTextAtomic(userSettingsPath, backupContent)
 
       // 删除备份文件
       await fs.unlink(backupPath)
@@ -833,8 +823,9 @@ export class ManagedModeService extends EventEmitter {
         file.startsWith('settings.json.') && file.endsWith('.backup')
       )
       return backupFiles.length > 0
-    } catch {
-      return false
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+      throw error
     }
   }
 
@@ -1114,8 +1105,11 @@ export class ManagedModeService extends EventEmitter {
       try {
         const existingContent = await fs.readFile(userSettingsPath, 'utf8')
         existingConfig = JSON.parse(existingContent) as Record<string, unknown>
+        if (!existingConfig || typeof existingConfig !== 'object' || Array.isArray(existingConfig)) {
+          throw new Error('系统 settings 必须是 JSON 对象，原文件未修改')
+        }
       } catch (error) {
-        // 文件不存在或读取失败，使用空配置
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
         managedModeLogger.info('系统settings文件不存在，将创建新文件')
       }
 
@@ -1138,7 +1132,7 @@ export class ManagedModeService extends EventEmitter {
       }
 
       // 写入配置
-      await fs.writeFile(userSettingsPath, JSON.stringify(finalConfig, null, 2), 'utf8')
+      await writeTextAtomic(userSettingsPath, JSON.stringify(finalConfig, null, 2))
 
       managedModeLogger.info(`托管模式配置已写入系统settings: ${userSettingsPath}`)
       managedModeLogger.debug('写入的配置', finalConfig)
@@ -1153,20 +1147,6 @@ export class ManagedModeService extends EventEmitter {
     } catch (error: unknown) {
       managedModeLogger.error('写入系统settings配置失败', error)
       return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-
-  /**
-   * 检查端口是否被占用
-   */
-  private async checkPortInUse(port: number): Promise<boolean> {
-    try {
-      const response = await net.fetch(`http://127.0.0.1:${port}/health`, {
-        signal: AbortSignal.timeout(1000)
-      })
-      return response.ok
-    } catch {
-      return false
     }
   }
 
@@ -1512,6 +1492,13 @@ export class ManagedModeService extends EventEmitter {
       const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`
       const requestBody = (req.body ?? {}) as MessagesRequestBody
       const isStreamRequest = requestBody.stream === true
+      const controller = new AbortController()
+      const abortUpstream = (): void => controller.abort()
+      req.once('aborted', abortUpstream)
+      res.once('close', () => {
+        req.removeListener('aborted', abortUpstream)
+        if (!res.writableFinished) controller.abort()
+      })
       let upstreamUrl = '' // 在外部声明，以便在catch块中使用
 
       try {
@@ -1632,7 +1619,9 @@ export class ManagedModeService extends EventEmitter {
           url: upstreamUrl,
           headers: forwardedHeaders,
           body: req.body,
-          timeoutMs: 120000, // 2分钟超时（响应头返回前）
+          timeoutMs: 120000,
+          stream: isStreamRequest,
+          signal: controller.signal,
           proxyUrl
         })
 
@@ -1665,6 +1654,7 @@ export class ManagedModeService extends EventEmitter {
 
           // 处理流错误
           upstream.stream.on('error', (error: unknown) => {
+            if (controller.signal.aborted || res.destroyed) return
             managedModeLogger.error('[托管代理] 上游流错误', error)
             if (!res.headersSent) {
               res.status(500).end()
@@ -1758,6 +1748,7 @@ export class ManagedModeService extends EventEmitter {
         res.status(upstream.status).json(responseData)
 
       } catch (error: unknown) {
+        if (controller.signal.aborted || res.destroyed) return
         managedModeLogger.error('[托管代理] 请求失败', error)
 
         // 统一提取错误信息，避免在 catch 中直接访问 any 字段

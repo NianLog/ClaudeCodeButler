@@ -9,6 +9,7 @@ import os from 'os'
 import { mcpArchiveService } from './mcp-archive.service'
 import { terminalManagementService } from './terminal-management-service'
 import { logger } from '../utils/logger'
+import { writeTextAtomic } from '../utils/atomic-json-writer'
 import type {
   ClaudeConfig,
   MCPServerConfig,
@@ -123,37 +124,7 @@ export class MCPManagementService {
         }
       }
 
-      // 步骤4: 原子性写入 - 先写临时文件,再重命名
-      const tempPath = `${this.configPath}.tmp`
-      try {
-        await fs.writeFile(tempPath, content, 'utf-8')
-        // 验证写入的文件可以正确读取和解析
-        const verifyContent = await fs.readFile(tempPath, 'utf-8')
-        JSON.parse(verifyContent)
-
-        // 原子性重命名
-        await fs.rename(tempPath, this.configPath)
-      } catch (writeError: unknown) {
-        const writeErrorMessage = writeError instanceof Error ? writeError.message : String(writeError)
-        // 写入失败,恢复备份
-        if (backupCreated) {
-          try {
-            await fs.copyFile(backupPath, this.configPath)
-          } catch (restoreError) {
-            // 恢复失败,严重错误
-            return {
-              success: false,
-              error: `保存失败且无法恢复备份: ${(restoreError as Error).message}`,
-              details: { originalError: writeErrorMessage }
-            }
-          }
-        }
-        return {
-          success: false,
-          error: `写入配置文件失败: ${writeErrorMessage}`,
-          details: writeError
-        }
-      }
+      await writeTextAtomic(this.configPath, content)
 
       // 步骤5: 清理备份文件
       if (backupCreated) {
@@ -166,14 +137,6 @@ export class MCPManagementService {
 
       return { success: true }
     } catch (error: unknown) {
-      // 未预期的错误,尝试恢复备份
-      if (backupCreated) {
-        try {
-          await fs.copyFile(backupPath, this.configPath)
-        } catch {
-          // 恢复失败
-        }
-      }
       return {
         success: false,
         error: `保存配置文件失败: ${error instanceof Error ? error.message : String(error)}`,

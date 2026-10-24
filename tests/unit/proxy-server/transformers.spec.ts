@@ -117,15 +117,15 @@ describe('OpenRouterTransformer', () => {
     expect(result.model).toBe('unknown-model')
   })
 
-  it('transformRequest 应保证 max_tokens 至少为 1', async () => {
+  it('transformRequest 应保留 token 预算，由入口拒绝无效预算', async () => {
     const { OpenRouterTransformer } = await import('../../../src/proxy-server/src/transformers/openrouter')
     const transformer = new OpenRouterTransformer()
     const result = await transformer.transformRequest(
-      { model: 'x', messages: [], max_tokens: 0 } as any,
+      { model: 'x', messages: [], max_tokens: 1234 } as any,
       buildProvider() as any
     )
 
-    expect(result.max_tokens).toBe(1)
+    expect(result.max_tokens).toBe(1234)
   })
 
   it('transformResponse 应将 OpenAI 风格 usage/stop_reason 转换为 Claude 格式', async () => {
@@ -156,7 +156,7 @@ describe('OpenRouterTransformer', () => {
 
     const mapFinish = async (finishReason: string) => {
       const r = await transformer.transformResponse(
-        { choices: [{ finish_reason: finishReason }] } as any,
+        { choices: [{ finish_reason: finishReason, message: { content: '' } }] } as any,
         buildProvider() as any
       )
       return r.stop_reason
@@ -164,18 +164,20 @@ describe('OpenRouterTransformer', () => {
 
     expect(await mapFinish('stop')).toBe('end_turn')
     expect(await mapFinish('length')).toBe('max_tokens')
-    expect(await mapFinish('tool_calls')).toBe('tool_use')
-    expect(await mapFinish('unknown_reason')).toBeNull()
+    await expect(mapFinish('tool_calls')).rejects.toThrow(/工具调用/)
+    await expect(mapFinish('unknown_reason')).rejects.toThrow(/正常完成/)
   })
 
-  it('transformStreamChunk 应将 [DONE] 帧规范化为 SSE 结束帧', async () => {
+  it('完整流应转换为 Anthropic message_stop', async () => {
     const { OpenRouterTransformer } = await import('../../../src/proxy-server/src/transformers/openrouter')
     const transformer = new OpenRouterTransformer()
 
-    expect(transformer.transformStreamChunk!('data: [DONE]', buildProvider() as any)).toBe('data: [DONE]\n\n')
+    const stream = transformer.createStreamTransformer('fixture')
+    stream.push('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+    expect(stream.end()).toContain('event: message_stop')
   })
 
-  it('transformStreamChunk 应转换正常 data 帧并保留 usage/model', async () => {
+  it('流转换应保留模型、文本与最终 usage', async () => {
     const { OpenRouterTransformer } = await import('../../../src/proxy-server/src/transformers/openrouter')
     const transformer = new OpenRouterTransformer()
     const chunk = 'data: ' + JSON.stringify({
@@ -186,19 +188,20 @@ describe('OpenRouterTransformer', () => {
       usage: { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 }
     })
 
-    const result = transformer.transformStreamChunk!(chunk, buildProvider() as any)
-    expect(result).toMatch(/^data: /)
-    const payload = JSON.parse(result!.slice(6).trim())
-    expect(payload.model).toBe('anthropic/claude-3.5-sonnet')
-    expect(payload.usage.total_tokens).toBe(12)
-    expect(payload.choices[0].finish_reason).toBe('end_turn')
+    const stream = transformer.createStreamTransformer('fixture')
+    const result = stream.push(chunk + '\n\ndata: [DONE]\n\n') + stream.end()
+    const events = result.split('\n').filter(line => line.startsWith('data: ')).map(line => JSON.parse(line.slice(6)))
+    expect(events.find(event => event.type === 'message_start').message.model).toBe('anthropic/claude-3.5-sonnet')
+    expect(events.find(event => event.type === 'content_block_delta').delta.text).toBe('hi')
+    expect(events.find(event => event.type === 'message_delta')).toMatchObject({ delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 7, input_tokens: 5 } })
   })
 
-  it('transformStreamChunk 对非法 JSON 应原样返回（容错降级）', async () => {
+  it('流转换应拒绝非法 JSON，不能把错误协议透传给客户端', async () => {
     const { OpenRouterTransformer } = await import('../../../src/proxy-server/src/transformers/openrouter')
     const transformer = new OpenRouterTransformer()
 
-    expect(transformer.transformStreamChunk!('data: {invalid', buildProvider() as any)).toBe('data: {invalid')
+    const stream = transformer.createStreamTransformer('fixture')
+    expect(() => stream.push('data: {invalid\n\n')).toThrow()
   })
 
   it('validateConfig 应校验 OpenRouter 密钥前缀与 URL 域名', async () => {
@@ -248,21 +251,22 @@ describe('DeepSeekTransformer', () => {
     expect(result.model).toBe('deepseek-chat')
   })
 
-  it('transformRequest 应将 max_tokens 截断到 4096 上限', async () => {
+  it('transformRequest 应保留预算和采样参数', async () => {
     const { DeepSeekTransformer } = await import('../../../src/proxy-server/src/transformers/deepseek')
     const transformer = new DeepSeekTransformer()
     const result = await transformer.transformRequest(
-      { model: 'x', messages: [], max_tokens: 99999 } as any,
+      { model: 'x', messages: [], max_tokens: 99999, temperature: 0.3 } as any,
       buildProvider() as any
     )
 
-    expect(result.max_tokens).toBe(4096)
+    expect(result.max_tokens).toBe(99999)
+    expect(result.temperature).toBe(0.3)
   })
 
-  it('transformRequest 应将多模态消息内容降级为纯文本拼接', async () => {
+  it('transformRequest 应拒绝无效图片，不能静默删除图片', async () => {
     const { DeepSeekTransformer } = await import('../../../src/proxy-server/src/transformers/deepseek')
     const transformer = new DeepSeekTransformer()
-    const result = await transformer.transformRequest(
+    await expect(transformer.transformRequest(
       {
         model: 'x',
         max_tokens: 100,
@@ -278,10 +282,7 @@ describe('DeepSeekTransformer', () => {
         ]
       } as any,
       buildProvider() as any
-    )
-
-    // 仅保留文本部分并用换行连接，图像内容被丢弃
-    expect(result.messages[0].content).toBe('第一段\n第二段')
+    )).rejects.toThrow(/Base64/)
   })
 
   it('transformResponse 应将字符串内容包装为 Claude 文本块', async () => {
@@ -329,7 +330,7 @@ describe('GeminiTransformer', () => {
     const transformer = new GeminiTransformer()
     const result = await transformer.transformRequest(
       {
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'gemini-fixture',
         max_tokens: 512,
         messages: [
           { role: 'user', content: '你好' },
@@ -351,7 +352,7 @@ describe('GeminiTransformer', () => {
     const transformer = new GeminiTransformer()
     const result = await transformer.transformRequest(
       {
-        model: 'x',
+        model: 'gemini-fixture',
         max_tokens: 256,
         temperature: 0.7,
         top_p: 0.9,
@@ -365,28 +366,25 @@ describe('GeminiTransformer', () => {
     expect(result.generationConfig.topP).toBe(0.9)
   })
 
-  it('transformRequest 对未知模型应回退到默认 gemini-1.5-pro', async () => {
+  it('transformRequest 对未配置的非 Gemini 模型应明确拒绝', async () => {
     const { GeminiTransformer } = await import('../../../src/proxy-server/src/transformers/gemini')
     const transformer = new GeminiTransformer()
-    const result = await transformer.transformRequest(
+    await expect(transformer.transformRequest(
       { model: 'totally-unknown', messages: [] } as any,
       buildProvider() as any
-    )
-
-    expect(result.model).toBe('gemini-1.5-pro')
+    )).rejects.toThrow(/模型 ID/)
   })
 
-  it('transformRequest 应携带 4 项 BLOCK_NONE 安全设置与系统指令', async () => {
+  it('transformRequest 应转换系统指令并保留服务商默认安全策略', async () => {
     const { GeminiTransformer } = await import('../../../src/proxy-server/src/transformers/gemini')
     const transformer = new GeminiTransformer()
     const result = await transformer.transformRequest(
-      { model: 'x', messages: [], system: '你是助手' } as any,
+      { model: 'gemini-fixture', messages: [], system: '你是助手' } as any,
       buildProvider() as any
     )
 
-    expect(result.safetySettings).toHaveLength(4)
-    expect(result.safetySettings.every((s: any) => s.threshold === 'BLOCK_NONE')).toBe(true)
-    expect(result.systemInstruction).toBe('你是助手')
+    expect(result.safetySettings).toBeUndefined()
+    expect(result.systemInstruction).toEqual({ parts: [{ text: '你是助手' }] })
   })
 
   it('transformResponse 应将 candidates 内容与 usageMetadata 转换为 Claude 格式', async () => {
@@ -432,11 +430,9 @@ describe('转换器工厂（getTransformer / registerTransformer）', () => {
     expect(getTransformer('deepseek').name).toBe('deepseek')
   })
 
-  it('getTransformer 对未知名称应回退到 anthropic（保证链路不中断）', async () => {
+  it('getTransformer 对未知名称应拒绝，避免误用协议与认证', async () => {
     const { getTransformer } = await import('../../../src/proxy-server/src/transformers')
-    const transformer = getTransformer('non-exist')
-
-    expect(transformer.name).toBe('anthropic')
+    expect(() => getTransformer('non-exist')).toThrow(/未注册/)
   })
 
   it('getTransformerNames 应返回全部内置转换器名称', async () => {

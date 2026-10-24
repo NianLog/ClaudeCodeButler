@@ -62,11 +62,51 @@ const servers: http.Server[] = []
 
 afterAll(() => {
   for (const server of servers) {
+    server.closeAllConnections()
     server.close()
   }
 })
 
 describe('postUpstream', () => {
+  it('响应头已返回而正文不结束时仍受总时限限制', async () => {
+    const server = http.createServer((req, res) => {
+      req.resume()
+      res.writeHead(200)
+      res.write('{')
+    })
+    servers.push(server)
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const upstream = await postUpstream({
+      url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      headers: {}, body: {}, timeoutMs: 200
+    })
+    await expect(readBodyStream(upstream.stream, 1024)).rejects.toMatchObject({ code: 'ECONNABORTED' })
+    expect(upstream.stream.destroyed).toBe(true)
+  })
+
+  it('SSE 允许长时间静默，调用方取消后立即断开上游', async () => {
+    let upstreamClosed!: () => void
+    const closed = new Promise<void>(resolve => { upstreamClosed = resolve })
+    const server = http.createServer((req, res) => {
+      req.resume()
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      res.write('data: first\n\n')
+      res.once('close', upstreamClosed)
+    })
+    servers.push(server)
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const controller = new AbortController()
+    const upstream = await postUpstream({
+      url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      headers: {}, body: {}, timeoutMs: 100, stream: true, signal: controller.signal
+    })
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(upstream.stream.destroyed).toBe(false)
+    controller.abort()
+    await closed
+    expect(upstream.stream.destroyed).toBe(true)
+  })
+
   it('转发 POST 并返回状态/响应头/流（JSON 请求体自动序列化并设置 content-length）', async () => {
     const { server, url } = await startEchoServer()
     servers.push(server)

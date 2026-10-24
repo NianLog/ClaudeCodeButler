@@ -4,6 +4,7 @@
  */
 
 import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -37,7 +38,57 @@ describe('SettingsService artifact template migration', () => {
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     await rm(tempDirectory, { recursive: true, force: true })
+  })
+
+  it('磁盘替换失败时保留原文件和内存设置，后续保存仍可成功', async () => {
+    const service = new SettingsService(tempDirectory)
+    const original = await service.loadSettings()
+    const before = await fs.readFile(path.join(tempDirectory, 'settings.json'), 'utf8')
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('ENOSPC'))
+    await expect(service.saveSettings('basic', {
+      basic: { ...original.basic, language: 'en-US' }
+    })).rejects.toThrow('ENOSPC')
+    expect(service.getSettings()).toEqual(original)
+    expect(await fs.readFile(path.join(tempDirectory, 'settings.json'), 'utf8')).toBe(before)
+    await service.saveSettings('basic', { basic: { ...original.basic, language: 'en-US' } })
+    expect(service.getSettings().basic.language).toBe('en-US')
+  })
+
+  it('并发保存不同标签页时保留两次修改', async () => {
+    const service = new SettingsService(tempDirectory)
+    const original = await service.loadSettings()
+    await Promise.all([
+      service.saveSettings('basic', { basic: { ...original.basic, language: 'en-US' } }),
+      service.saveSettings('editor', { editor: { ...original.editor, fontSize: 18 } })
+    ])
+    const saved = JSON.parse(await fs.readFile(path.join(tempDirectory, 'settings.json'), 'utf8'))
+    expect(saved.basic.language).toBe('en-US')
+    expect(saved.editor.fontSize).toBe(18)
+  })
+
+  it('保存全部前发现后续标签页无效时不写入任何标签页', async () => {
+    const service = new SettingsService(tempDirectory)
+    const original = await service.loadSettings()
+    const before = await fs.readFile(path.join(tempDirectory, 'settings.json'), 'utf8')
+    await expect(service.saveAllSettings({
+      ...original,
+      basic: { ...original.basic, language: 'en-US' },
+      editor: { ...original.editor, fontSize: 500 }
+    })).rejects.toThrow('fontSize')
+    expect(service.getSettings()).toEqual(original)
+    expect(await fs.readFile(path.join(tempDirectory, 'settings.json'), 'utf8')).toBe(before)
+  })
+
+  it.each([false, true])('文件损坏时拒绝覆盖，保留原始内容供恢复（已加载=%s）', async loaded => {
+    const file = path.join(tempDirectory, 'settings.json')
+    const service = new SettingsService(tempDirectory)
+    if (loaded) await service.loadSettings()
+    await fs.writeFile(file, '{broken')
+    await expect(service.loadSettings()).rejects.toThrow()
+    await expect(service.saveAllSettings()).rejects.toThrow()
+    expect(await fs.readFile(file, 'utf8')).toBe('{broken')
   })
 
   /** 写入最小 legacy settings fixture。 */

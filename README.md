@@ -7,7 +7,7 @@
 English | [简体中文](./README_CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Electron](https://img.shields.io/badge/Electron-40.10.6-47848F?logo=electron)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-44.9.3-47848F?logo=electron)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
@@ -21,10 +21,14 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 
 ### Project Status
 
-- **Current version**: `1.5.0` (released 2026-09-05); previous release `1.4.0`
+- **Current candidate**: `1.5.1` (unreleased); latest published release `1.5.0` (2026-09-05)
 - **v1.5.0 theme**: from a Claude Code-only manager to a registry-driven multi-AI-tool configuration control plane
 - **Supported tools**: Claude Code, Codex CLI, Gemini CLI, and Antigravity — onboarded through a declarative JSON registry covering artifact discovery, validation, atomic edits, backup/restore, and configuration-set snapshot switching
-- **Quality & security**: automated tests and both production builds green; root and proxy-server production-dependency audits report `0 vulnerabilities` (see [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md))
+- **1.5.1 safety fixes**: serialized atomic writes, validation before configuration-set activation, accurate settings error feedback, bounded version requests, and upstream cancellation. Existing paths and data formats remain compatible.
+- **Final fixes**: damaged or unreadable managed settings are preserved; startup, restart and restore failures are reported. The restart button actually restarts the service, while provider switches only refresh the UI after completion.
+- **Batch C**: the standalone proxy requires accessToken and uses protocol-specific endpoints and SSE translation. Skill replacement stages and validates the complete import before swapping, with rollback on failure. See the [standalone proxy guide](src/proxy-server/PROTOCOL.md) for startup and protocol limits.
+- **Local acceptance**: 46 test files / 351 tests pass; both production dependency audits are clean. Maximum-compression Windows Portable/NSIS/ZIP candidates are built; ZIP and Portable pass runtime business checks and graceful shutdown. These unsigned local candidates have not been published.
+- **Release gates**: production audits for both packages, preflight, Authenticode checks, ASAR integrity, dependency SBOMs, SHA-256 and build provenance. Local unsigned packages are for testing; see [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for verification and remaining build-tool advisories.
 
 The product name remains **Claude Code Butler**. The name records the project's origin rather than limiting its architecture: new tools are integrated through a bounded registry and built-in capabilities, while `CCB`, `.ccb`, app identity, and repository identifiers remain stable.
 
@@ -210,7 +214,7 @@ npm run dist:all
 
 ### Application runtime
 
-- **Electron**: 40.10.6
+- **Electron**: 44.9.0
 - **electron-vite**: 5.0.0
 - **Vite**: 7.3.6
 - **TypeScript**: 5.9.3

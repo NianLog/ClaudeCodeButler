@@ -20,12 +20,21 @@ import {
   validateNewConfigTemplate
 } from '@shared/config-template'
 import { logger } from '../utils/logger'
+import { writeJsonAtomic, writeTextAtomic } from '../utils/atomic-json-writer'
 
 export class SettingsService {
   private settingsPath: string
   private settings: AppSettings
   private validationRules: SettingsValidationRule[]
   private changeHandlers: Map<string, ((event: SettingsChangeEvent) => void)[]>
+  private pending: Promise<unknown> = Promise.resolve()
+  private loaded = false
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.pending.then(operation)
+    this.pending = result.catch(() => undefined)
+    return result
+  }
 
   constructor(userDataPath?: string) {
     this.settingsPath = join(userDataPath || app.getPath('userData'), 'settings.json')
@@ -138,24 +147,26 @@ export class SettingsService {
    * 加载设置
    */
   async loadSettings(): Promise<AppSettings> {
+    return this.enqueue(() => this.readSettings())
+  }
+
+  private async readSettings(): Promise<AppSettings> {
     try {
       logger.info(`正在从 ${this.settingsPath} 加载设置`)
-
-      // 确保目录存在
-      await fs.mkdir(app.getPath('userData'), { recursive: true })
-
-      // 检查文件是否存在
+      let content: string
       try {
-        await fs.access(this.settingsPath)
-      } catch {
-        logger.info('设置文件不存在，创建默认设置文件')
-        await this.saveAllSettings()
-        return this.settings
+        content = await fs.readFile(this.settingsPath, 'utf8')
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        const defaults = this.getDefaultSettings()
+        await this.saveToFile(defaults)
+        this.loaded = true
+        return this.getSettings()
       }
-
-      // 读取设置文件
-      const content = await fs.readFile(this.settingsPath, 'utf8')
       const loadedSettings = JSON.parse(content)
+      if (!loadedSettings || typeof loadedSettings !== 'object' || Array.isArray(loadedSettings)) {
+        throw new Error('无效的设置格式')
+      }
 
       // 合并默认设置和加载的设置
       this.settings = this.mergeWithDefaults(loadedSettings)
@@ -169,13 +180,13 @@ export class SettingsService {
       }
 
       logger.info('设置加载成功')
-      return this.settings
+      this.loaded = true
+      return this.getSettings()
 
     } catch (error) {
       logger.error('加载设置失败:', error)
-      logger.info('使用默认设置')
-      this.settings = this.getDefaultSettings()
-      return this.settings
+      this.loaded = false
+      throw error
     }
   }
 
@@ -216,66 +227,81 @@ export class SettingsService {
    * 保存特定标签页的设置
    */
   async saveSettings(tab: SettingsTab, data: Partial<AppSettings>, options: SettingsSaveOptions = {}): Promise<void> {
-    try {
-      logger.info(`正在保存 ${tab} 设置:`, data)
+    const snapshot = structuredClone(data)
+    return this.enqueue(async () => {
+      if (!this.loaded) await this.readSettings()
+      try {
+        logger.info(`正在保存 ${tab} 设置:`, data)
 
-      // 保存前验证
-      const tabData = this.extractTabData(tab, data)
-      const validation = this.validateTabSettings(tab, tabData)
+        // 保存前验证
+        if (!Object.hasOwn(this.settings, tab)) throw new Error('未知的设置标签页')
+        const tabData = this.extractTabData(tab, snapshot)
+        const validation = this.validateTabSettings(tab, tabData)
 
-      if (!validation.isValid) {
-        throw new Error(`设置验证失败: ${validation.errors.join(', ')}`)
+        if (!validation.isValid) {
+          throw new Error(`设置验证失败: ${validation.errors.join(', ')}`)
+        }
+
+        // 保存旧值用于事件
+        const oldValues = { ...this.settings[tab] }
+
+        const next = { ...this.settings, [tab]: { ...this.settings[tab], ...tabData } }
+
+        // 保存到文件
+        if (!options.silent) {
+          await this.saveToFile(next)
+        } else {
+          this.settings = next
+        }
+
+        // 触发变更事件
+        this.triggerChangeEvents(tab, oldValues, this.settings[tab] as unknown as Record<string, unknown>)
+
+        logger.info(`${tab} 设置保存成功`)
+
+      } catch (error) {
+        logger.error(`保存 ${tab} 设置失败:`, error)
+        throw error
       }
-
-      // 保存旧值用于事件
-      const oldValues = { ...this.settings[tab] }
-
-      // 更新设置（动态 key 赋值，用 Record 绕过联合/交叉类型冲突）
-      ;(this.settings as unknown as Record<string, Record<string, unknown>>)[tab] = { ...(this.settings[tab] as Record<string, unknown>), ...(tabData as Record<string, unknown>) }
-
-      // 保存到文件
-      if (!options.silent) {
-        await this.saveToFile()
-      }
-
-      // 触发变更事件
-      this.triggerChangeEvents(tab, oldValues, this.settings[tab] as unknown as Record<string, unknown>)
-
-      logger.info(`${tab} 设置保存成功`)
-
-    } catch (error) {
-      logger.error(`保存 ${tab} 设置失败:`, error)
-      throw error
-    }
+    })
   }
 
   /**
    * 保存所有设置
    */
-  async saveAllSettings(): Promise<void> {
-    try {
-      // 验证所有设置
-      const validation = this.validateSettings(this.settings)
-      if (!validation.isValid) {
-        throw new Error(`设置验证失败: ${validation.errors.join(', ')}`)
+  async saveAllSettings(data?: Partial<AppSettings>): Promise<void> {
+    const snapshot = data === undefined ? undefined : structuredClone(data)
+    return this.enqueue(async () => {
+      if (!this.loaded) await this.readSettings()
+      try {
+        const next = { ...this.settings, ...snapshot }
+        // 验证所有设置
+        const validation = this.validateSettings(next)
+        if (!validation.isValid) {
+          throw new Error(`设置验证失败: ${validation.errors.join(', ')}`)
+        }
+
+        const previous = this.settings
+        await this.saveToFile(next)
+        for (const tab of ['basic', 'editor', 'notifications', 'advanced', 'window'] as SettingsTab[]) {
+          this.triggerChangeEvents(tab, previous[tab] as unknown as Record<string, unknown>, next[tab] as unknown as Record<string, unknown>)
+        }
+        logger.info('所有设置保存成功')
+
+      } catch (error) {
+        logger.error('保存所有设置失败:', error)
+        throw error
       }
-
-      await this.saveToFile()
-      logger.info('所有设置保存成功')
-
-    } catch (error) {
-      logger.error('保存所有设置失败:', error)
-      throw error
-    }
+    })
   }
 
   /**
    * 保存到文件
    */
-  private async saveToFile(): Promise<void> {
+  private async saveToFile(next: AppSettings): Promise<void> {
     try {
-      const content = JSON.stringify(this.settings, null, 2)
-      await fs.writeFile(this.settingsPath, content, 'utf8')
+      await writeJsonAtomic(this.settingsPath, next)
+      this.settings = next
       logger.debug(`设置已保存到: ${this.settingsPath}`)
     } catch (error) {
       logger.error('写入设置文件失败:', error)
@@ -446,7 +472,7 @@ export class SettingsService {
    * 获取设置
    */
   getSettings(): AppSettings {
-    return { ...this.settings }
+    return structuredClone(this.settings)
   }
 
   /**
@@ -463,44 +489,47 @@ export class SettingsService {
    * 重置设置
    */
   async resetSettings(tab?: SettingsTab): Promise<void> {
-    try {
-      if (tab) {
-        if (tab === 'about') {
-          logger.info('about 设置无需重置')
-          return
+    return this.enqueue(async () => {
+      if (!this.loaded) await this.readSettings()
+      try {
+        if (tab) {
+          if (tab === 'about') {
+            logger.info('about 设置无需重置')
+            return
+          }
+          // 重置特定标签页
+          const defaults = this.getDefaultSettings()
+          if (!Object.hasOwn(this.settings, tab)) throw new Error('未知的设置标签页')
+          const next = { ...this.settings }
+          const settingsByTab = next as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
+          const defaultsByTab = defaults as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
+          const oldValues = { ...settingsByTab[tab] }
+          settingsByTab[tab] = { ...defaultsByTab[tab] }
+
+          await this.saveToFile(next)
+          this.triggerChangeEvents(tab, oldValues, this.settings[tab] as unknown as Record<string, unknown>)
+
+          logger.info(`${tab} 设置已重置`)
+        } else {
+          // 重置所有设置
+          const oldSettings = { ...this.settings }
+          await this.saveToFile(this.getDefaultSettings())
+
+          // 触发所有标签页的变更事件
+          const tabs: Array<Exclude<SettingsTab, 'about'>> = ['basic', 'editor', 'notifications', 'advanced', 'window']
+          const oldSettingsByTab = oldSettings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
+          const newSettingsByTab = this.settings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
+          for (const tabKey of tabs) {
+            this.triggerChangeEvents(tabKey, oldSettingsByTab[tabKey], newSettingsByTab[tabKey])
+          }
+
+          logger.info('所有设置已重置')
         }
-        // 重置特定标签页
-        const defaults = this.getDefaultSettings()
-        const settingsByTab = this.settings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
-        const defaultsByTab = defaults as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
-        const oldValues = { ...settingsByTab[tab] }
-        settingsByTab[tab] = { ...defaultsByTab[tab] }
-
-        await this.saveToFile()
-        this.triggerChangeEvents(tab, oldValues, this.settings[tab] as unknown as Record<string, unknown>)
-
-        logger.info(`${tab} 设置已重置`)
-      } else {
-        // 重置所有设置
-        const oldSettings = { ...this.settings }
-        this.settings = this.getDefaultSettings()
-
-        await this.saveToFile()
-
-        // 触发所有标签页的变更事件
-        const tabs: Array<Exclude<SettingsTab, 'about'>> = ['basic', 'editor', 'notifications', 'advanced', 'window']
-        const oldSettingsByTab = oldSettings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
-        const newSettingsByTab = this.settings as unknown as Record<Exclude<SettingsTab, 'about'>, Record<string, unknown>>
-        for (const tabKey of tabs) {
-          this.triggerChangeEvents(tabKey, oldSettingsByTab[tabKey], newSettingsByTab[tabKey])
-        }
-
-        logger.info('所有设置已重置')
+      } catch (error) {
+        logger.error('重置设置失败:', error)
+        throw error
       }
-    } catch (error) {
-      logger.error('重置设置失败:', error)
-      throw error
-    }
+    })
   }
 
   /**
@@ -511,7 +540,7 @@ export class SettingsService {
       const content = JSON.stringify(this.settings, null, 2)
 
       if (filePath) {
-        await fs.writeFile(filePath, content, 'utf8')
+        await writeTextAtomic(filePath, content)
         logger.info(`设置已导出到: ${filePath}`)
       }
 
@@ -525,35 +554,33 @@ export class SettingsService {
   /**
    * 导入设置
    */
-  async importSettings(content: string, merge: boolean = false): Promise<void> {
-    try {
-      const importedSettings = JSON.parse(content)
+  async importSettings(content: string, _merge: boolean = false): Promise<void> {
+    return this.enqueue(async () => {
+      if (!this.loaded) await this.readSettings()
+      try {
+        const importedSettings = JSON.parse(content)
 
-      if (!this.isValidSettingsFormat(importedSettings)) {
-        throw new Error('无效的设置格式')
+        if (!this.isValidSettingsFormat(importedSettings)) {
+          throw new Error('无效的设置格式')
+        }
+
+        // 保留旧版 merge 参数的行为：两种模式均补充默认字段。
+        const next = this.mergeWithDefaults(importedSettings)
+
+        // 验证导入的设置
+        const validation = this.validateSettings(next)
+        if (!validation.isValid) {
+          throw new Error(`导入的设置验证失败: ${validation.errors.join(', ')}`)
+        }
+
+        await this.saveToFile(next)
+        logger.info('设置导入成功')
+
+      } catch (error) {
+        logger.error('导入设置失败:', error)
+        throw error
       }
-
-      if (merge) {
-        // 合并导入的设置
-        this.settings = this.mergeWithDefaults(importedSettings)
-      } else {
-        // 完全替换设置
-        this.settings = this.mergeWithDefaults(importedSettings)
-      }
-
-      // 验证导入的设置
-      const validation = this.validateSettings(this.settings)
-      if (!validation.isValid) {
-        throw new Error(`导入的设置验证失败: ${validation.errors.join(', ')}`)
-      }
-
-      await this.saveToFile()
-      logger.info('设置导入成功')
-
-    } catch (error) {
-      logger.error('导入设置失败:', error)
-      throw error
-    }
+    })
   }
 
   /**
