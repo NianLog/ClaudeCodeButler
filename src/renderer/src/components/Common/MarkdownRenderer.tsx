@@ -77,13 +77,12 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
   }), [syntaxModule])
 
   return (
-    <ReactMarkdown
-      className={className}
+    <div className={className}><ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={components}
     >
       {content}
-    </ReactMarkdown>
+    </ReactMarkdown></div>
   )
 }
 

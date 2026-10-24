@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/shallow'
 /**
  * 国际化 React Hook
  * 提供翻译功能
@@ -51,14 +52,14 @@ export const useTranslation = (): UseTranslationReturn => {
       return undefined
     }
   })
-  const { setTabSettings } = useSettingsStore((state) => {
+  const { setTabSettings } = useSettingsStore(useShallow((state) => {
     try {
       return { setTabSettings: state.setTabSettings }
     } catch (error) {
       console.warn('Error accessing setTabSettings:', error)
       return { setTabSettings: () => {} }
     }
-  })
+  }))
 
   // 获取当前语言
   const language = useMemo(() => {

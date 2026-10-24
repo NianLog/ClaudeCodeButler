@@ -611,7 +611,7 @@ const ClaudeCodeAnalytics: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis tickFormatter={formatYAxisNumber} />
-                  <RechartsTooltip formatter={(value: number) => formatNumber(value)} />
+                  <RechartsTooltip formatter={(value) => typeof value === 'number' ? formatNumber(value) : String(value ?? '')} />
                   <Legend />
                   <Bar dataKey="input" fill="#3b82f6" name={t('claudeAnalytics.charts.input')} />
                   <Bar dataKey="output" fill="#10b981" name={t('claudeAnalytics.charts.output')} />

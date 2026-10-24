@@ -9,10 +9,12 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMockState = vi.hoisted(() => ({
-  userDataPath: ''
+  userDataPath: '',
+  fetch: vi.fn()
 }))
 
 vi.mock('electron', () => ({
+  net: { fetch: electronMockState.fetch },
   app: {
     getPath: (name: string) => {
       if (name === 'userData') {
@@ -50,6 +52,7 @@ describe('MCPManagementService', () => {
    */
   beforeEach(async () => {
     vi.resetModules()
+    electronMockState.fetch.mockReset()
     tempHomeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccb-mcp-'))
     electronMockState.userDataPath = tempHomeDir
     vi.spyOn(os, 'homedir').mockReturnValue(tempHomeDir)
@@ -138,10 +141,10 @@ describe('MCPManagementService', () => {
       'utf8'
     )
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    electronMockState.fetch.mockResolvedValue({
       ok: false,
       status: 401
-    }))
+    })
 
     const result = await service.validateServerAvailability('remote', 'global')
 
@@ -149,5 +152,44 @@ describe('MCPManagementService', () => {
     expect(result.data?.valid).toBe(true)
     expect(result.data?.statusCode).toBe(401)
     expect(result.data?.transportType).toBe('http')
+  })
+
+  it('uses Electron networking for a local MCP endpoint and cancels its SSE body', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    await fs.writeFile(path.join(tempHomeDir, '.claude.json'), JSON.stringify({
+      mcpServers: { local: { type: 'sse', url: 'http://127.0.0.1:7331/sse' } }
+    }))
+    const cancel = vi.fn()
+    electronMockState.fetch.mockResolvedValue(new Response(new ReadableStream({ cancel }), { status: 200 }))
+    const nodeFetch = vi.fn()
+    vi.stubGlobal('fetch', nodeFetch)
+
+    const result = await new MCPManagementService().validateServerAvailability('local', 'global')
+
+    expect(result.data?.valid).toBe(true)
+    expect(electronMockState.fetch).toHaveBeenCalledWith('http://127.0.0.1:7331/sse', expect.objectContaining({ method: 'GET' }))
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(electronMockState.fetch.mock.calls[0][1].signal.aborted).toBe(true)
+    expect(nodeFetch).not.toHaveBeenCalled()
+  })
+
+  it('aborts a stalled Electron request at the bounded probe timeout', async () => {
+    const { MCPManagementService } = await import('../../../src/main/services/mcp-management.service')
+    await fs.writeFile(path.join(tempHomeDir, '.claude.json'), JSON.stringify({
+      mcpServers: { remote: { type: 'http', url: 'https://example.com/mcp', timeout: 1 } }
+    }))
+    const service = new MCPManagementService()
+    electronMockState.fetch.mockImplementation((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
+      options.signal?.addEventListener('abort', () => reject(new Error('probe aborted')), { once: true })
+    }))
+    vi.useFakeTimers()
+    const pending = service.validateServerAvailability('remote', 'global')
+    await vi.waitFor(() => expect(electronMockState.fetch).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(1000)
+    const result = await pending
+
+    expect(result.data?.valid).toBe(false)
+    expect(result.data?.message).toContain('probe aborted')
+    expect(electronMockState.fetch.mock.calls[0][1].signal.aborted).toBe(true)
   })
 })

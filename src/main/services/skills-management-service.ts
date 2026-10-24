@@ -11,7 +11,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import yaml from 'js-yaml'
+import { load } from 'js-yaml'
 import { logger } from '../utils/logger'
 import type {
   SkillDirectory,
@@ -249,7 +249,7 @@ class SkillsManagementService {
       }
 
       const yamlContent = match[1]
-      const metadata = yaml.load(yamlContent) as SkillMetadata
+      const metadata = load(yamlContent) as SkillMetadata
 
       return {
         name: typeof metadata?.name === 'string' ? metadata.name.trim() : '',

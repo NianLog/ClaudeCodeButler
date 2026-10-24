@@ -2,6 +2,8 @@ import http from 'http'
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
+import { brotliCompressSync, deflateSync, gzipSync } from 'zlib'
+import express from 'express'
 import type { AddressInfo } from 'net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { net } from 'electron'
@@ -35,6 +37,69 @@ afterEach(async () => {
 })
 
 describe('集成代理连接生命周期', () => {
+  it('未鉴权时不解析损坏或压缩正文，health 仍公开', async () => {
+    const reservation = http.createServer()
+    const port = await listen(reservation)
+    await new Promise<void>(resolve => reservation.close(() => resolve()))
+    const service = new ManagedModeService() as unknown as {
+      config: Partial<ManagedModeConfig>
+      startIntegratedProxy(): Promise<void>
+      proxyProcess: http.Server
+    }
+    service.config = { port, providers: [], accessToken: 'fixture-token' }
+    await service.startIntegratedProxy()
+    servers.push(service.proxyProcess)
+    for (const encoding of [undefined, 'gzip', 'br']) {
+      const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+        method: 'POST', headers: { 'content-type': 'application/json', ...(encoding ? { 'content-encoding': encoding } : {}) }, body: '{invalid'
+      })
+      expect(response.status).toBe(401)
+      expect((await response.json()).error.type).toBe('authentication_error')
+    }
+    expect((await fetch(`http://127.0.0.1:${port}/health`)).status).toBe(200)
+  })
+
+  it.each([
+    { encoding: 'gzip', encode: gzipSync },
+    { encoding: 'deflate', encode: deflateSync },
+    { encoding: 'br', encode: brotliCompressSync }
+  ])('已鉴权时保留 $encoding 请求体支持', async ({ encoding, encode }) => {
+    let received = ''
+    let receivedEncoding: string | undefined
+    const upstream = express()
+    upstream.use(express.json())
+    upstream.post('/v1/messages', (req, res) => {
+      received = JSON.stringify(req.body)
+      receivedEncoding = req.headers['content-encoding']
+      res.json({ id: 'compressed-fixture', type: 'message', content: [] })
+    })
+    const upstreamPort = await listen(http.createServer(upstream))
+    const reservation = http.createServer()
+    const port = await listen(reservation)
+    await new Promise<void>(resolve => reservation.close(() => resolve()))
+    const service = new ManagedModeService() as unknown as {
+      config: Partial<ManagedModeConfig>
+      startIntegratedProxy(): Promise<void>
+      proxyProcess: http.Server
+    }
+    service.config = {
+      port, currentProvider: 'fixture', accessToken: 'fixture-token',
+      providers: [{ id: 'fixture', name: 'fixture', apiKey: 'test-key', apiBaseUrl: `http://127.0.0.1:${upstreamPort}`, enabled: true }],
+      logging: { enabled: false, level: 'info' }
+    }
+    await service.startIntegratedProxy()
+    servers.push(service.proxyProcess)
+    const payload = JSON.stringify({ model: 'fixture', messages: [], stream: false })
+    const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'content-encoding': encoding, 'x-api-key': 'fixture-token' },
+      body: encode(Buffer.from(payload))
+    })
+    expect(response.status).toBe(200)
+    expect((await response.json()).id).toBe('compressed-fixture')
+    expect(receivedEncoding).toBeUndefined()
+    expect(JSON.parse(received)).toMatchObject({ model: 'fixture', stream: false })
+  })
+
   it('端口空闲时直接监听，不受旧健康请求的成功响应影响', async () => {
     const reservation = http.createServer()
     const port = await listen(reservation)
@@ -225,8 +290,12 @@ describe('集成代理连接生命周期', () => {
 
   it('客户端收到首个 SSE 后断连会取消真实上游连接', async () => {
     let markClosed!: () => void
+    let upstreamHost: string | undefined
+    let forwardedHost: string | string[] | undefined
     const closed = new Promise<void>(resolve => { markClosed = resolve })
     const upstreamPort = await listen(http.createServer((req, res) => {
+      upstreamHost = req.headers.host
+      forwardedHost = req.headers['x-forwarded-host']
       req.resume()
       res.writeHead(200, { 'content-type': 'text/event-stream' })
       res.write('data: first\n\n')
@@ -250,7 +319,7 @@ describe('集成代理连接生命周期', () => {
     await new Promise<void>((resolve, reject) => {
       const request = http.request({
         hostname: '127.0.0.1', port, path: '/v1/messages', method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-api-key': 'local-fixture-token' }
+        headers: { 'content-type': 'application/json', 'x-api-key': 'local-fixture-token', host: '0177.0.0.1' }
       }, response => {
         expect(response.statusCode).toBe(200)
         response.once('data', () => { response.destroy(); request.destroy(); resolve() })
@@ -259,5 +328,7 @@ describe('集成代理连接生命周期', () => {
       request.end(JSON.stringify({ model: 'fixture', stream: true, messages: [] }))
     })
     await closed
+    expect(upstreamHost).toBe(`127.0.0.1:${upstreamPort}`)
+    expect(forwardedHost).toBe('0177.0.0.1')
   })
 })

@@ -5,8 +5,8 @@
  * @performance 使用react-window虚拟滚动优化大量日志渲染性能
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { VariableSizeList } from 'react-window'
+import React, { useState, useEffect, useRef } from 'react'
+import { List, useDynamicRowHeight, type ListImperativeAPI, type RowComponentProps } from 'react-window'
 import {
   Input,
   Button,
@@ -129,14 +129,14 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   }, [logs, logFilter, typeFilter, statusFilter, searchText, logTypeFilter])
 
   // 虚拟滚动列表引用
-  const listRef = useRef<VariableSizeList>(null)
+  const listRef = useRef<ListImperativeAPI>(null)
 
   /**
    * 切换日志详情展开/收起
    * @param logId 日志ID
    * @param index 日志索引
    */
-  const toggleLogExpand = (logId: string, index: number) => {
+  const toggleLogExpand = (logId: string) => {
     setExpandedLogs(prev => {
       const newSet = new Set(prev)
       if (newSet.has(logId)) {
@@ -146,45 +146,17 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       }
       return newSet
     })
-    // 重要：调用resetAfterIndex触发VariableSizeList重新计算高度
-    // 参考: https://github.com/bvaughn/react-window/issues/92
-    if (listRef.current) {
-      listRef.current.resetAfterIndex(index)
-    }
   }
 
-  /**
-   * 获取日志条目高度
-   * @param index 日志索引
-   * @returns 高度（像素）
-   * @description 根据展开状态动态返回不同高度
-   * 参考最佳实践: https://pankajtime12.medium.com/killer-way-to-use-react-window-for-variable-size-list-53c68d75c152
-   */
-  const getItemSize = useCallback((index: number): number => {
-    const log = filteredLogs[index]
-    if (!log) return 90 // 默认高度(降低以改善美观度)
-
-    const isExpanded = expandedLogs.has(log.id)
-
-    // 基础高度：包含日志头部、消息、URL等
-    let baseHeight = 90 // 从120降至90,更美观
-
-    // 如果展开详情，需要额外空间
-    if (isExpanded && log.data) {
-      // 详情内容的预估高度：JSON字符串行数 * 行高 + padding
-      const jsonStr = JSON.stringify(log.data, null, 2)
-      const lines = jsonStr.split('\n').length
-      const detailsHeight = Math.min(lines * 16 + 60, 300) // 最大300px，避免过高
-      baseHeight += detailsHeight
-    }
-
-    return baseHeight
-  }, [filteredLogs, expandedLogs])
+  const rowHeight = useDynamicRowHeight({
+    defaultRowHeight: 90,
+    key: [searchText, logFilter, typeFilter, statusFilter, filteredLogs[0]?.id].join('|')
+  })
 
   // 自动滚动到最新日志
   useEffect(() => {
     if (autoScroll && listRef.current && !isPaused && filteredLogs.length > 0) {
-      listRef.current.scrollToItem(filteredLogs.length - 1, 'end')
+      listRef.current.scrollToRow({ index: filteredLogs.length - 1, align: 'end' })
     }
   }, [filteredLogs, autoScroll, isPaused])
 
@@ -294,12 +266,12 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
    * 虚拟滚动行渲染器
    * @description 渲染单个日志条目，用于react-window虚拟滚动，支持动态高度
    */
-  const LogRow = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+  const LogRow = ({ index, style, ariaAttributes }: RowComponentProps) => {
     const log = filteredLogs[index]
     const isExpanded = expandedLogs.has(log.id)
 
     return (
-      <div style={{ ...style, padding: '0 8px' }} className={`log-entry log-${log.type} log-${log.level}`}>
+      <div {...ariaAttributes} style={{ ...style, padding: '0 8px' }} className={`log-entry log-${log.type} log-${log.level}`}>
         <div className="log-header">
           <Space className="log-meta">
             <Tag color={getLogLevelColor(log.level)} icon={getLogLevelIcon(log.level)}>
@@ -348,7 +320,7 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
           <div className="log-details">
             <div
               className="log-details-summary"
-              onClick={() => toggleLogExpand(log.id, index)}
+              onClick={() => toggleLogExpand(log.id)}
               style={{ cursor: 'pointer' }}
             >
               <EyeOutlined /> {isExpanded ? t('managedMode.logs.collapse') : t('managedMode.logs.expand')}
@@ -471,16 +443,9 @@ const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (
-          <VariableSizeList
-            ref={listRef}
-            height={parseInt(height) || 400}
-            itemCount={filteredLogs.length}
-            itemSize={getItemSize}
-            width="100%"
-            overscanCount={10}
-          >
-            {LogRow}
-          </VariableSizeList>
+          <List listRef={listRef} style={{ height: parseInt(height) || 400, width: '100%' }}
+            rowCount={filteredLogs.length} rowHeight={rowHeight} rowComponent={LogRow}
+            rowProps={{}} overscanCount={10} />
         )}
       </div>
     </div>

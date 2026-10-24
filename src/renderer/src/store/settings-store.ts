@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/shallow'
 /**
  * 新的设置状态管理
  * 支持按标签页分类管理设置
@@ -474,7 +475,7 @@ export const useHasUnsavedChanges = () => useSettingsStore((state) => state.unsa
 /**
  * 操作 hooks
  */
-export const useSettingsActions = () => useSettingsStore((state) => ({
+export const useSettingsActions = () => useSettingsStore(useShallow((state) => ({
   setSettings: state.setSettings,
   setTabSettings: state.setTabSettings,
   updateSetting: state.updateSetting,
@@ -487,4 +488,4 @@ export const useSettingsActions = () => useSettingsStore((state) => ({
   markTabSaved: state.markTabSaved,
   initialize: state.initialize,
   getDefaultSettings: state.getDefaultSettings
-}))
+})))

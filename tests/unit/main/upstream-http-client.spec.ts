@@ -4,7 +4,7 @@
  * 验证 JSON 转发、流式响应、非 2xx 透传、超时映射、网络错误 code、响应体大小上限。
  */
 
-import { describe, it, expect, afterAll } from 'vitest'
+import { describe, it, expect, afterAll, vi } from 'vitest'
 import http from 'http'
 import type { AddressInfo } from 'net'
 import {
@@ -68,6 +68,30 @@ afterAll(() => {
 })
 
 describe('postUpstream', () => {
+  it('不复用无代理的空闲连接，避免旧 Node 的待收数据进入下一次请求', async () => {
+    const connections = new Set<unknown>()
+    const connectionHeaders: Array<string | undefined> = []
+    let calls = 0
+    const server = http.createServer((req, res) => {
+      calls++
+      connections.add(req.socket)
+      connectionHeaders.push(req.headers.connection)
+      req.resume()
+      res.end('{}')
+    })
+    servers.push(server)
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    for (let index = 0; index < 2; index++) {
+      const response = await postUpstream({ url, headers: {}, body: {}, timeoutMs: 1000 })
+      expect((await readBodyStream(response.stream, 1024)).toString()).toBe('{}')
+      await new Promise<void>(resolve => setImmediate(resolve))
+    }
+    expect(calls).toBe(2)
+    expect(connections.size).toBe(2)
+    expect(connectionHeaders).toEqual(['close', 'close'])
+  })
+
   it('响应头已返回而正文不结束时仍受总时限限制', async () => {
     const server = http.createServer((req, res) => {
       req.resume()
@@ -76,12 +100,20 @@ describe('postUpstream', () => {
     })
     servers.push(server)
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
-    const upstream = await postUpstream({
-      url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
-      headers: {}, body: {}, timeoutMs: 200
-    })
-    await expect(readBodyStream(upstream.stream, 1024)).rejects.toMatchObject({ code: 'ECONNABORTED' })
-    expect(upstream.stream.destroyed).toBe(true)
+    // 计时从响应头返回后显式推进，避免并行导入占用本机 200ms 建连预算。
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const upstream = await postUpstream({
+        url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        headers: {}, body: {}, timeoutMs: 200
+      })
+      const pending = expect(readBodyStream(upstream.stream, 1024)).rejects.toMatchObject({ code: 'ECONNABORTED' })
+      await vi.advanceTimersByTimeAsync(200)
+      await pending
+      expect(upstream.stream.destroyed).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('SSE 允许长时间静默，调用方取消后立即断开上游', async () => {

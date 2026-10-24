@@ -168,6 +168,7 @@ export function createProxyServer(config: ProxyServerConfig): express.Applicatio
 }
 
 export async function startProxyServer(config: ProxyServerConfig): Promise<void> {
+  assertSupportedNodeRuntime()
   const app = createProxyServer(config)
   await new Promise<void>((resolve, reject) => {
     const server = app.listen(config.port, config.host, () => {
@@ -176,4 +177,11 @@ export async function startProxyServer(config: ProxyServerConfig): Promise<void>
     })
     server.on('error', reject)
   })
+}
+
+export function assertSupportedNodeRuntime(version = process.versions.node): void {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version)
+  if (!match || Number(match[1]) !== 24 || Number(match[2]) < 22 || (Number(match[2]) === 22 && Number(match[3]) < 1)) {
+    throw new Error('独立代理需要 Node.js 24.22.1 或更新的 24.x 安全版本')
+  }
 }

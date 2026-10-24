@@ -546,7 +546,7 @@ const AgentsManagementPanel: React.FC = () => {
       >
         {selectedAgent && (
           <>
-            <Divider orientation="left">{t('agents.detail.metadata')}</Divider>
+            <Divider titlePlacement="start">{t('agents.detail.metadata')}</Divider>
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label={t('agents.detail.name')}>
                 {selectedAgent.metadata.name}
@@ -597,7 +597,7 @@ const AgentsManagementPanel: React.FC = () => {
               </Descriptions.Item>
             </Descriptions>
 
-            <Divider orientation="left">{t('agents.detail.content')}</Divider>
+            <Divider titlePlacement="start">{t('agents.detail.content')}</Divider>
             <div className="agent-content-markdown">
               <MarkdownRenderer content={selectedAgent.content} />
             </div>

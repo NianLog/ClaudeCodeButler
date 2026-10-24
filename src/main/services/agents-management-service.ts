@@ -11,7 +11,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import yaml from 'js-yaml'
+import { load } from 'js-yaml'
 import { logger } from '../utils/logger'
 import type {
   AgentFile,
@@ -156,7 +156,7 @@ class AgentsManagementService {
       }
 
       const yamlContent = match[1]
-      const metadata = yaml.load(yamlContent) as {
+      const metadata = load(yamlContent) as {
         name?: string
         description?: string
         tools?: string | string[]

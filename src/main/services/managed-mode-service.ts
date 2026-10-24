@@ -1435,7 +1435,6 @@ export class ManagedModeService extends EventEmitter {
     const express = await import('express')
 
     const expressApp = express.default()
-    expressApp.use(express.default.json({ limit: '50mb' }))
 
     const port = this.config?.port || ManagedModeService.DEFAULT_PORT
 
@@ -1486,8 +1485,10 @@ export class ManagedModeService extends EventEmitter {
       })
     })
 
+    expressApp.use('/v1', authMiddleware, express.default.json({ limit: '50mb' }))
+
     // 代理端点 - Anthropic Messages API
-    expressApp.post('/v1/messages', authMiddleware, async (req: Request, res: Response) => {
+    expressApp.post('/v1/messages', async (req: Request, res: Response) => {
       const requestTime = new Date().toISOString()
       const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`
       const requestBody = (req.body ?? {}) as MessagesRequestBody
@@ -1544,6 +1545,7 @@ export class ManagedModeService extends EventEmitter {
           'host',                    // 由上游 HTTP 客户端根据目标 URL 自动设置
           'connection',              // 连接管理头，由HTTP客户端处理
           'content-length',          // 由 upstream-http-client 根据序列化 body 自动计算
+          'content-encoding',        // JSON 中间件已解压，转发的是重新序列化的正文
           'transfer-encoding',       // 传输编码，由HTTP客户端处理
           'authorization'            // 原始授权头（后续会替换为x-api-key）
         ]

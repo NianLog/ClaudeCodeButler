@@ -1,4 +1,5 @@
 import http from 'http'
+import { brotliCompressSync, deflateRawSync, deflateSync, gzipSync } from 'zlib'
 import type { AddressInfo } from 'net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProxyServerConfig } from '../../../src/proxy-server/src/types'
@@ -6,7 +7,7 @@ import type { ProxyServerConfig } from '../../../src/proxy-server/src/types'
 vi.mock('../../../src/proxy-server/src/logger', () => ({
   getLogger: () => ({ log: vi.fn(), info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() })
 }))
-import { createProxyServer } from '../../../src/proxy-server/src/server'
+import { assertSupportedNodeRuntime, createProxyServer } from '../../../src/proxy-server/src/server'
 
 const servers: http.Server[] = []
 async function listen(server: http.Server): Promise<string> {
@@ -37,6 +38,32 @@ afterEach(async () => {
 })
 
 describe('standalone proxy boundary', () => {
+  it('requires a verified patched 24.x runtime at the standalone startup boundary', () => {
+    for (const version of ['24.22.1', '24.22.2', '24.23.0']) expect(() => assertSupportedNodeRuntime(version)).not.toThrow()
+    for (const version of ['24.17.0', '24.22.0', '22.22.2', '26.6.0', '24.22.1-rc.1', 'invalid']) {
+      expect(() => assertSupportedNodeRuntime(version)).toThrow(/24\.22\.1/)
+    }
+  })
+
+  it.each([
+    { label: 'gzip', encoding: 'gzip', encode: gzipSync },
+    { label: 'deflate', encoding: 'deflate', encode: deflateSync },
+    { label: 'raw deflate', encoding: 'deflate', encode: deflateRawSync },
+    { label: 'br', encoding: 'br', encode: brotliCompressSync }
+  ])('preserves $label upstream response decoding without a paid POST retry', async ({ encoding, encode }) => {
+    let calls = 0
+    const upstream = await listen(http.createServer((_req, res) => {
+      calls++
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': encoding })
+      res.end(encode(Buffer.from('{"id":"compressed-fixture","type":"message","content":[]}')))
+    }))
+    const proxy = await listen(http.createServer(createProxyServer(config(upstream))))
+    const response = await post(proxy, { 'x-api-key': 'fixture-caller-token' })
+    expect(response.status).toBe(200)
+    expect((await response.json()).id).toBe('compressed-fixture')
+    expect(calls).toBe(1)
+  })
+
   it('rejects missing or conflicting credentials before reading an invalid body or reaching upstream', async () => {
     let calls = 0
     const upstream = await listen(http.createServer((_req, res) => { calls++; res.end('{}') }))

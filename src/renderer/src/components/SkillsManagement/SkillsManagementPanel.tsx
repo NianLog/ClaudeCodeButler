@@ -524,7 +524,7 @@ const SkillsManagementPanel: React.FC = () => {
       >
         {selectedSkill && (
           <>
-            <Divider orientation="left">{t('skills.detail.metadata')}</Divider>
+            <Divider titlePlacement="start">{t('skills.detail.metadata')}</Divider>
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label={t('skills.detail.name')} span={2}>
                 {selectedSkill.metadata.name}
@@ -555,7 +555,7 @@ const SkillsManagementPanel: React.FC = () => {
               </Descriptions.Item>
             </Descriptions>
 
-            <Divider orientation="left">{t('skills.detail.structure')}</Divider>
+            <Divider titlePlacement="start">{t('skills.detail.structure')}</Divider>
             <div style={{ marginBottom: 16 }}>
               <Text strong>SKILL.md</Text>
               <br />
@@ -579,7 +579,7 @@ const SkillsManagementPanel: React.FC = () => {
               </div>
             )}
 
-            <Divider orientation="left">{t('skills.detail.content')}</Divider>
+            <Divider titlePlacement="start">{t('skills.detail.content')}</Divider>
             <MarkdownRenderer
               className="skill-content-markdown"
               content={selectedSkill.skillMdContent}

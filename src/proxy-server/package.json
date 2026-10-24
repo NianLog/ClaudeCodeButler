@@ -17,15 +17,19 @@
   "author": "NianSir",
   "license": "MIT",
   "dependencies": {
-    "express": "^5.1.0",
-    "axios": "^1.20.0",
-    "winston": "^3.11.0",
-    "dotenv": "^16.3.1"
+    "express": "5.3.0",
+    "axios": "1.20.0",
+    "winston": "3.19.0",
+    "dotenv": "18.0.9"
   },
   "devDependencies": {
-    "@types/express": "^5.0.6",
-    "@types/node": "^20.10.0",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.0"
-  }
+    "@types/express": "5.0.6",
+    "@types/node": "24.19.2",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": "^24.22.1"
+  },
+  "packageManager": "npm@12.2.1"
 }

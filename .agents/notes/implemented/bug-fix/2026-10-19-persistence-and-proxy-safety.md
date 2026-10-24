@@ -39,4 +39,4 @@ Last-verified: 2026-10-25
 
 ## 后续扩展边界（2026-10-25）
 
-[跨工具资源导入提案](../../proposed/feature/2026-10-25-agent-import-and-global-context.md)和[稳定依赖升级提案](../../proposed/process/2026-10-25-latest-stable-dependency-upgrades.md)延续本笔记的写入与失败约束；它们尚未实现，不替换本次修复的证据和范围。
+[跨工具资源导入提案](../../proposed/feature/2026-10-25-agent-import-and-global-context.md)和[稳定依赖升级提案](../../implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)延续本笔记的写入与失败约束；它们尚未实现，不替换本次修复的证据和范围。

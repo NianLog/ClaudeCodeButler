@@ -5,7 +5,7 @@
 
 ## 1. 产品与架构定位
 
-CCB（Claude Code Butler）是本地优先的 Windows 桌面应用（Electron 44.9.3 + React 18 + TS），核心价值是把分散在用户主目录的 AI CLI 工具配置（`~/.claude/settings.json`、MCP 注册表、Codex `config.toml` 等）纳入统一的生命周期管理：发现、校验、编辑、备份、恢复、模板化。
+CCB（Claude Code Butler）是本地优先的 Windows 桌面应用（Electron 45.0.0 + React 19 + TS），核心价值是把分散在用户主目录的 AI CLI 工具配置（`~/.claude/settings.json`、MCP 注册表、Codex `config.toml` 等）纳入统一的生命周期管理：发现、校验、编辑、备份、恢复、模板化。
 
 v1.4.0 及以前是"Claude Code 专用管理器"：路径、格式、业务逻辑硬编码在各 service 中。v1.5.0 起演进为**规则驱动的多工具配置控制平面**：工具能力以 declarative JSON registry 声明，应用侧只实现有限的、审计过的内置 capability handler。这是典型的 Strangler 渐进迁移，而非重写。
 
@@ -14,7 +14,7 @@ v1.4.0 及以前是"Claude Code 专用管理器"：路径、格式、业务逻�
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Renderer（sandbox: true，无 Node）                            │
-│  React 18 + AntD 5 + Zustand；面板懒加载；Monaco 按需 runtime │
+│  React 19 + AntD 6 + Zustand；面板懒加载；Monaco 按需 runtime │
 │  （editor 核心 + JSON + Markdown，仅 editor/json 两个 worker）│
 │  只发 IPC 请求，不接触真实路径                                  │
 ├──────────── preload（contextBridge，唯一桥）──────────────────┤
@@ -163,7 +163,7 @@ template 解析      = USER_OVERRIDE > REGISTRY > EMBEDDED
 - Registry 配置创建允许不存在的父目录，创建后重新授权路径链；已有目标先完成备份再覆盖。配置集先检查全部 VALIDATE 结果，再逐文件激活。
 - `postUpstream` 普通请求总超时覆盖正文，成功 SSE 只限制响应头阶段；下游 aborted/close 经 AbortSignal 取消上游。`readBodyStream` 还限制正文时长、字节数和不完整关闭。
 - `system:fetchUrl` 保留旧参数形式，但主进程仅接受固定版本 HTTPS URL，复用有 15 秒时限、64 KiB 上限和拒绝重定向的 net.fetch 客户端。
-- Electron 固定 44.9.3；构建启用 ASAR integrity validation + onlyLoadAppFromAsar。保留 Node 环境变量 fuse 的默认值，兼容企业 `NODE_EXTRA_CA_CERTS`。
+- Electron 固定 45.0.0；构建启用 ASAR integrity validation + onlyLoadAppFromAsar。保留 Node 环境变量 fuse 的默认值，兼容企业 `NODE_EXTRA_CA_CERTS`。
 - 两种配置 watcher 复用 `utils/watch-path-filter.ts`，只忽略监控根目录内部的隐藏项；`.ccb` 等隐藏祖先不导致整个目录被排除。保持现有事件契约，不新增 renderer 自动刷新。
 - 正式 tag 发布先过 quality/preflight，要求代码签名凭据、forceCodeSigning 及 Authenticode 有效；ZIP 的 exe 和 ASAR 与已验证目录比对。SBOM 是有明确边界的 npm 依赖图，校验清单与 GitHub provenance 绑定最终产物。
 - 架构决策见 [.agents 持久化记录](.agents/notes/implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md) 与 [发布门禁记录](.agents/notes/implemented/process/2026-10-19-supported-runtime-and-release-gates.md)。
@@ -175,3 +175,10 @@ template 解析      = USER_OVERRIDE > REGISTRY > EMBEDDED
 - 请求与响应转换复用 `transformers/chat-completions.ts`、`gemini-content.ts`；`stream.ts` 为每个请求创建独立 SSE 帧缓冲，UTF-8 解码保留分段状态。普通请求时限覆盖正文，成功 SSE 清除响应头时限，下游断开取消上游，不自动重试。支持范围见 [独立包说明](src/proxy-server/PROTOCOL.md)。
 - Skill 目录与文件列表导入共用 `commitSkillImport` 队列：根目录及链接检查 → 独占暂存 → 完整文件/元数据校验 → 原目录 rename 为备份 → 暂存目录替换 → 清理。安装失败恢复原目录；恢复也失败则保留备份路径并报告。只清理本次 mkdtemp 创建的目录。双 rename 不是断电事务，也不锁外部 CLI。
 - 所有 Skill 仍位于 `~/.claude/skills`，默认不覆盖，IPC 签名不变；不执行导入的 SKILL.md 或脚本。拒绝 traversal、UNC、ADS、保留名、重复路径、链接、无效 Base64/UTF-8；导入上限为 2000 项（目录导入含子目录）、单文件 10 MiB、总计 50 MiB、深度 32。
+
+
+## 10. 稳定工具链与运行时边界（2026-10-25）
+
+Electron 45.0.0 / React 19 / AntD 6 / Zustand 5，Vite 8 与 ESLint 10；main/preload 仍为 CJS。两套锁文件与禁 lifecycle 的 .npmrc 独立维护。集成代理先鉴权后解码，MCP 探测使用 net.fetch 并取消正文；普通上游请求临时关闭空闲连接复用，解压后的请求移除 Content-Encoding。Chromium Brotli 已核实包含修复，保留 br。内嵌 Node 24.22.0 的其他厂商回补仍待核实，正式发布继续阻塞。
+
+决策与兼容例外见 [.agents 工具链记录](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)。

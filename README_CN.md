@@ -7,7 +7,7 @@
 [English](./README.md) | 简体中文
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Electron](https://img.shields.io/badge/Electron-44.9.3-47848F?logo=electron)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-45.0.0-47848F?logo=electron)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
@@ -102,7 +102,7 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 
 ### 环境要求
 
-- Node.js >= 20.19.0（推荐 Node.js 22 LTS）
+- Node.js ^24.22.1 与 npm 12.2.1
 - npm >= 10.0.0
 - 仅在执行本地 Semgrep 审计时需要 Python >= 3.10
 
@@ -214,7 +214,7 @@ npm run dist:all
 
 ### 应用运行时
 
-- **Electron**: 44.9.0
+- **Electron**: 45.0.0
 - **electron-vite**: 5.0.0
 - **Vite**: 7.3.6
 - **TypeScript**: 5.9.3
@@ -451,3 +451,6 @@ semgrep scan \
 Made by NianSir
 
 </div>
+
+
+工具链更新（2026-10-25）：Electron 45.0.0、React 19、AntD 6、Zustand 5；隔离 Node 24.22.1 / npm 12.2.1。TypeScript 保留解析器支持的 6.0.3；Electron 内嵌 Node 厂商回补仍为正式发布门禁，未发布。

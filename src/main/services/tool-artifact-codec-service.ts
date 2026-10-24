@@ -3,7 +3,7 @@
  * @description 提供规则驱动配置资产的内置、不可下载 format codecs。
  */
 
-import yaml from 'js-yaml'
+import { load, JSON_SCHEMA } from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import type {
   ArtifactFormat,
@@ -157,7 +157,7 @@ export class ToolArtifactCodecService {
       let parsedValue: unknown
       if (format === 'JSON') parsedValue = JSON.parse(content)
       else if (format === 'JSONC') parsedValue = JSON.parse(stripTrailingCommas(stripJsonComments(content)))
-      else if (format === 'YAML') parsedValue = yaml.load(content, { schema: yaml.JSON_SCHEMA })
+      else if (format === 'YAML') parsedValue = load(content, { schema: JSON_SCHEMA })
       else if (format === 'TOML') parsedValue = parseToml(content)
       if (parsedValue !== undefined) assertBoundedStructure(parsedValue)
       return { valid: true, format, errors: [] }

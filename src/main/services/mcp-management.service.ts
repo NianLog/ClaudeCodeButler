@@ -4,6 +4,7 @@
  */
 
 import { promises as fs } from 'fs'
+import { net } from 'electron'
 import path from 'path'
 import os from 'os'
 import { mcpArchiveService } from './mcp-archive.service'
@@ -886,7 +887,7 @@ export class MCPManagementService {
     const timer = setTimeout(() => controller.abort(), timeout)
 
     try {
-      const response = await fetch(serverConfig.url, {
+      const response = await net.fetch(serverConfig.url, {
         method: 'GET',
         headers: {
           Accept: transportType === 'sse'
@@ -895,6 +896,9 @@ export class MCPManagementService {
         },
         signal: controller.signal
       })
+
+      // 仅判断已保存地址的可达性，不下载正文或持续读取 SSE。
+      await response.body?.cancel()
 
       const valid = response.ok || [401, 403, 405].includes(response.status)
       const message = valid
@@ -921,6 +925,7 @@ export class MCPManagementService {
       }
     } finally {
       clearTimeout(timer)
+      controller.abort()
     }
   }
 

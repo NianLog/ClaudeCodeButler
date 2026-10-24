@@ -6,6 +6,8 @@
  * 此处用根包类型（editor.main.d.ts，为 editor.api 的超集）补齐；
  * 运行时仍走深层路径，以保持按需加载（见 monaco-runtime.ts）。
  */
-declare module 'monaco-editor/esm/vs/editor/editor.api' {
+declare module 'monaco-editor/editor/editor.api' {
   export * from 'monaco-editor'
 }
+
+declare module 'monaco-editor/language/json/monaco.contribution'

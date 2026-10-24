@@ -86,7 +86,8 @@ export function postUpstream(opts: UpstreamRequestOptions): Promise<UpstreamResp
       method: 'POST' as const,
       headers,
       signal: opts.signal,
-      ...(opts.proxyUrl ? { agent: new HttpsProxyAgent(opts.proxyUrl) } : {})
+      // shortcut: Electron 的 CVE-2026-105481 回补未核实；确认后恢复无代理连接复用。
+      agent: opts.proxyUrl ? new HttpsProxyAgent(opts.proxyUrl) : false
     }
 
     let request: ClientRequest

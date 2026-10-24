@@ -17,7 +17,7 @@ Last-verified: 2026-10-25
 | [配置可靠性路线](2026-10-20-configuration-reliability-roadmap.md) | 部分重叠；用户把跨工具导入、全局对象与界面改进提前到 1.5.1，其他诊断/恢复路线仍属后续，互链 |
 | [代理协议与 Skill 覆盖导入](../../implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md) | 部分重叠；沿用完整目录校验、暂存、备份、切换与回滚，不另建一套 Skill 复制机制，互链 |
 | [配置写入与代理边界](../../implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md) | 部分重叠；延续失败传播、备份失败不写入、超时不盲重试，互链 |
-| [新稳定依赖升级](../process/2026-10-25-latest-stable-dependency-upgrades.md) | 同批前置；包含运行时安全核验和 React/AntD/Zustand 等升级，互链 |
+| [新稳定依赖升级](../../implemented/process/2026-10-25-latest-stable-dependency-upgrades.md) | 同批前置；包含运行时安全核验和 React/AntD/Zustand 等升级，互链 |
 | 已验收候选与隐藏工作区监控 | 无关的既有实现保留；不把新扫描接进常驻 watcher 或更改旧数据路径 |
 
 ## Proposal

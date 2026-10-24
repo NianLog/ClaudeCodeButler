@@ -32,7 +32,7 @@ const { TextArea } = Input
 const { Option } = Select
 const { Title, Paragraph } = Typography
 const { Dragger } = Upload
-const { Step } = Steps
+
 
 /**
  * 配置导入模态框属性
@@ -440,13 +440,13 @@ const ConfigImportModal: React.FC<ConfigImportModalProps> = ({
         >
           {currentStep === 1 ? t('configImport.import') : t('configImport.next')}
         </Button>
-      ]}
+      ]} maskClosable={false}
     >
-      <Steps current={currentStep} style={{ marginBottom: 24 }}>
-        <Step title={t('configImport.steps.selectFile')} icon={<InboxOutlined />} />
-        <Step title={t('configImport.steps.confirmInfo')} icon={<CheckCircleOutlined />} />
-        <Step title={t('configImport.steps.manualInput')} icon={<FileTextOutlined />} />
-      </Steps>
+      <Steps current={currentStep} style={{ marginBottom: 24 }} items={[
+        { title: t('configImport.steps.selectFile'), icon: <InboxOutlined /> },
+        { title: t('configImport.steps.confirmInfo'), icon: <CheckCircleOutlined /> },
+        { title: t('configImport.steps.manualInput'), icon: <FileTextOutlined /> }
+      ]} />
 
       <Form form={form} layout="vertical" initialValues={{ type: 'claude-code' }}>
         <div className="import-content">

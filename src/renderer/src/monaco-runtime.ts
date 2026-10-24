@@ -10,9 +10,9 @@
  * 新增语言支持时在此按需补充对应 monaco.contribution，并同步
  * CodeEditor 的 getWorker 映射。
  */
-import 'monaco-editor/esm/vs/editor/editor.api'
-import 'monaco-editor/esm/vs/language/json/monaco.contribution'
-import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
+import 'monaco-editor/editor/editor.api'
+import 'monaco-editor/language/json/monaco.contribution'
+import 'monaco-editor/languages/definitions/markdown/register'
+import * as monaco from 'monaco-editor/editor/editor.api'
 
 export default monaco

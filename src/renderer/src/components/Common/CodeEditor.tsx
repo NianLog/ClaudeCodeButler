@@ -2,9 +2,7 @@
  * 代码编辑器组件
  * 支持语法高亮、自动修正、JSON/Markdown格式化
  *
- * v3 主题适配：
- *  - Monaco Editor 主题恒为 'vs-dark'（CCB 三套内置主题均为深色）
- *  - 内联样式全部迁移至 CSS 变量，跟随主题切换
+ * 编辑器主题和界面变量跟随当前浅色或暗色主题。
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react'
@@ -20,8 +18,8 @@ import type * as monaco from 'monaco-editor'
 // Monaco 语言 worker（Vite ?worker 导入）。修复原空 blob worker 导致语法诊断/tokenization
 // 退回主线程执行造成的内存与 CPU 开销（v1.4.0 性能根因之一）。
 // 语言服务按需：编辑器只处理 json/markdown/plaintext，不引入 ts/css/html worker。
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
-import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import editorWorker from 'monaco-editor/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/language/json/json.worker?worker'
 import { useTranslation } from '../../locales/useTranslation'
 import { useTheme } from '../../hooks/useTheme'
 
@@ -163,8 +161,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       indentation: true
     },
     renderWhitespace: 'selection',
-    cursorBlinking: 'smooth',
-    smoothScrolling: true,
+    cursorBlinking: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'solid' : 'smooth',
+    smoothScrolling: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     contextmenu: true,
     mouseWheelZoom: true,
     // 代码折叠

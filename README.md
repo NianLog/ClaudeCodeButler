@@ -7,7 +7,7 @@
 English | [简体中文](./README_CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Electron](https://img.shields.io/badge/Electron-44.9.3-47848F?logo=electron)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-45.0.0-47848F?logo=electron)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
@@ -102,7 +102,7 @@ The product name remains **Claude Code Butler**. The name records the project's 
 
 ### Requirements
 
-- Node.js >= 20.19.0 (Node.js 22 LTS recommended)
+- Node.js ^24.22.1 and npm 12.2.1
 - npm >= 10.0.0
 - Python >= 3.10 only when running the local Semgrep audit
 
@@ -214,7 +214,7 @@ npm run dist:all
 
 ### Application runtime
 
-- **Electron**: 44.9.0
+- **Electron**: 45.0.0
 - **electron-vite**: 5.0.0
 - **Vite**: 7.3.6
 - **TypeScript**: 5.9.3
@@ -451,3 +451,6 @@ Thanks to these open source projects and tools:
 Made by NianSir
 
 </div>
+
+
+Toolchain update (2026-10-25): Electron 45.0.0, React 19, AntD 6, Zustand 5; isolated Node 24.22.1 / npm 12.2.1. TypeScript stays on supported 6.0.3 pending parser support for 7. Electron Node backport verification remains a release gate. No release has been published.
