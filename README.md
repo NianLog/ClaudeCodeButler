@@ -27,7 +27,7 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 - **1.5.1 safety fixes**: serialized atomic writes, validation before configuration-set activation, accurate settings error feedback, bounded version requests, and upstream cancellation. Existing paths and data formats remain compatible.
 - **Final fixes**: damaged or unreadable managed settings are preserved; startup, restart and restore failures are reported. The restart button actually restarts the service, while provider switches only refresh the UI after completion.
 - **Batch C**: the standalone proxy requires accessToken and uses protocol-specific endpoints and SSE translation. Skill replacement stages and validates the complete import before swapping, with rollback on failure. See the [standalone proxy guide](src/proxy-server/PROTOCOL.md) for startup and protocol limits.
-- **Local acceptance**: 52 files / 470 tests pass with no skips; type checks and both builds pass, lint has zero errors (16 warnings), and 12 native Electron interaction checks pass. Fresh package verification is tracked in the security report; no release is published.
+- **Local acceptance**: 52 files / 470 tests pass with no skips; type checks, lint (0 errors / 16 warnings), both builds and 12 native interactions pass. Unsigned Portable/NSIS/ZIP, payloads/hashes, legacy profiles and three performance rounds are verified. Unpublished; see the [acceptance report](./SECURITY_AUDIT_REPORT.md).
 - **Release gates**: production audits for both packages, preflight, Authenticode checks, ASAR integrity, dependency SBOMs, SHA-256 and build provenance. Local unsigned packages are for testing; see [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for verification and remaining build-tool advisories.
 
 The product name remains **Claude Code Butler**. The name records the project's origin rather than limiting its architecture: new tools are integrated through a bounded registry and built-in capabilities, while `CCB`, `.ccb`, app identity, and repository identifiers remain stable.
@@ -48,7 +48,7 @@ The product name remains **Claude Code Butler**. The name records the project's 
 
 - 🧠 **Editor & Settings Experience**
   - Monaco-based editor with on-demand runtime loading to keep the initial renderer light
-  - Built-in formatting, syntax validation, and modal preview using the same editor component
+  - Lossless JSON whitespace formatting, syntax validation, and modal preview using the same editor; Markdown stays unchanged
   - Artifact selector, effective-source indicator, bounded diff preview, and per-artifact template override controls
   - Terminal presets, theme/language preferences, and editor behavior settings
 

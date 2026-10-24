@@ -136,3 +136,6 @@ Action release/tag/40 位 SHA 与 action.yml 已用只读认证 GitHub CLI 对�
 - 工具链提交的独立索引快照：357 tests 通过；缺少本地 web/ 发布物的 6 项 staging 条件跳过，未修改跳过条件。快照类型检查、lint 和生产构建通过。
 - 根类型检查、全量 lint（0 error，16 warning）及 root/proxy 生产构建通过。根/代理完整 npm audit 各 0，生产子集另行复核并记录最终报告。
 - npm 12 clean ci 两安装边界成功（lifecycle 关闭）；正式 preflight、DDE、Windows 候选及原生界面最终结果统一补入 SECURITY_AUDIT_REPORT.md，不使用扩展前 46/351 作为新结果。
+
+
+最终验收：源码289a832、sourceDirty=false 的未签名三产物已核验，52个out文件与ASAR一致，ZIP/NSIS payload一致，目录/ZIP/Portable业务和旧profile正常退出；两类离线worker真实诊断、保值格式化/撤销及篡改拒绝通过。三轮原生快照中位页面加载估算 1446.43ms，总工作集 528.53MiB（可能重复计共享页，非独占内存），不宣称性能提升。完整报告见根 SECURITY_AUDIT_REPORT.md；云CI、真实安装和厂商回补仍未验证，暂不发布。

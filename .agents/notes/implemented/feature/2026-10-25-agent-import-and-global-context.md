@@ -79,3 +79,6 @@ Header 只有 Claude Code、Codex CLI、Gemini CLI、Antigravity 四个可写管
 - 类型检查、全量 lint 与双构建通过。正式 preflight、DDE、依赖审计和候选包最终结果见 SECURITY_AUDIT_REPORT.md；暂不 tag、push 或发布。
 
 共享编辑器的最后一段原文保护见[无损格式化](../bug-fix/2026-10-25-lossless-editor-formatting.md)，原生检查12项包含实际格式化按钮与单步撤销。
+
+
+最终验收：源码289a832、sourceDirty=false 的未签名三产物已核验，52个out文件与ASAR一致，ZIP/NSIS payload一致，目录/ZIP/Portable业务和旧profile正常退出；两类离线worker真实诊断、保值格式化/撤销及篡改拒绝通过。三轮原生快照中位页面加载估算 1446.43ms，总工作集 528.53MiB（可能重复计共享页，非独占内存），不宣称性能提升。完整报告见根 SECURITY_AUDIT_REPORT.md；云CI、真实安装和厂商回补仍未验证，暂不发布。

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "schema": "dde-agent-index/1",
-  "generatedAt": "2026-10-24T21:33:39.432Z",
+  "generatedAt": "2026-10-24T22:22:21.897Z",
   "generator": "npx tsx scripts/notes.ts index",
   "disclaimer": "本索引是笔记库的派生快照，用于快速导航与关系检索，不是事实源。\n凡涉及代码修改、实现细节核对、或笔记 freshness.state 为 stale/undated 时，\n必须回读 source.path/lines 指向的源文件与相关代码，避免被过期记录误导。",
   "usage": {
@@ -348,7 +348,7 @@
         "rule": "最近复核 2026-10-25"
       },
       "summary": "在现有 config-editor-utils 中提取 formatEditorContent(content, language)，复用已安装 jsonc-parser 的 token 空白编辑。严格 JSON 仍先校验语法，解析值不参与输出；保留数字字面量、转义、顺序、重复键和原换行。格式化不取代 main 的能力、重复/危险键与原生结构校验。",
-      "bodySha256": "64e757b4578ff087",
+      "bodySha256": "6a9c9fa0fc990b47",
       "lines": {
         "title": 1,
         "status": 3,
@@ -439,7 +439,7 @@
         "rule": "最近复核 2026-10-25"
       },
       "summary": "E：全局管理对象与原生资源",
-      "bodySha256": "8259d9037ecb1d04",
+      "bodySha256": "b54769fef79e695b",
       "lines": {
         "title": 1,
         "status": 3,
@@ -609,7 +609,7 @@
         "rule": "最近复核 2026-10-25"
       },
       "summary": "D0：按实际路径核验运行时",
-      "bodySha256": "f0dbb91fa4dae097",
+      "bodySha256": "ab725e466d54f373",
       "lines": {
         "title": 1,
         "status": 3,

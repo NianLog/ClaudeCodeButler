@@ -36,3 +36,6 @@ JSON 格式化只改空白。Markdown/纯文本继续可编辑和保存，保持
 从原格式化实现提取的相同分支先跑反例：4 failed / 6 passed。修复后该文件 10 tests 全通过：大整数/指数/-0/转义、CRLF、重复键、非法 JSON、Markdown frontmatter/fenced code、TOML 原文。
 
 全量 52 files / 470 tests 通过，无跳过，包含 production-key rehearsal 和本地 staging。最终原生按钮与单步撤销、类型/lint/双构建和新候选包结果统一记录于 SECURITY_AUDIT_REPORT.md。原先 853fce7 候选保留为格式化修复前基线，最终交付必须使用后续干净提交的新包。
+
+
+最终验收：源码289a832、sourceDirty=false 的未签名三产物已核验，52个out文件与ASAR一致，ZIP/NSIS payload一致，目录/ZIP/Portable业务和旧profile正常退出；两类离线worker真实诊断、保值格式化/撤销及篡改拒绝通过。三轮原生快照中位页面加载估算 1446.43ms，总工作集 528.53MiB（可能重复计共享页，非独占内存），不宣称性能提升。完整报告见根 SECURITY_AUDIT_REPORT.md；云CI、真实安装和厂商回补仍未验证，暂不发布。

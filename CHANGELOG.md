@@ -20,7 +20,7 @@
 - 四主题同步色阶、暗色字重、双环焦点、等宽数字与 reduced-motion；编辑抽屉不点蒙层关闭，失败保留草稿，离开模块/切换/退出统一处理未保存内容。草稿仅在进程内存保留。
 - Electron 45.0.0、React 19、AntD 6、Zustand 5、Vite 8、Vitest 5、ESLint 10、Tailwind 4、Monaco 0.57；隔离 Node 24.22.1 / npm 12.2.1，TypeScript 6.0.3 为解析器兼容例外。
 - 集成代理先鉴权后解码，MCP 探测 net.fetch 并取消正文，解压请求删除 Content-Encoding，普通上游临时关闭连接复用。Brotli 经固定源码证明包含修复，保留 br；其他内嵌 Node 厂商回补仍待核实。
-- 源码全量 52 files / 470 tests，通过；类型与双构建通过，lint 0 error / 16 warning。原生交互 12 项通过。当前候选包验收另行记录，暂不发布。
+- 源码全量 52 files / 470 tests，通过；类型与双构建通过，lint 0 error / 16 warning。原生交互 12 项通过。最终289a832候选三产物/hash/52文件与ASAR/ZIP及NSIS payload/旧profile/离线worker/三轮快照均已核验，未签名、未发布；详情见 SECURITY_AUDIT_REPORT.md。
 
 
 ### Fixed
