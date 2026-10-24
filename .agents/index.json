@@ -1,7 +1,7 @@
 {
   "version": 1,
   "schema": "dde-agent-index/1",
-  "generatedAt": "2026-10-24T14:14:33.686Z",
+  "generatedAt": "2026-10-24T17:41:31.046Z",
   "generator": "npx tsx scripts/notes.ts index",
   "disclaimer": "本索引是笔记库的派生快照，用于快速导航与关系检索，不是事实源。\n凡涉及代码修改、实现细节核对、或笔记 freshness.state 为 stale/undated 时，\n必须回读 source.path/lines 指向的源文件与相关代码，避免被过期记录误导。",
   "usage": {
@@ -12,12 +12,12 @@
     "markRechecked": "npx tsx scripts/notes.ts touch <笔记路径>   # 刷新 Last-verified 元数据"
   },
   "stats": {
-    "activeNotes": 5,
+    "activeNotes": 7,
     "archivedNotes": 0,
     "modules": 0,
-    "relations": 4,
+    "relations": 19,
     "byLifecycle": {
-      "proposed": 1,
+      "proposed": 3,
       "implemented": 4
     },
     "staleNotes": []
@@ -39,20 +39,118 @@
       "supersedes": null,
       "supersededBy": [],
       "cites": [
-        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+        "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md"
       ],
       "citedBy": [
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+        "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
         "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
       ],
-      "lastVerified": "2026-10-20",
+      "lastVerified": "2026-10-25",
       "archivedDate": null,
       "freshness": {
         "state": "fresh",
-        "monthsSinceVerify": 0.2,
-        "rule": "最近复核 2026-10-20"
+        "monthsSinceVerify": 0,
+        "rule": "最近复核 2026-10-25"
       },
       "summary": "1.6 优先支持 Claude Code、Codex 的 Windows/WSL 场景，围绕“发现问题 → 解释来源 → 修改预览 → 核对结果 → 恢复”组织现有能力，复用 registry、配置集、备份和路径 facade。",
-      "bodySha256": "7356644adbb1facf",
+      "bodySha256": "adc8641d47a5ff9c",
+      "lines": {
+        "title": 1,
+        "status": 3,
+        "scope": [
+          4
+        ],
+        "supersedes": null,
+        "lastVerified": 5,
+        "archived": null,
+        "sections": [
+          {
+            "title": "Problem",
+            "line": 8
+          },
+          {
+            "title": "Proposal",
+            "line": 14
+          },
+          {
+            "title": "Evidence and uncertainty",
+            "line": 30
+          },
+          {
+            "title": "Follow-up",
+            "line": 42
+          },
+          {
+            "title": "Alternatives considered",
+            "line": 49
+          },
+          {
+            "title": "Acceptance criteria",
+            "line": 56
+          },
+          {
+            "title": "Risks",
+            "line": 64
+          },
+          {
+            "title": "2026-10-25 范围追加",
+            "line": 70
+          }
+        ]
+      },
+      "updateHint": "编辑 .agents/notes/proposed/feature/2026-10-20-configuration-reliability-roadmap.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
+    },
+    {
+      "id": "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+      "path": ".agents/notes/proposed/feature/2026-10-25-agent-import-and-global-context.md",
+      "anchor": "// Note: .agents/notes/proposed/feature/2026-10-25-agent-import-and-global-context.md",
+      "title": "1.5.1 跨工具导入、全局管理对象与四主题改进",
+      "lifecycle": "proposed",
+      "class": "feature",
+      "date": "2026-10-25",
+      "scope": [
+        "src/shared/**",
+        "src/main/services/**",
+        "src/main/ipc-handlers.ts",
+        "src/preload/index.ts",
+        "src/renderer/src/**",
+        "tests/unit/**",
+        "ARCHITECTURE.md",
+        "CAPABILITIES.md",
+        "DEVELOPMENT.md",
+        "CHANGELOG.md",
+        "README.md",
+        "README_CN.md",
+        "PRODUCT.md",
+        ".impeccable/config.json"
+      ],
+      "supersedes": null,
+      "supersededBy": [],
+      "cites": [
+        "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+        "implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md",
+        "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+        "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md"
+      ],
+      "citedBy": [
+        "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+        "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+        "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+        "implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md",
+        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+      ],
+      "lastVerified": "2026-10-25",
+      "archivedDate": null,
+      "freshness": {
+        "state": "fresh",
+        "monthsSinceVerify": 0,
+        "rule": "最近复核 2026-10-25"
+      },
+      "summary": "范围与假设",
+      "bodySha256": "fb296ac7e7d567f5",
       "lines": {
         "title": 1,
         "status": 3,
@@ -69,31 +167,107 @@
           },
           {
             "title": "Proposal",
-            "line": 13
-          },
-          {
-            "title": "Evidence and uncertainty",
-            "line": 29
-          },
-          {
-            "title": "Follow-up",
-            "line": 41
+            "line": 23
           },
           {
             "title": "Alternatives considered",
-            "line": 48
+            "line": 124
           },
           {
             "title": "Acceptance criteria",
-            "line": 55
+            "line": 136
           },
           {
             "title": "Risks",
-            "line": 63
+            "line": 148
           }
         ]
       },
-      "updateHint": "编辑 .agents/notes/proposed/feature/2026-10-20-configuration-reliability-roadmap.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
+      "updateHint": "编辑 .agents/notes/proposed/feature/2026-10-25-agent-import-and-global-context.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
+    },
+    {
+      "id": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+      "path": ".agents/notes/proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+      "anchor": "// Note: .agents/notes/proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+      "title": "1.5.1 全量稳定依赖升级与运行时安全验证",
+      "lifecycle": "proposed",
+      "class": "process",
+      "date": "2026-10-25",
+      "scope": [
+        "package.json",
+        "package-lock.json",
+        "src/proxy-server/package.json",
+        "src/proxy-server/package-lock.json",
+        ".github/workflows/release.yml",
+        "electron.vite.config.ts",
+        ".eslintrc.js",
+        "tailwind.config.js",
+        "src/main/**",
+        "src/preload/**",
+        "src/renderer/src/**",
+        "src/proxy-server/src/**",
+        "scripts/**",
+        "tests/unit/**",
+        "README.md",
+        "README_CN.md",
+        "CHANGELOG.md"
+      ],
+      "supersedes": null,
+      "supersededBy": [],
+      "cites": [
+        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+        "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+        "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md"
+      ],
+      "citedBy": [
+        "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+        "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+        "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+      ],
+      "lastVerified": "2026-10-25",
+      "archivedDate": null,
+      "freshness": {
+        "state": "fresh",
+        "monthsSinceVerify": 0,
+        "rule": "最近复核 2026-10-25"
+      },
+      "summary": "D0：先区分依赖审计与内嵌运行时安全",
+      "bodySha256": "6a110e2cd46bcca3",
+      "lines": {
+        "title": 1,
+        "status": 3,
+        "scope": [
+          4
+        ],
+        "supersedes": null,
+        "lastVerified": 5,
+        "archived": null,
+        "sections": [
+          {
+            "title": "Problem",
+            "line": 7
+          },
+          {
+            "title": "Proposal",
+            "line": 25
+          },
+          {
+            "title": "Alternatives considered",
+            "line": 153
+          },
+          {
+            "title": "Acceptance criteria",
+            "line": 162
+          },
+          {
+            "title": "Risks",
+            "line": 172
+          }
+        ]
+      },
+      "updateHint": "编辑 .agents/notes/proposed/process/2026-10-25-latest-stable-dependency-upgrades.md 后运行：npx tsx scripts/notes.ts verify && npx tsx scripts/notes.ts index"
     },
     {
       "id": "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
@@ -110,17 +284,23 @@
       ],
       "supersedes": null,
       "supersededBy": [],
-      "cites": [],
-      "citedBy": [],
-      "lastVerified": "2026-10-24",
+      "cites": [
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+        "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md"
+      ],
+      "citedBy": [
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+        "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md"
+      ],
+      "lastVerified": "2026-10-25",
       "archivedDate": null,
       "freshness": {
         "state": "fresh",
         "monthsSinceVerify": 0,
-        "rule": "最近复核 2026-10-24"
+        "rule": "最近复核 2026-10-25"
       },
       "summary": "沿用所有配置路径和落盘格式。原子写使用随机独占临时文件、文件同步和同路径写入队列，失败只清理自己的临时文件。配置集检查全部校验结果后再写，首次创建只跳过不存在文件的备份。旧配置与设置复用同一写入工具，备份失败阻止覆盖，UI 仅在主进程报告成功后清除草稿标记。代理通过 AbortSignal 传播取消，普通响应设置总时限，SSE 保持长流并回收断开的连接，不自动重试 POST。",
-      "bodySha256": "6fb47cead9222d20",
+      "bodySha256": "ad7753510d2b173b",
       "lines": {
         "title": 1,
         "status": 3,
@@ -133,27 +313,31 @@
         "sections": [
           {
             "title": "Problem",
-            "line": 7
+            "line": 8
           },
           {
             "title": "Decision",
-            "line": 11
+            "line": 12
           },
           {
             "title": "Alternatives considered",
-            "line": 19
+            "line": 20
           },
           {
             "title": "Verification",
-            "line": 25
+            "line": 26
           },
           {
             "title": "Consequences",
-            "line": 29
+            "line": 30
           },
           {
             "title": "Test evidence",
-            "line": 33
+            "line": 34
+          },
+          {
+            "title": "后续扩展边界（2026-10-25）",
+            "line": 40
           }
         ]
       },
@@ -174,17 +358,21 @@
       ],
       "supersedes": null,
       "supersededBy": [],
-      "cites": [],
-      "citedBy": [],
-      "lastVerified": "2026-10-24",
+      "cites": [
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md"
+      ],
+      "citedBy": [
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md"
+      ],
+      "lastVerified": "2026-10-25",
       "archivedDate": null,
       "freshness": {
         "state": "fresh",
         "monthsSinceVerify": 0,
-        "rule": "最近复核 2026-10-24"
+        "rule": "最近复核 2026-10-25"
       },
       "summary": "独立代理读取原 managed-mode-config.json 的 accessToken，缺 token 拒绝启动，错误认证在解析正文和请求上游前拒绝。按转换器选择协议地址和认证头，保持 Anthropic 兼容网关；普通与流式返回均转换为 Anthropic contract。不支持的内容明确报错，不删除输入语义，不跟随重定向，不自动重试。DeepSeek 明确禁用原生推理；Gemini 原生工具/推理与各原生协议的 cache_control 拒绝，不伪造能力。导入先",
-      "bodySha256": "e4ab12bcd4b4ec21",
+      "bodySha256": "38935993e3e03dc9",
       "lines": {
         "title": 1,
         "status": 3,
@@ -197,23 +385,27 @@
         "sections": [
           {
             "title": "Problem",
-            "line": 7
+            "line": 8
           },
           {
             "title": "Decision",
-            "line": 11
+            "line": 12
           },
           {
             "title": "Alternatives considered",
-            "line": 15
+            "line": 16
           },
           {
             "title": "Verification",
-            "line": 21
+            "line": 22
           },
           {
             "title": "Consequences",
-            "line": 25
+            "line": 26
+          },
+          {
+            "title": "后续导入提案（2026-10-25）",
+            "line": 30
           }
         ]
       },
@@ -304,21 +496,24 @@
       "supersededBy": [],
       "cites": [
         "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
-        "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md"
+        "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md",
+        "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+        "proposed/feature/2026-10-25-agent-import-and-global-context.md"
       ],
       "citedBy": [
         "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+        "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
         "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md"
       ],
-      "lastVerified": "2026-10-24",
+      "lastVerified": "2026-10-25",
       "archivedDate": null,
       "freshness": {
         "state": "fresh",
         "monthsSinceVerify": 0,
-        "rule": "最近复核 2026-10-24"
+        "rule": "最近复核 2026-10-25"
       },
       "summary": "当前版本是未发布的 1.5.1 修复候选，保留应用身份、配置路径与文件格式。使用已核对的 Electron 44.9.3，并优先采用兼容现有调用的依赖修复，删除未使用的代理依赖。版本抓取改为主进程固定 HTTPS 地址、正文上限、超时和拒绝重定向；保留旧 fetchUrl 方法签名但只接受这个固定地址，兼容现有调用并拒绝任意 URL。",
-      "bodySha256": "3bc0cfe338159b4e",
+      "bodySha256": "2f86fdfb22a0cce3",
       "lines": {
         "title": 1,
         "status": 3,
@@ -331,27 +526,31 @@
         "sections": [
           {
             "title": "Problem",
-            "line": 7
+            "line": 8
           },
           {
             "title": "Decision",
-            "line": 11
+            "line": 12
           },
           {
             "title": "Alternatives considered",
-            "line": 23
+            "line": 24
           },
           {
             "title": "Verification",
-            "line": 29
+            "line": 30
           },
           {
             "title": "Consequences",
-            "line": 33
+            "line": 34
           },
           {
             "title": "Local validation boundary",
-            "line": 37
+            "line": 38
+          },
+          {
+            "title": "2026-10-25 新增范围",
+            "line": 48
           }
         ]
       },
@@ -367,6 +566,71 @@
     },
     {
       "type": "cite",
+      "from": "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+      "to": "proposed/feature/2026-10-25-agent-import-and-global-context.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
+      "to": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+      "to": "proposed/feature/2026-10-20-configuration-reliability-roadmap.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+      "to": "implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+      "to": "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/feature/2026-10-25-agent-import-and-global-context.md",
+      "to": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+      "to": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+      "to": "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+      "to": "proposed/feature/2026-10-20-configuration-reliability-roadmap.md"
+    },
+    {
+      "type": "cite",
+      "from": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md",
+      "to": "proposed/feature/2026-10-25-agent-import-and-global-context.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+      "to": "proposed/feature/2026-10-25-agent-import-and-global-context.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
+      "to": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md",
+      "to": "proposed/feature/2026-10-25-agent-import-and-global-context.md"
+    },
+    {
+      "type": "cite",
       "from": "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md",
       "to": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
     },
@@ -379,6 +643,16 @@
       "type": "cite",
       "from": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
       "to": "implemented/bug-fix/2026-10-24-hidden-workspace-watcher.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+      "to": "proposed/process/2026-10-25-latest-stable-dependency-upgrades.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/process/2026-10-19-supported-runtime-and-release-gates.md",
+      "to": "proposed/feature/2026-10-25-agent-import-and-global-context.md"
     }
   ]
 }

@@ -2,7 +2,8 @@
 
 Status: implemented
 Scope: package.json, package-lock.json, src/proxy-server/package.json, src/proxy-server/package-lock.json, .github/workflows/release.yml, scripts/**
-Last-verified: 2026-10-24
+Last-verified: 2026-10-25
+
 
 ## Problem
 
@@ -43,3 +44,7 @@ Electron 40 已停止维护，依赖审计已不再双零，正式预检未进�
 最终生产目录已验证 47 个 out 文件与 ASAR 字节一致，46 files / 351 tests 无跳过；1.5.0 副本写出配置和主题，再由 1.5.1 使用同一隔离目录完成回归。性能三轮复用保留数据的 profile，采集可见/隐藏各 60 秒，watcher 目录/条目非零且稳定。该结果证明本地业务与数据兼容，不替代目标机 NSIS 安装/覆盖升级/卸载。root/proxy 生产审计均 0，root 仅保留 3 项 PostCSS 构建链中危，复核日期和理由见 SECURITY_AUDIT_REPORT.md。
 
 maximum 三产物全部生成；ZIP 与 NSIS 的 exe/ASAR 对齐已验收目录，ZIP/Portable 实际业务和 app.quit 正常退出通过。两份 CycloneDX、构建元数据和 6 项 SHA-256 清单齐全且匹配，元数据保留 sourceDirty=true。当前 runtime 实际验证新窗口/跨 document 导航拒绝、hash 导航允许及 ASAR header 篡改启动拒绝。第三轮隐藏时新增 GPU 进程的原始样本保留，不宣称性能改善。
+
+## 2026-10-25 新增范围
+
+本笔记中的 44.9.3、回归与未签名包记录继续代表扩展前基线，Git 已保存为 ed53f23。用户追加的工作见[稳定依赖与运行时安全提案](../../proposed/process/2026-10-25-latest-stable-dependency-upgrades.md)和[跨工具导入及全局管理对象提案](../../proposed/feature/2026-10-25-agent-import-and-global-context.md)。新范围尚未实施或完成回归，不能把旧验收结论用于新依赖和新功能；暂不发布保持。

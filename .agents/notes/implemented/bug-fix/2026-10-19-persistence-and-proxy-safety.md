@@ -2,7 +2,8 @@
 
 Status: implemented
 Scope: src/main/**, src/renderer/src/store/settings-store.ts, tests/unit/**
-Last-verified: 2026-10-24
+Last-verified: 2026-10-25
+
 
 ## Problem
 
@@ -35,3 +36,7 @@ Last-verified: 2026-10-24
 故障注入覆盖并发写、rename 失败保留原文件、备份失败阻止覆盖、配置集校验失败不写入、设置失败不提交内存及 UI、缺失目录创建、正文卡住超时与下游断连取消。最新完整回归和验证边界见 SECURITY_AUDIT_REPORT.md。
 
 1.5.1 收尾新增 12 项托管故障测试，先复现后修复；真实生产构建复现并修复重启按钮未调用 IPC、停止后健康请求误报端口占用、持续连接未释放的问题。最终完整回归 46 files / 351 tests（含两项新增真实监控测试），无跳过；实际界面验证重启成功、损坏 JSON 显示错误且原文不变，以及禁用后准确恢复原设置。业务 fixture 在外部证据目录保存，使用独立用户目录，不连接付费提供商。
+
+## 后续扩展边界（2026-10-25）
+
+[跨工具资源导入提案](../../proposed/feature/2026-10-25-agent-import-and-global-context.md)和[稳定依赖升级提案](../../proposed/process/2026-10-25-latest-stable-dependency-upgrades.md)延续本笔记的写入与失败约束；它们尚未实现，不替换本次修复的证据和范围。

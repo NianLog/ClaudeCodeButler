@@ -2,7 +2,8 @@
 
 Status: implemented
 Scope: src/proxy-server/src/**, src/main/services/skills-management-service.ts, tests/unit/**
-Last-verified: 2026-10-24
+Last-verified: 2026-10-25
+
 
 ## Problem
 
@@ -25,3 +26,7 @@ Last-verified: 2026-10-24
 ## Consequences
 
 协议转换只存在于独立包，不扩展主应用集成模式，也不统一两套代理。真实提供商账户、企业网络和机器断电不在本地 fixture 验证范围。目录替换需要两次 rename，保留备份用于恢复，不能声称跨进程事务或断电原子性。导入新增大小、编码、数量和链接限制；原路径、默认不覆盖与 IPC 签名不变。不迁移配置、不发布。
+
+## 后续导入提案（2026-10-25）
+
+[跨工具导入与全局管理对象](../../proposed/feature/2026-10-25-agent-import-and-global-context.md)将复用本笔记的 Skill 暂存、备份与回滚，不以增加来源为由绕过校验；新增格式和交互尚未实施。
