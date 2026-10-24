@@ -3,10 +3,21 @@
  * @description 统一处理配置编辑语言判断与复制名称生成，避免不同页面出现不一致行为。
  */
 
+import { applyEdits, format } from 'jsonc-parser'
+
 /**
  * 编辑器语言类型
  */
 export type EditorLanguage = 'json' | 'markdown'
+
+export const formatEditorContent = (content: string, language: EditorLanguage | 'plaintext'): string => {
+  if (language !== 'json') return content
+  // 只校验语法，不使用解析结果重写数字、转义和重复键。
+  JSON.parse(content)
+  return applyEdits(content, format(content, undefined, {
+    tabSize: 2, insertSpaces: true, eol: content.includes('\r\n') ? '\r\n' : '\n'
+  }))
+}
 
 /**
  * 配置文件描述

@@ -73,7 +73,9 @@ Header 只有 Claude Code、Codex CLI、Gemini CLI、Antigravity 四个可写管
 
 ## Testing
 
-- 52 files / 464 tests 全通过，无跳过；包含 production-key rehearsal 和本地模板 staging。新增格式、权限、CAS、恢复、预览脱敏、原型污染与归档故障测试覆盖实际反例。
+- 52 files / 470 tests 全通过，无跳过；包含 production-key rehearsal 和本地模板 staging。新增格式、权限、CAS、恢复、预览脱敏、原型污染与归档故障测试覆盖实际反例。
 - 独立恢复安全复核 2 files / 42 tests，通过原瞬时外部修改反例；相关后端集成 14 files / 176 tests 全通过。
-- 原生 Electron 45 的生产 React/IPC/sandbox，隔离 HOME/APPDATA：11 项交互通过，四主题（主按钮文字对比度最低 5.13:1、次级文字最低 5.00:1、输入边界最低 3.17:1，Input/Select 两圈焦点均实际生效）、1440/1280 桌面、目标切换、脱敏导入、失败保稿、保存再切换、附件恢复、退出拦截。截图用离屏捕获，不能等同屏幕阅读器或真实安装升级验收。
+- 原生 Electron 45 的生产 React/IPC/sandbox，隔离 HOME/APPDATA：12 项交互通过，四主题（主按钮文字对比度最低 5.13:1、次级文字最低 5.00:1、输入边界最低 3.17:1，Input/Select 两圈焦点均实际生效）、1440/1280 桌面、目标切换、脱敏导入、失败保稿、保存再切换、附件恢复、退出拦截。截图用离屏捕获，不能等同屏幕阅读器或真实安装升级验收。
 - 类型检查、全量 lint 与双构建通过。正式 preflight、DDE、依赖审计和候选包最终结果见 SECURITY_AUDIT_REPORT.md；暂不 tag、push 或发布。
+
+共享编辑器的最后一段原文保护见[无损格式化](../bug-fix/2026-10-25-lossless-editor-formatting.md)，原生检查12项包含实际格式化按钮与单步撤销。

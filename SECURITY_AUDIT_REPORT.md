@@ -6,12 +6,12 @@
 
 | 检查 | 当前证据 |
 | --- | --- |
-| 源代码完整回归 | 52 files / 464 tests 全通过，无跳过，含本地 production-key rehearsal 和模板 staging |
+| 源代码完整回归 | 52 files / 470 tests 全通过，无跳过，含本地 production-key rehearsal 和模板 staging |
 | 覆盖率 | statements 47.43%、branches 51.75%、functions 46.73%、lines 47.56%；不含 renderer，不是功能覆盖率 |
 | 工具链独立快照 | 类型、lint、生产构建通过；357 tests 通过，缺 web 发布物的 6 项 staging 条件跳过 |
 | 依赖审计 | 重新 npm 12 严格 ci：根 747 包、proxy 121 包；根/代理生产与全量 audit 四项均为 0。官方 registry 最后核对 47 个不同直接包，无未说明的版本落后；例外仅 TS 6.0.3 与 Node 24 类型 |
 | 源代码静态门禁 | 类型检查 0 error；全量 lint 0 error / 16 warning；root/proxy 双构建通过 |
-| 真实 Electron 交互 | 11 项通过：四主题、四目标、脱敏导入、Monaco、失败保稿、保存再切换、附件恢复、1280 布局、退出拦截；四主题实际测得主按钮文字最低约5.13:1、次级文字约5.00:1、输入边界约3.17:1，Input/Select 双环焦点生效；离屏捕获，不是手工可访问性验收 |
+| 真实 Electron 交互 | 12 项通过：四主题、四目标、脱敏导入、Monaco、失败保稿、保存再切换、附件恢复、1280 布局、退出拦截；四主题实际测得主按钮文字最低约5.13:1、次级文字约5.00:1、输入边界约3.17:1，Input/Select 双环焦点生效；离屏捕获，不是手工可访问性验收 |
 | 独立恢复复核 | 2 files / 42 tests，通过真实瞬时外部修改反例；原件保留且无可见坏备份 |
 | 包与云 CI | 本次候选完整校验待后续验收记录；云端 CI 未运行，未 tag、push 或发布 |
 
@@ -20,6 +20,8 @@
 Electron 45.0.0 实际 Node 24.22.0 / Chromium 156.0.8078.48；构建和独立代理为 Node 24.22.1 / npm 12.2.1。Chromium Brotli 固定源码已包含修复，因此保留 br；三种压缩解码实际转发回归通过。Electron 非规范 TLS 主机直接探针仍未拒绝；生产 URL 规范化、过滤来路 Host、HTTP agent:false、鉴权前置和 net.fetch 取消正文降低可达面，但不代表厂商回补完成。未使用的 DNS Resolver 路径和有限随机探针结果不当作修复证明。
 
 正式发布仍阻塞于内嵌 Node 相关厂商回补证据、有效签名与真实安装升级验收。两套 npm audit 为零不替代运行时证明。未关闭 TLS/sandbox/签名链，不以签名暂缓删除正式门禁。
+
+编辑器共享格式化另有 4 个反例先失败后通过：原 JSON 往返会改变大整数/转义/重复键/换行，Markdown 空行重排会改变原文；现采用 token 空白编辑、单步撤销和只读保护，详见[无损格式化记录](.agents/notes/implemented/bug-fix/2026-10-25-lossless-editor-formatting.md)。格式化修复前 853fce7 三产物保留为基线；最终测试包从后续干净提交重建。
 
 决策与官方证据：[工具链](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)、[导入与全局上下文](.agents/notes/implemented/feature/2026-10-25-agent-import-and-global-context.md)。实际 CLI/模型账号、企业 CA、macOS/Linux、屏幕阅读器、NSIS 安装/卸载尚未实机验收。
 

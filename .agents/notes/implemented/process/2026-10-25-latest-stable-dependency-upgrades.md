@@ -132,7 +132,7 @@ Action release/tag/40 位 SHA 与 action.yml 已用只读认证 GitHub CLI 对�
 
 ## Testing
 
-- 全批扩展工作区：52 files / 464 tests 通过，无跳过，含本地 production-key rehearsal 与模板 staging；覆盖率 statements 47.43%、branches 51.75%、functions 46.73%、lines 47.56%，renderer 不计入分母。
+- 全批扩展工作区：52 files / 470 tests 通过，无跳过，含本地 production-key rehearsal 与模板 staging；覆盖率 statements 47.43%、branches 51.75%、functions 46.73%、lines 47.56%，renderer 不计入分母。
 - 工具链提交的独立索引快照：357 tests 通过；缺少本地 web/ 发布物的 6 项 staging 条件跳过，未修改跳过条件。快照类型检查、lint 和生产构建通过。
 - 根类型检查、全量 lint（0 error，16 warning）及 root/proxy 生产构建通过。根/代理完整 npm audit 各 0，生产子集另行复核并记录最终报告。
 - npm 12 clean ci 两安装边界成功（lifecycle 关闭）；正式 preflight、DDE、Windows 候选及原生界面最终结果统一补入 SECURITY_AUDIT_REPORT.md，不使用扩展前 46/351 作为新结果。

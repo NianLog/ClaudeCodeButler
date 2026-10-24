@@ -195,3 +195,6 @@ MANAGE_MCP / MANAGE_DIRECTORY、SKILL_DIRECTORY_V1 / SUBAGENT_DIRECTORY_V1 是 1
 JSONC 采用拒绝危险键/重复键后的局部 raw 修改，保留注释与未知大整数；TOML 仅改可安全定位的 table。Skill 沿用全包暂存/备份/切换，附件保持。备份实际快照必须先匹配 revision，metadata.originalPath 不决定任何恢复路径。旧归档恢复只有原生写成功后才确认移除；清理失败报告部分完成。
 
 六新增工具只是导入来源；不能等价的认证、停用、权限、模型和工具限制逐项阻止，不猜字段。详细契约、官方来源与取舍见 [.agents 导入记录](.agents/notes/implemented/feature/2026-10-25-agent-import-and-global-context.md)；四主题规范见 [DESIGN.md](DESIGN.md)。
+
+
+共享 CodeEditor 的 JSON 格式化复用现有 jsonc-parser 做 token 空白编辑，保留大整数、转义和换行；严格 JSON 校验不变。格式化使用可撤销编辑，只读/写入中不处理。Markdown/纯文本保留原文，不做空行重排。见[无损编辑记录](.agents/notes/implemented/bug-fix/2026-10-25-lossless-editor-formatting.md)。

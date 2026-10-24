@@ -47,4 +47,4 @@ maximum 三产物全部生成；ZIP 与 NSIS 的 exe/ASAR 对齐已验收目录�
 
 ## 2026-10-25 新增范围
 
-本笔记中的 44.9.3、回归与未签名包记录继续代表扩展前基线，Git 已保存为 ed53f23。用户追加的工作见[稳定依赖与运行时安全提案](../../implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)和[跨工具导入及全局管理对象提案](../../implemented/feature/2026-10-25-agent-import-and-global-context.md)。新范围已批准实施，源码全量 52 files / 464 tests 通过；具体版本、运行时未决门禁与候选包验收见新记录，旧包不充作新包，暂不发布保持。
+本笔记中的 44.9.3、回归与未签名包记录继续代表扩展前基线，Git 已保存为 ed53f23。用户追加的工作见[稳定依赖与运行时安全提案](../../implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)和[跨工具导入及全局管理对象提案](../../implemented/feature/2026-10-25-agent-import-and-global-context.md)。新范围已批准实施，源码全量 52 files / 470 tests 通过；具体版本、运行时未决门禁与候选包验收见新记录，旧包不充作新包，暂不发布保持。

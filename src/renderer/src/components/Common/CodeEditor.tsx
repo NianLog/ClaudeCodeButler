@@ -1,6 +1,6 @@
 /**
  * 代码编辑器组件
- * 支持语法高亮、自动修正、JSON/Markdown格式化
+ * 支持语法高亮、JSON 空白排版与 Markdown 原文编辑
  *
  * 编辑器主题和界面变量跟随当前浅色或暗色主题。
  */
@@ -22,6 +22,7 @@ import editorWorker from 'monaco-editor/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/language/json/json.worker?worker'
 import { useTranslation } from '../../locales/useTranslation'
 import { useTheme } from '../../hooks/useTheme'
+import { formatEditorContent } from '../../utils/config-editor-utils'
 
 const { Text } = Typography
 const { Option } = Select
@@ -228,21 +229,18 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     const editor = editorRef.current
     const model = editor.getModel()
-    if (!model) return
+    if (!model || editor.getRawOptions().readOnly) return
 
     const content = model.getValue()
 
     try {
-      if (language === 'json') {
-        const parsed = JSON.parse(content)
-        const formatted = JSON.stringify(parsed, null, 2)
-        model.setValue(formatted)
-        validateJSON(formatted)
-      } else if (language === 'markdown') {
-        // 简单的Markdown格式化
-        const lines = content.split('\n').filter((line: string) => line.trim())
-        model.setValue(lines.join('\n\n'))
+      const formatted = formatEditorContent(content, language)
+      if (formatted !== content) {
+        editor.pushUndoStop()
+        editor.executeEdits('ccb-format', [{ range: model.getFullModelRange(), text: formatted }])
+        editor.pushUndoStop()
       }
+      if (language === 'json') validateJSON(formatted)
     } catch (error) {
       console.error('Format failed:', error)
     }
@@ -362,14 +360,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           <Space>
             {/* 自动修正按钮已移除 */}
 
-            <Button
+            {language === 'json' && <Button
               size="small"
               icon={<FormatPainterOutlined />}
               onClick={formatCode}
               disabled={isReadOnly}
             >
               {t('codeEditor.actions.format')}
-            </Button>
+            </Button>}
 
             {showPreview && language === 'markdown' && (
               <Select
