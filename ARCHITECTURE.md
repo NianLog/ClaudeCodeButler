@@ -3,13 +3,13 @@
 > 活文档。新增/移动模块、改变分层边界、引入新依赖或新数据流时，必须在同一提交更新本文件。
 > 更新时间：2026-10-25（1.5.1 未发布候选，分支 `codex/v1.5.1-agents-ux-upgrades`）。
 
-> 2026-10-25 真实路径复核：三批补修已落地，含 19 个原反例的 555 项回归及 19 组真实 Electron 流程通过。干净源码 37e020e 的新候选已完成载荷/ASAR/SBOM/摘要核验，暂不发布；目标机、云 CI 和跨平台分别待验。见[资源闭环记录](.agents/notes/implemented/bug-fix/2026-10-25-resource-management-closure.md)。
+> 2026-10-25 最新本机验收：资源三批与网络 A+B 已完成；642 项测试和 22 组真实 Electron 流程通过，无跳过/未捕获异常。干净源码 2086a94 的未签名候选已通过业务及载荷核验，暂不发布。详见[验收报告](SECURITY_AUDIT_REPORT.md)；早期 37e020e 验收保留在历史记录中。
 
 ### 资源闭环三批
 
-网络缓解 B：main/独立代理复用现有 ESLint 限制 Node 原生 fetch、Resolver、WebSocket/EventSource 和快照入口，保留 OS lookup、Chromium 与 renderer 接口。健康检查以请求时的服务实例为边界，旧成功/失败回调不操作重启后的新实例；两条回归先失败后转绿。62 项规则与 20 项生命周期测试通过，完整与最终候选验收继续。
+网络缓解 B：main/独立代理复用现有 ESLint 限制 Node 原生 fetch、Resolver、WebSocket/EventSource 和快照入口，保留 OS lookup、Chromium 与 renderer 接口。健康检查以请求时的服务实例为边界，旧成功/失败回调不操作重启后的新实例；两条回归先失败后转绿。62 项规则与 20 项生命周期测试、全量与真实 Electron/新候选验收均通过。
 
-网络缓解 A（2026-10-25）：上游 TLS 显式绑定规范目标；下载 HEAD 委托现有 HTTP 工具，禁复用、收尾响应并设五秒总时限，保持 2xx/3xx 和 Chromium 下载语义。此处 Node HEAD 经用户批准暂留，B 批约束与完整验收进行中。配置路径、数据格式与公共 IPC 不变，见[决定与证据更正](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。下段是实施前的厂商回补复核记录。
+网络缓解 A（2026-10-25）：上游 TLS 显式绑定规范目标；下载 HEAD 委托现有 HTTP 工具，禁复用、收尾响应并设五秒总时限，保持 2xx/3xx 和 Chromium 下载语义。Node HEAD 为用户批准的临时例外，2026-11-01 或下次入口/依赖变更复核。配置路径、数据格式与公共 IPC 不变，见[决定与证据更正](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。下段保留实施前的厂商回补证据，不代表当前应用缓解未验收。
 
 运行时安全复核（2026-10-25）：当前 Electron 45 的 9 份相关内置 JS 源码与未修复 Node 24.22.0 一致，TLS/DNS 反例仍未拒绝。Brotli 已由 Chromium 包含修复，其余七项 Node 上游修复缺失，内置 c-ares/Undici 另有公告版本风险。宿主 Node/npm 更新不能替换内嵌运行时；现有 URL/Host/鉴权/agent:false 缓解保持。用户本轮暂缓安装生命周期和签名，不改程序代码，不发布。详见[运行时证据](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)。
 

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "schema": "dde-agent-index/1",
-  "generatedAt": "2026-10-25T13:23:33.926Z",
+  "generatedAt": "2026-10-25T14:20:07.564Z",
   "generator": "npx tsx scripts/notes.ts index",
   "disclaimer": "本索引是笔记库的派生快照，用于快速导航与关系检索，不是事实源。\n凡涉及代码修改、实现细节核对、或笔记 freshness.state 为 stale/undated 时，\n必须回读 source.path/lines 指向的源文件与相关代码，避免被过期记录误导。",
   "usage": {
@@ -15,7 +15,7 @@
     "activeNotes": 10,
     "archivedNotes": 0,
     "modules": 0,
-    "relations": 33,
+    "relations": 34,
     "byLifecycle": {
       "proposed": 1,
       "implemented": 9
@@ -415,6 +415,7 @@
         "implemented/process/2026-10-19-supported-runtime-and-release-gates.md"
       ],
       "citedBy": [
+        "implemented/bug-fix/2026-10-25-resource-management-closure.md",
         "implemented/process/2026-10-25-latest-stable-dependency-upgrades.md"
       ],
       "lastVerified": "2026-10-25",
@@ -425,7 +426,7 @@
         "rule": "最近复核 2026-10-25"
       },
       "summary": "A：在现有客户端修正边界",
-      "bodySha256": "537da81204947636",
+      "bodySha256": "a1144590b3885619",
       "lines": {
         "title": 1,
         "status": 3,
@@ -458,7 +459,7 @@
           },
           {
             "title": "Consequences",
-            "line": 89
+            "line": 93
           }
         ]
       },
@@ -487,7 +488,8 @@
         "implemented/bug-fix/2026-10-19-persistence-and-proxy-safety.md",
         "implemented/bug-fix/2026-10-20-proxy-protocol-and-skill-import.md",
         "proposed/feature/2026-10-20-configuration-reliability-roadmap.md",
-        "implemented/process/2026-10-25-latest-stable-dependency-upgrades.md"
+        "implemented/process/2026-10-25-latest-stable-dependency-upgrades.md",
+        "implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md"
       ],
       "citedBy": [
         "implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md",
@@ -501,7 +503,7 @@
         "rule": "最近复核 2026-10-25"
       },
       "summary": "三批代码、本机回归和干净提交的新候选包核验已完成；暂不发布，不能视为目标机/云 CI/跨平台生产验收通过。",
-      "bodySha256": "6a17765839caa1ff",
+      "bodySha256": "a31a18650c0eb4ce",
       "lines": {
         "title": 1,
         "status": 3,
@@ -908,6 +910,11 @@
       "type": "cite",
       "from": "implemented/bug-fix/2026-10-25-resource-management-closure.md",
       "to": "implemented/process/2026-10-25-latest-stable-dependency-upgrades.md"
+    },
+    {
+      "type": "cite",
+      "from": "implemented/bug-fix/2026-10-25-resource-management-closure.md",
+      "to": "implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md"
     },
     {
       "type": "cite",

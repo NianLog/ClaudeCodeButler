@@ -65,4 +65,4 @@ Last-verified: 2026-10-25
 
 ## Consequences
 
-revision 检查不能提供外部 CLI 的跨进程事务；旧无摘要副本不能被追溯证明历史完整性。尚未取得官方结构的桌面变体不假定等价。补修已重建并校验；后续[内嵌 Node 复核](../process/2026-10-25-latest-stable-dependency-upgrades.md)确认七项上游修复缺失，运行时安全门禁未通过。签名与安装/覆盖升级/卸载按用户要求暂缓，云 CI 和其他平台未验证。
+revision 检查不能提供外部 CLI 的跨进程事务；旧无摘要副本不能被追溯证明历史完整性。尚未取得官方结构的桌面变体不假定等价。补修已重建并校验；后续[内嵌 Node 复核](../process/2026-10-25-latest-stable-dependency-upgrades.md)确认七项上游修复缺失，运行时安全门禁未通过。后续[网络 A+B 缓解](2026-10-25-reachable-node-network-mitigations.md)已完成 642 项回归、22 组真实 Electron 与源码 2086a94 新候选本机验收；厂商缺失事实不变，应用入口另行验收。签名与安装/覆盖升级/卸载按用户要求暂缓，云 CI 和其他平台未验证。

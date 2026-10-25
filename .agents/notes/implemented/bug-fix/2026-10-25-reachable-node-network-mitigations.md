@@ -24,7 +24,7 @@ postUpstream 保持签名和原始流协议。HTTPS 证书检查显式使用 URL
 
 ### 应用验收与厂商修复分开
 
-[依赖与内嵌运行时记录](../process/2026-10-25-latest-stable-dependency-upgrades.md)中的七项未回补事实继续保留。应用风险按入口、触发条件、缓解及复核日期验收；未识别入口不写成组件已修复。B 批的入口约束和完整/真实 Electron 验收尚未完成前，不宣布本轮整体通过；签名、安装生命周期、云 CI 与跨平台也不自动记为通过。不发布。
+[依赖与内嵌运行时记录](../process/2026-10-25-latest-stable-dependency-upgrades.md)中的七项未回补事实继续保留。应用风险按入口、触发条件、缓解及复核日期验收；未识别入口不写成组件已修复。A+B 入口约束、完整回归和真实 Electron/干净新候选本机验收已完成；签名、安装生命周期、云 CI 与跨平台不记为通过。不发布。
 
 当前排除条件：不使用 Node Resolver 查询；lookup 走 uv/OS；Node c-ares 绑定关闭查询缓存，部分公告 API 未暴露；桌面普通请求走 Chromium，无 Node Undici 网络入口；独立代理实际选择 Axios HTTP adapter，启动已有 Node 24.22.1 / major 24 检查。没有用户 Node snapshot/SEA 构建，也不以 Node Permission Model 替代路径授权。B 批已把这些边界加入现有 lint 与回归，不重复实现运行时检查。
 
@@ -86,6 +86,10 @@ Node 原生绑定关闭查询缓存并让 lookup 进入 uv_getaddrinfo，参见 
 
 A 批新增测试先得到 16 fail / 6 pass；最小修复后相关 4 files / 51 tests 通过，含五秒总时限和失败状态的连接回收，类型检查通过。Node 24.22.1 与 Electron 45 实际内嵌 Node 24.22.0 对照均拒绝错误目标证书、接受正确 IP SAN；真实 helper 的 HEAD 保留 200/302、拒绝 405、四次请求四条独立连接全部关闭。夹具仅用回环和进程私有 CA，不读写真实配置，不降低 TLS 验证。
 
+60 files / 642 tests 全通过，无跳过；类型零错误，lint 零错误/15 个既有 warning，lint:changed、root/proxy 双构建、正式 preflight 和双全依赖 audit（0 漏洞）通过。覆盖率 statements 50.45%、branches 54.52%、functions 49.26%、lines 50.71%，范围 main/proxy/shared。真实 Electron 45 的 22 组流程通过，含 14 组 TLS/代理/Host 网络案例、3 次正确字节下载、405 拒绝与五秒超时；四主题/九张截图、零 renderer 未捕获异常、正常退出，5 个用户文件摘要不变。62 项入口正反例及 20 项生命周期测试已包含于全量；所有新增安全分支先有失败反例。
+
+干净源码 2086a94 的未签名 Portable/NSIS/ZIP 完成载荷、52 个 out 文件与 ASAR 一致性、双 SBOM 和六项 SHA-256 核验，sourceDirty=false；Portable/ZIP/解包目录各 17 项业务验收通过，篡改 ASAR 被拒且未创建 settings。NSIS 仅解包，未执行安装。候选来源为 2086a942f39ede3cdd5dc613455616bec961efb3，验收文档另提；main 比前候选增 146 bytes，无新运行依赖。外部旧冒烟驱动补传 revision，并使用损坏 YAML 验证失败，保留合法无前言 Skill。证据目录为本机 Codex visualizations 下的 network-mitigation-ab-20261025，完整结论和摘要见根 SECURITY_AUDIT_REPORT.md。
+
 ## Consequences
 
-多次握手有开销，换取当前已知边界的安全和兼容性。当前版本仍包含未修复的底层代码；新增原生 fetch/Resolver、快照、权限模型或传递依赖网络出口时必须重新分级。不能用 lint 或这些有限探针证明所有调用均不可利用。B 批已完成入口约束，完整回归与真实 Electron/新包验收结果继续原地补充；本记录不授权发布。
+多次握手有开销，换取当前已知边界的安全和兼容性。当前版本仍包含未修复的底层代码；新增原生 fetch/Resolver、快照、权限模型或传递依赖网络出口时必须重新分级。不能用 lint 或这些有限探针证明所有调用均不可利用。B 批入口约束、完整回归与真实 Electron/新包本机验收已完成；原路径和用户数据保持。签名与安装生命周期暂缓，云 CI/其他平台未验；本记录不授权发布。

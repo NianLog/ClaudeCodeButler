@@ -11,6 +11,13 @@
 
 ## [Unreleased] - 1.5.1
 
+### 2026-10-25 网络 A+B 最终本机验收
+
+- 60 files / 642 tests 全通过，无跳过；类型零错误，lint 零错误/15 个既有 warning，lint:changed、root/proxy 双构建、正式 preflight 和双全依赖 audit（0 漏洞）通过。真实 Electron 45 的 22 组流程通过，含 14 组 TLS/代理/Host 网络案例、3 次正确字节下载、405 拒绝与五秒超时；四主题/九张截图、零 renderer 未捕获异常、正常退出，5 个用户文件摘要不变。
+- 干净源码 2086a94 的未签名 Portable/NSIS/ZIP 完成载荷、52 个 out 文件与 ASAR 一致性、双 SBOM 和六项 SHA-256 核验，sourceDirty=false；Portable/ZIP/解包目录各 17 项业务验收通过，篡改 ASAR 被拒且未创建 settings。NSIS 仅解包，未执行安装。
+- main 由 411276 增至 411422 bytes（+146 bytes），来自目标证书校验和健康回调身份判断；未增加运行依赖或改数据格式。
+- 七项 Node 上游修复仍缺失；c-ares 11 项、Undici 8 项当前未识别触发路径，按条件持续跟踪，不把应用缓解等同于厂商修复。Node HEAD 临时例外在下次入口/依赖变更或 2026-11-01 复核。签名、安装/覆盖升级/卸载按用户要求暂缓，云 CI 与其他平台未验，不发布。下方 A/B 实施记录的阶段性数字保留为历史。
+
 ### 2026-10-25 网络入口约束 B
 
 - 现有 ESLint 限制新增的 Node 原生网络/Resolver/快照入口，允许命名 lookup 和 Electron/renderer 网络 API；62 项正反例通过。

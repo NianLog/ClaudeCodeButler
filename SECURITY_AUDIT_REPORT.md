@@ -1,18 +1,22 @@
 # Semgrep 安全审计与改进报告
 
-## 2026-10-25：A+B 代码与针对性回归完成，完整门禁进行中
+## 2026-10-25：网络 A+B 本机验收完成，未发布
 
-A 为 TLS 目标绑定及 Node HEAD 禁复用/回收；B 为入口 lint、快照/权限模型构建边界及逐项风险跟踪。62 项规则回归通过（先 46 fail / 15 pass），不限制 renderer 的 Chromium API。真实 Host 请求进一步发现旧健康回调会关闭重启后的新服务；两条先失败的回归转绿，现以服务实例身份限制成功/失败回调。不是靠等待或重试掩盖连接拒绝。
+A 将 TLS 证书身份绑定 URL 规范化目标，保留 CA 链、DNS/IP SAN 和代理协议；下载 HEAD 禁复用、立即清理响应并设五秒总时限，保留 2xx/3xx 与 Chromium 实际下载。B 限制 main/独立代理新增 Node fetch、Undici、Resolver、WebSocket/EventSource 和用户快照入口，保留 OS lookup 与 Chromium API。验收发现的旧健康回调竞态已以服务实例身份判断修复，迟到成功/失败均不操作新服务。未增加运行依赖、移动配置或迁移数据。
 
-真实验收补齐完整 IPC 转发、IPv4/IPv6/DNS、可信/不可信证书、Host、代理、下载与原始 settings 恢复；隐藏夹具保留原生 BrowserWindow 类型，下载和 shell 动作均隔离。最终全量和干净候选的结论将在本节补充。详见[可达性、19 项组件风险和例外清单](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。未修改配置路径/数据格式，未发布。
+60 files / 642 tests 全通过，无跳过；类型零错误，lint 零错误/15 个既有 warning，lint:changed、root/proxy 双构建、正式 preflight 和双全依赖 audit（0 漏洞）通过。覆盖率 statements 50.45%、branches 54.52%、functions 49.26%、lines 50.71%，统计 main/proxy/shared，不含 renderer；不表示全部路径已覆盖。新增 A 反例先 16 fail / 6 pass；规则先 46 fail / 15 pass；健康竞态先 2 fail / 18 pass，均修复转绿。真实 Electron 45 的 22 组流程通过，含 14 组 TLS/代理/Host 网络案例、3 次正确字节下载、405 拒绝与五秒超时；四主题/九张截图、零 renderer 未捕获异常、正常退出，5 个用户文件摘要不变。
 
-## 2026-10-25：可达网络风险补修 A 完成，B 与最终验收进行中
+干净源码 2086a94 的未签名 Portable/NSIS/ZIP 完成载荷、52 个 out 文件与 ASAR 一致性、双 SBOM 和六项 SHA-256 核验，sourceDirty=false；Portable/ZIP/解包目录各 17 项业务验收通过，篡改 ASAR 被拒且未创建 settings。NSIS 仅解包，未执行安装。main 为 411422 bytes，比 37e020e 增 146 bytes。新包 sourceCommit 为 `2086a942f39ede3cdd5dc613455616bec961efb3`，最终验收文档另行提交；不是用文档提交冒称包来源。未签名产物仅为本地候选。
 
-用户已批准按可达性实施 A+B，并明确允许暂留 Node HEAD。A 将上游证书验证绑定规范化目标，下载 HEAD 委托现有 HTTP 工具并禁用复用、释放响应、设置五秒总时限，保持既有 2xx/3xx、IPC 与实际下载行为。新增反例先得到 16 fail / 6 pass，修复后相关 4 files / 51 tests 和类型检查通过；Node 24.22.1 与 Electron 45 内嵌 Node 的受控 TLS/HEAD helper 对照通过。完整业务、B 批入口约束与新包验收尚未完成，不计为全量通过。
+| 本轮候选 | 大小（bytes） | SHA-256 |
+| --- | ---: | --- |
+| CCB-Portable-1.5.1.exe | 105556475 | `9cc3f01830d67ed4c437178f305bb5904278bdc80c6ea9fe5bb0984eafb0de90` |
+| CCB-Setup-1.5.1.exe | 116577117 | `27a7d353316e41a91662ba5cccf4f8636b94779d333d3c41188573e240d59577` |
+| CCB-1.5.1-win.zip | 145785347 | `15f687e39bcf646bc6f7f1a3eecd518d3b264eb7aafab340bcc715d3d4e23513` |
 
-证据更正：上轮预先响应 PoC 消费了 HEAD 响应，验证的是默认 agent 的底层复用条件；原始下载 IPC 没有消费响应，对照显示连接占用、未入空闲池。不能把该 PoC 写成实际下载 IPC 已成功错配，更没有证据证明文件内容遭污染。本轮修复同时处理禁复用与连接泄漏。
+证据更正：此前预先响应 PoC 消费了 HEAD 响应，只证明默认 agent 的底层复用条件；原始下载 IPC 没消费响应，对照显示连接占用、未入空闲池。不能据此声称旧 IPC 已成功错配或文件内容遭污染。本轮同时修复禁复用和连接占用。外部旧冒烟驱动也已按当前协议补传删除 revision，并改用真正损坏的 YAML 验证导入失败，不再把合法的无前言 Skill 当作无效输入；未为通过测试放宽生产检查。
 
-七项 Node 未回补事实保留；c-ares 11 项、Undici 8 项按当前缺少的触发条件跟踪。下方是补修前的复核，不以版本命中推定每项应用可利用，也不把应用缓解写成内嵌库已修复。见[新决定与临时例外](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。签名与安装生命周期继续暂缓，未发布。
+七项 Node 上游修复仍缺失；c-ares 11 项、Undici 8 项当前未识别触发路径，按条件持续跟踪，不把应用缓解等同于厂商修复。Node HEAD 临时例外在下次入口/依赖变更或 2026-11-01 复核。签名、安装/覆盖升级/卸载按用户要求暂缓，云 CI 与其他平台未验，不发布。Brotli 已有厂商修复证据，保留 br。逐项触发条件、替代方案和临时例外见[网络缓解 DDE](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。以下是应用补修前厂商回补的历史证据；底层缺失事实仍成立，不据版本命中推定全部风险在 CCB 可利用，也不据有限回归证明未来入口安全。
 
 ## 2026-10-25：内嵌 Node 回补复核（安全门禁未通过）
 
