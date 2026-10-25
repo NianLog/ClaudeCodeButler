@@ -283,8 +283,17 @@ export class ToolConfigSetService {
       const validation = await this.managementService.validateArtifact(toolId, file.artifactId, '', file.content)
       if (!validation.valid) throw new Error(`配置校验失败: ${validation.errors.join('; ')}`)
     }
-    for (const file of content.files) {
-      await this.managementService.editArtifact(toolId, file.artifactId, '', file.content)
+    const targets = await Promise.all(content.files.map(async (file) => {
+      try {
+        const current = await this.discoveryService.readArtifact(toolId, file.artifactId, '')
+        return { ...file, expectedRevision: current.revision }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        return { ...file, expectedRevision: 'MISSING' }
+      }
+    }))
+    for (const file of targets) {
+      await this.managementService.editArtifact(toolId, file.artifactId, '', file.content, file.expectedRevision)
     }
     logger.info(`配置集已激活: ${toolId}/${setId} (${metadata.name})`)
   }

@@ -3,6 +3,7 @@
  * @description 按 effective registry 安全发现并只读加载 AI Coding 工具配置资产。
  */
 
+import { createHash } from 'crypto'
 import { lstat, open } from 'fs/promises'
 import path from 'path'
 import type {
@@ -103,8 +104,13 @@ export class ToolArtifactDiscoveryService {
       if (fileMetadata.size > CONFIG_ARTIFACT_MAX_BYTES) {
         throw new Error(`配置资产超过读取限制: ${CONFIG_ARTIFACT_MAX_BYTES} bytes`)
       }
-      const buffer = Buffer.alloc(Math.min(fileMetadata.size + 1, CONFIG_ARTIFACT_MAX_BYTES + 1))
-      const { bytesRead } = await fileHandle.read(buffer, 0, buffer.length, 0)
+      const buffer = Buffer.alloc(CONFIG_ARTIFACT_MAX_BYTES + 1)
+      let bytesRead = 0
+      while (bytesRead < buffer.length) {
+        const chunk = await fileHandle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead)
+        if (chunk.bytesRead === 0) break
+        bytesRead += chunk.bytesRead
+      }
       if (bytesRead > CONFIG_ARTIFACT_MAX_BYTES) {
         throw new Error(`配置资产超过读取限制: ${CONFIG_ARTIFACT_MAX_BYTES} bytes`)
       }
@@ -119,9 +125,11 @@ export class ToolArtifactDiscoveryService {
         artifactId: artifact.artifactId,
         format: artifact.format,
         path: resolvedPath,
-        size: fileMetadata.size,
+        size: bytesRead,
         lastModifiedAt: fileMetadata.mtime.toISOString(),
-        content
+        exists: true,
+        content,
+        revision: createHash('sha256').update(buffer.subarray(0, bytesRead)).digest('hex')
       }
     } finally {
       await fileHandle.close()
@@ -193,6 +201,11 @@ export class ToolArtifactDiscoveryService {
         return await this.readFileMetadata(tool.toolId, artifact, resolvedPath)
       } catch (error) {
         const nodeError = error as NodeJS.ErrnoException
+        if (nodeError.code === 'ENOENT' && artifact.capabilities.includes('RESTORE')) {
+          await this.authorizeArtifact(tool.toolId, artifact.artifactId, resolvedPath, 'RESTORE')
+          return { toolId: tool.toolId, artifactId: artifact.artifactId, format: artifact.format,
+            path: resolvedPath, size: 0, lastModifiedAt: '', exists: false }
+        }
         if (nodeError.code === 'ENOENT' || nodeError.code === 'ENOTDIR') return undefined
         throw error
       }
@@ -236,7 +249,8 @@ export class ToolArtifactDiscoveryService {
       format: artifact.format,
       path: resolvedPath,
       size: metadata.size,
-      lastModifiedAt: metadata.mtime.toISOString()
+      lastModifiedAt: metadata.mtime.toISOString(),
+      exists: true
     }
   }
 

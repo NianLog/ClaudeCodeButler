@@ -4,6 +4,7 @@
  *              （名称校验、路径注入防护、先全组校验后写入）。
  */
 
+import { createHash } from 'crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import os from 'os'
 import path from 'path'
@@ -28,6 +29,7 @@ interface ManagementCall {
   kind: 'validate' | 'edit'
   artifactId: string
   content: string
+  expectedRevision?: string
 }
 let calls: ManagementCall[]
 
@@ -90,8 +92,8 @@ function createManagementService(): ToolArtifactManagementService {
       calls.push({ kind: 'validate', artifactId, content })
       return toolArtifactCodecService.validate(artifactId === 'alpha-config' ? 'JSON' : 'TEXT', content)
     },
-    editArtifact: async (toolId: string, artifactId: string, _path: string, content: string) => {
-      calls.push({ kind: 'edit', artifactId, content })
+    editArtifact: async (toolId: string, artifactId: string, _path: string, content: string, expectedRevision: string) => {
+      calls.push({ kind: 'edit', artifactId, content, expectedRevision })
       await writeFile(
         artifactId === 'alpha-config' ? liveAlphaPath() : liveBetaPath(),
         content,
@@ -202,6 +204,8 @@ describe('ToolConfigSetService', () => {
     expect(calls.filter((call) => call.kind === 'validate')).toHaveLength(2)
     expect(calls.filter((call) => call.kind === 'edit').map((call) => call.artifactId))
       .toEqual(['alpha-config', 'beta-notes'])
+    expect(calls.filter((call) => call.kind === 'edit').map((call) => call.expectedRevision))
+      .toEqual([createHash('sha256').update('{"model":"live"}').digest('hex'), 'MISSING'])
     expect(created.isInUse).toBe(false)
 
     // 白盒破坏快照内容（绕过 API 校验），激活应在校验阶段失败且不触发任何写入

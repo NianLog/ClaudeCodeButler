@@ -277,7 +277,7 @@ interface ToolRegistryAPI {
     error?: string
   }>
   /** 校验并原子更新 registry 授权配置 */
-  editArtifact: (toolId: string, artifactId: string, path: string, content: string) => Promise<{
+  editArtifact: (toolId: string, artifactId: string, path: string, content: string, expectedRevision: string) => Promise<{
     success: boolean
     data?: ConfigArtifactContent
     error?: string
@@ -294,8 +294,14 @@ interface ToolRegistryAPI {
     data?: ConfigArtifactBackup[]
     error?: string
   }>
+  /** 按受控 backup identifier 读取历史原文，供恢复前差异预览 */
+  readArtifactBackup: (backupId: string) => Promise<{
+    success: boolean
+    data?: { backup: ConfigArtifactBackup; content: string; revision: string }
+    error?: string
+  }>
   /** 恢复受控 backup identifier */
-  restoreArtifactBackup: (backupId: string) => Promise<{
+  restoreArtifactBackup: (backupId: string, expectedRevision: string, expectedBackupRevision?: string) => Promise<{
     success: boolean
     data?: ConfigArtifactContent
     error?: string
@@ -657,7 +663,8 @@ interface AgentsAPI {
     success: boolean
     error?: string
   }>
-  delete: (agentId: string) => Promise<{
+  update: (agentId: string, formData: AgentFormData, expectedRevision: string) => Promise<{ success: boolean; error?: string }>
+  delete: (agentId: string, expectedRevision: string) => Promise<{
     success: boolean
     error?: string
   }>
@@ -701,7 +708,8 @@ interface SkillsAPI {
     success: boolean
     error?: string
   }>
-  delete: (skillId: string) => Promise<{
+  update: (skillId: string, formData: SkillFormData, expectedRevision: string) => Promise<{ success: boolean; error?: string }>
+  delete: (skillId: string, expectedRevision: string) => Promise<{
     success: boolean
     error?: string
   }>
@@ -962,14 +970,16 @@ const toolRegistryAPI: ToolRegistryAPI = {
     ipcRenderer.invoke('toolRegistry:readArtifact', toolId, artifactId, path),
   validateArtifact: (toolId: string, artifactId: string, path: string, content: string) =>
     ipcRenderer.invoke('toolRegistry:validateArtifact', toolId, artifactId, path, content),
-  editArtifact: (toolId: string, artifactId: string, path: string, content: string) =>
-    ipcRenderer.invoke('toolRegistry:editArtifact', toolId, artifactId, path, content),
+  editArtifact: (toolId: string, artifactId: string, path: string, content: string, expectedRevision: string) =>
+    ipcRenderer.invoke('toolRegistry:editArtifact', toolId, artifactId, path, content, expectedRevision),
   createArtifactBackup: (toolId: string, artifactId: string, path: string) =>
     ipcRenderer.invoke('toolRegistry:createArtifactBackup', toolId, artifactId, path),
   listArtifactBackups: (toolId: string, artifactId: string, path: string) =>
     ipcRenderer.invoke('toolRegistry:listArtifactBackups', toolId, artifactId, path),
-  restoreArtifactBackup: (backupId: string) =>
-    ipcRenderer.invoke('toolRegistry:restoreArtifactBackup', backupId),
+  readArtifactBackup: (backupId: string) =>
+    ipcRenderer.invoke('toolRegistry:readArtifactBackup', backupId),
+  restoreArtifactBackup: (backupId: string, expectedRevision: string, expectedBackupRevision?: string) =>
+    ipcRenderer.invoke('toolRegistry:restoreArtifactBackup', backupId, expectedRevision, expectedBackupRevision),
   listConfigSets: (toolId: string) => ipcRenderer.invoke('toolRegistry:listConfigSets', toolId),
   createConfigSet: (toolId: string, name: string) =>
     ipcRenderer.invoke('toolRegistry:createConfigSet', toolId, name),
@@ -1167,7 +1177,8 @@ const agentsAPI: AgentsAPI = {
   scan: () => ipcRenderer.invoke('agents:scan'),
   get: (agentId: string) => ipcRenderer.invoke('agents:get', agentId),
   add: (formData: AgentFormData) => ipcRenderer.invoke('agents:add', formData),
-  delete: (agentId: string) => ipcRenderer.invoke('agents:delete', agentId),
+  update: (agentId, formData, expectedRevision) => ipcRenderer.invoke('agents:update', agentId, formData, expectedRevision),
+  delete: (agentId, expectedRevision) => ipcRenderer.invoke('agents:delete', agentId, expectedRevision),
   import: (sourceFilePath: string, options?: AgentImportOptions) =>
     ipcRenderer.invoke('agents:import', sourceFilePath, options),
   importContent: (content: string, options?: AgentImportOptions) =>
@@ -1185,7 +1196,8 @@ const skillsAPI: SkillsAPI = {
   scan: () => ipcRenderer.invoke('skills:scan'),
   get: (skillId: string) => ipcRenderer.invoke('skills:get', skillId),
   add: (formData: SkillFormData) => ipcRenderer.invoke('skills:add', formData),
-  delete: (skillId: string) => ipcRenderer.invoke('skills:delete', skillId),
+  update: (skillId, formData, expectedRevision) => ipcRenderer.invoke('skills:update', skillId, formData, expectedRevision),
+  delete: (skillId, expectedRevision) => ipcRenderer.invoke('skills:delete', skillId, expectedRevision),
   import: (sourceDirPath: string, options?: SkillImportOptions) =>
     ipcRenderer.invoke('skills:import', sourceDirPath, options),
   importFiles: (payload: { rootDirName: string; files: Array<{ relativePath: string; contentBase64: string }> }, options?: SkillImportOptions) =>

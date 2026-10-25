@@ -17,6 +17,8 @@ export interface AgentResource {
   revision: string
   fileCount?: number
   warnings: string[]
+  writable?: boolean
+  status?: 'READY' | 'READ_ONLY' | 'BLOCKED' | 'INVALID'
 }
 
 export interface AgentResourceList {
@@ -62,6 +64,7 @@ export interface ImportSource {
   kinds: AgentResourceKind[]
   warnings: string[]
   createdAt?: string
+  status?: 'FOUND' | 'NOT_FOUND' | 'BLOCKED' | 'INVALID'
 }
 
 export interface ImportPreviewItem {
@@ -119,7 +122,7 @@ export interface AgentResourcesAPI {
   readResource(input: ReadAgentResourceInput): Promise<ApiResponse<AgentResourceContent>>
   saveResource(input: SaveAgentResourceInput): Promise<ApiResponse<AgentResourceContent>>
   deleteResource(input: DeleteAgentResourceInput): Promise<ApiResponse<void>>
-  discoverImportSources(input?: { sourceContextId?: string }): Promise<ApiResponse<ImportSource[]>>
+  discoverImportSources(input?: { sourceContextId?: string; kind?: AgentResourceKind }): Promise<ApiResponse<ImportSource[]>>
   discoverResourceBackups(input: AgentResourceQuery): Promise<ApiResponse<ImportSource[]>>
   chooseImportProject(): Promise<ApiResponse<{ sourceContextId: string } | null>>
   chooseImportFile(input: { toolId: ImportToolId; kind: AgentResourceKind }): Promise<ApiResponse<ImportSource | null>>

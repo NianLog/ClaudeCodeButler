@@ -22,6 +22,8 @@ export interface AgentMetadata {
  * Agent文件接口
  */
 export interface AgentFile {
+  /** 原始文件快照版本；旧数据对象缺失时须重新读取后才能修改。 */
+  revision?: string
   /** Agent唯一标识（文件名，不含扩展名） */
   id: string
   /** Agent元数据 */

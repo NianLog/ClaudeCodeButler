@@ -119,7 +119,7 @@ const AgentsManagementPanel: React.FC = () => {
       // 提取Agent内容（移除YAML frontmatter）
       const frontmatterRegex = /^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)$/
       const match = editingAgent.content.match(frontmatterRegex)
-      const content = match ? match[1].trim() : editingAgent.content
+      const content = match ? match[1] : editingAgent.content
 
       form.setFieldsValue({
         name: editingAgent.metadata.name,

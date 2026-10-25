@@ -3,6 +3,7 @@
  * @description 验证规则驱动 artifact discovery 的 capability、路径与文件安全边界。
  */
 
+import { createHash } from 'crypto'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'fs/promises'
 import os from 'os'
 import path from 'path'
@@ -99,6 +100,18 @@ describe('ToolArtifactDiscoveryService', () => {
     expect(artifacts).toHaveLength(1)
     expect(loaded.content).toBe(content)
     expect(loaded.format).toBe('TOML')
+    expect(loaded.revision).toBe(createHash('sha256').update(content).digest('hex'))
+    expect(loaded.size).toBe(Buffer.byteLength(content))
+    expect(loaded.exists).toBe(true)
+  })
+
+  it('应暴露可恢复的缺失目标，但读取仍返回 ENOENT', async () => {
+    const service = createService(createTool(['DISCOVER', 'READ', 'EDIT', 'BACKUP', 'RESTORE']))
+    await expect(service.discoverArtifacts('codex-cli')).resolves.toEqual([expect.objectContaining({
+      artifactId: 'user-config', path: path.join(tempDirectory, '.codex', 'config.toml'),
+      exists: false, size: 0, lastModifiedAt: ''
+    })])
+    await expect(service.readArtifact('codex-cli', 'user-config', '')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('应忽略缺失文件并拒绝 registry 外部路径', async () => {

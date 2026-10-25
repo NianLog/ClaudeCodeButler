@@ -11,7 +11,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { load } from 'js-yaml'
+import { dump, JSON_SCHEMA, load } from 'js-yaml'
 import { logger } from '../utils/logger'
 import type {
   AgentFile,
@@ -20,6 +20,7 @@ import type {
   AgentImportOptions
 } from '@shared/types/agents'
 import { ensurePathWithinBase, ensureSafePathSegment } from '../utils/path-security'
+import { digest, readBounded, utf8 } from './agent-resource-files'
 
 /**
  * Agent管理服务类
@@ -102,7 +103,9 @@ class AgentsManagementService {
    */
   private async parseAgentFile(filePath: string): Promise<AgentFile | null> {
     try {
-      const content = await fs.readFile(filePath, 'utf-8')
+      const bytes = await readBounded(filePath)
+      if (!bytes) return null
+      const content = utf8(bytes)
       const stats = await fs.stat(filePath)
       const metadata = this.parseFrontmatter(content)
 
@@ -124,6 +127,7 @@ class AgentsManagementService {
       const id = fileName.replace(/\.md$/, '')
 
       return {
+        revision: digest(bytes),
         id,
         metadata,
         filePath,
@@ -445,35 +449,13 @@ class AgentsManagementService {
    * 构建Agent文件内容（frontmatter + 正文）
    */
   private buildAgentContent(formData: AgentFormData): string {
-    // 使用自定义格式生成YAML
-    let yamlContent = '---\n'
-    yamlContent += `name: ${formData.name}\n`
-    yamlContent += `description: ${formData.description}\n`
-
-    // tools用逗号分隔字符串
-    if (formData.tools && formData.tools.length > 0) {
-      yamlContent += `tools: ${formData.tools.join(', ')}\n`
+    const metadata = {
+      name: formData.name, description: formData.description,
+      ...(formData.tools?.length ? { tools: formData.tools } : {}),
+      ...(formData.model?.trim() ? { model: formData.model.trim() } : {}),
+      ...(formData.color?.trim() ? { color: /^[0-9A-Fa-f]{6}$/.test(formData.color.trim()) ? `#${formData.color.trim()}` : formData.color.trim() } : {})
     }
-
-    // model
-    if (formData.model && formData.model.trim()) {
-      yamlContent += `model: ${formData.model.trim()}\n`
-    }
-
-    // color（确保是有效的hex颜色格式）
-    if (formData.color && formData.color.trim()) {
-      let color = formData.color.trim()
-      // 如果没有#前缀且是6位hex，添加#
-      if (!color.startsWith('#') && /^[0-9A-Fa-f]{6}$/.test(color)) {
-        color = `#${  color}`
-      }
-      yamlContent += `color: ${color}\n`
-    }
-
-    yamlContent += '---\n'
-    yamlContent += `\n${formData.content}`
-
-    return yamlContent
+    return `---\n${dump(metadata, { schema: JSON_SCHEMA, lineWidth: -1 })}---\n\n${formData.content}`
   }
 
   /**

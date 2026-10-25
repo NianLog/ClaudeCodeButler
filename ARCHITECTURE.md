@@ -3,6 +3,15 @@
 > 活文档。新增/移动模块、改变分层边界、引入新依赖或新数据流时，必须在同一提交更新本文件。
 > 更新时间：2026-10-25（1.5.1 未发布候选，分支 `codex/v1.5.1-agents-ux-upgrades`）。
 
+> 2026-10-25 真实路径复核：此前资源验收遗漏旧表单和 junction 安装，完成结论收回。当前第一批修复已落地，默认发现、格式适配和最终实机验收仍在进行；不发布。见[资源闭环记录](.agents/notes/implemented/bug-fix/2026-10-25-resource-management-closure.md)。
+
+### 资源闭环第一批
+
+- `LegacyResourceEditor` 将旧 Skill/子 Agent 的新增、更新、删除与角色导入委托资源服务，旧表单提交完整包/文件 revision；不再用 delete/add 更新。字段修改保留未知权限元数据和附件，路径不变；不支持的 YAML 布局明确要求原文编辑。
+- 原生文件读取返回字节 revision；编辑/恢复必须提供 expectedRevision。恢复前备份当前版本，另可核对预览时的 backup revision；新副本存 SHA-256/实际大小，旧副本标记无历史摘要。备份内容和目录继续受路径、链接、大小与当前规则授权限制。
+- MCP 恢复将受控历史文件拆成服务器来源，复用窗口绑定的预览/应用和局部原文写入，保留其他当前设置。新旧原生 MCP 三条写入口均核对备份摘要等于被修改版本。Qoder 显式限制和项目审批参与转换与 revision。
+- 通用文件恢复独立展示整文件范围与两个版本，走 dirty/busy 守卫；缺失原文件仍可进入受控历史。原子替换与 revision 检查不等同于外部 CLI 的跨进程事务。
+
 ## 1. 产品与架构定位
 
 CCB（Claude Code Butler）是本地优先的 Windows 桌面应用（Electron 45.0.0 + React 19 + TS），核心价值是把分散在用户主目录的 AI CLI 工具配置（`~/.claude/settings.json`、MCP 注册表、Codex `config.toml` 等）纳入统一的生命周期管理：发现、校验、编辑、备份、恢复、模板化。

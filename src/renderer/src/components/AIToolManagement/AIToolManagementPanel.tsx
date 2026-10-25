@@ -52,6 +52,10 @@ const PANEL_TEXT = {
     tools: '已注册工具', artifacts: '配置资产', detected: '已检测到', notDetected: '未检测到，可继续检查已存在的配置文件',
     scanArtifacts: '扫描配置', open: '打开', readOnly: '只读', validate: '校验', backup: '创建备份', emptyTools: '规则库中没有工具定义',
     backupHistory: '历史备份', emptyBackups: '没有可恢复的备份', restore: '恢复', restoreTitle: '确认恢复备份', restoreContent: '将使用 {time} 的备份覆盖当前配置，是否继续？',
+    restoreScope: '恢复将替换整份原生文件及其中的所有设置。请先核对差异；当前版本会先备份。MCP 单项恢复请使用 MCP 管理页。',
+    legacyBackup: '此旧副本没有历史摘要，请逐项核对内容；本次预览后内容变化会阻止恢复。', verifiedBackup: '历史摘要校验通过',
+    currentContent: '当前文件', backupContent: '所选备份', missingContent: '当前文件不存在，将按授权路径恢复。', restoreApply: '备份当前版本并恢复整份文件', backToBackups: '返回备份列表',
+    missingReadOnly: '当前规则未授权创建这个缺失文件。请检查创建权限；MCP 定义可返回 MCP 管理按项恢复。',
     emptyArtifacts: '未发现当前平台的配置文件', securityTitle: '编辑本机配置原文件', securityDescription: '这里的修改可能直接影响 Agent。请核对文件位置；保存和恢复前会按规则校验并备份。',
     confirmSaveTitle: '确认更新配置', confirmSaveContent: '将原子更新 {path}。如果规则声明 BACKUP，会先自动创建备份。',
     confirmSaveMultiTitle: '确认更新关联配置', confirmSaveMultiContent: '将依次原子更新以下关联文件（声明 BACKUP 的会先自动创建备份）：',
@@ -65,6 +69,10 @@ const PANEL_TEXT = {
     tools: 'Registered tools', artifacts: 'Configuration artifacts', detected: 'Detected', notDetected: 'Not detected; existing configuration files can still be scanned',
     scanArtifacts: 'Scan configs', open: 'Open', readOnly: 'Read only', validate: 'Validate', backup: 'Create backup', emptyTools: 'No tool definitions in the registry',
     backupHistory: 'Backup history', emptyBackups: 'No restorable backups', restore: 'Restore', restoreTitle: 'Confirm backup restore', restoreContent: 'This replaces the current configuration with the backup from {time}. Continue?',
+    restoreScope: 'This replaces the entire native file and all its settings. Review the differences first; the current version is backed up before restoration. Use MCP management to restore individual servers.',
+    legacyBackup: 'This legacy copy has no historical digest. Review its content; changes after this preview will stop restoration.', verifiedBackup: 'Historical digest verified',
+    currentContent: 'Current file', backupContent: 'Selected backup', missingContent: 'The current file is missing. Restoration will use the authorized path.', restoreApply: 'Back up current version and restore entire file', backToBackups: 'Back to backups',
+    missingReadOnly: 'The current registry does not authorize creating this missing file. Check creation permissions; individual MCP definitions can be restored from MCP management.',
     emptyArtifacts: 'No configuration files found for this platform', securityTitle: 'Edit native configuration files', securityDescription: 'Changes here may affect your agent immediately. Check the file location; permissions and backups are checked before writes.',
     confirmSaveTitle: 'Confirm configuration update', confirmSaveContent: 'This atomically updates {path}. A backup is created first when the registry declares BACKUP.',
     confirmSaveMultiTitle: 'Confirm updating linked configurations', confirmSaveMultiContent: 'The following linked files are updated atomically in order (a backup is created first when BACKUP is declared):',
@@ -124,6 +132,7 @@ const AIToolManagementPanel: React.FC = () => {
   const [activeTabId, setActiveTabId] = useState('')
   const [backups, setBackups] = useState<ConfigArtifactBackup[]>([])
   const [backupHistoryOpen, setBackupHistoryOpen] = useState(false)
+  const [restorePreview, setRestorePreview] = useState<{ backup: ConfigArtifactBackup; content: string; current: string; expectedRevision: string; backupRevision: string }>()
   const [loadingBackups, setLoadingBackups] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingArtifacts, setLoadingArtifacts] = useState(false)
@@ -149,6 +158,7 @@ const AIToolManagementPanel: React.FC = () => {
     [baselines, drafts, editorParts]
   )
   const compositeMode = editorParts.length > 1
+  const restoreCanCreate = !restorePreview || restorePreview.expectedRevision !== 'MISSING' || !!tools.find(tool => tool.toolId === restorePreview.backup.toolId)?.artifacts.find(artifact => artifact.artifactId === restorePreview.backup.artifactId)?.capabilities.includes('EDIT')
 
   /** 加载 effective registry 与工具检测结果 */
   const loadTools = useCallback(async (): Promise<void> => {
@@ -218,7 +228,7 @@ const AIToolManagementPanel: React.FC = () => {
       )
       const candidatePath = discovered?.path ?? member.paths[platform]?.[0] ?? ''
       if (!candidatePath) continue
-      if (discovered) {
+      if (discovered && discovered.exists !== false) {
         const response = await window.electronAPI.toolRegistry.readArtifact(
           tool.toolId,
           member.artifactId,
@@ -309,7 +319,8 @@ const AIToolManagementPanel: React.FC = () => {
               toolId,
               artifactId,
               part.content?.path ?? '',
-              drafts[artifactId] ?? ''
+              drafts[artifactId] ?? '',
+              part.content?.revision ?? 'MISSING'
             )
             if (!response.success || !response.data) {
               throw new Error(`${part.definition.displayName[language]}: ${response.error || panelText.saveError}`)
@@ -361,14 +372,15 @@ const AIToolManagementPanel: React.FC = () => {
 
   /** 按需加载当前页签 artifact 可恢复的备份 */
   const openBackupHistory = async (): Promise<void> => {
-    if (!activePart?.content || !canRestore || !selectedToolId) return
+    if (!activePart || !canRestore || !selectedToolId) return
     setLoadingBackups(true)
+    setRestorePreview(undefined)
     setBackupHistoryOpen(true)
     try {
       const response = await window.electronAPI.toolRegistry.listArtifactBackups(
         selectedToolId,
         activePart.definition.artifactId,
-        activePart.content.path
+        activePart.content?.path ?? activePart.candidatePath
       )
       if (!response.success) throw new Error(response.error || panelText.listBackupsError)
       setBackups(response.data ?? [])
@@ -380,27 +392,42 @@ const AIToolManagementPanel: React.FC = () => {
     }
   }
 
-  /** 二次确认后恢复备份并刷新对应分组成员的编辑器快照 */
+  /** 先处理草稿，再读取用于明确整文件恢复的两个版本。 */
   const restoreBackup = (backup: ConfigArtifactBackup): void => {
-    modal.confirm({
-      title: panelText.restoreTitle,
-      content: formatPanelText(panelText.restoreContent, {
-        time: new Date(backup.createdAt).toLocaleString(language)
-      }),
-      okText: panelText.restore,
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        const response = await window.electronAPI.toolRegistry.restoreArtifactBackup(backup.backupId)
-        if (!response.success || !response.data) {
-          const error = new Error(response.error || panelText.restoreError)
-          message.error(error.message)
-          throw error
-        }
-        applySavedContent(response.data.artifactId, response.data)
-        setBackupHistoryOpen(false)
-        message.success(panelText.restored)
-      }
+    useAgentContextStore.getState().requestChange(() => {
+      void (async () => {
+        setSaving(true)
+        try {
+          const [historical, current] = await Promise.all([
+            window.electronAPI.toolRegistry.readArtifactBackup(backup.backupId),
+            window.electronAPI.toolRegistry.readArtifact(backup.toolId, backup.artifactId, backup.originalPath)
+          ])
+          if (!historical.success || !historical.data) throw new Error(historical.error || panelText.restoreError)
+          if (!current.success && !/\bENOENT\b/.test(current.error ?? '')) throw new Error(current.error || panelText.readError)
+          setRestorePreview({ backup: historical.data.backup, content: historical.data.content, current: current.data?.content ?? '', expectedRevision: current.data?.revision ?? 'MISSING', backupRevision: historical.data.revision })
+        } catch (error) {
+          setLoadError(error instanceof Error ? error.message : panelText.restoreError)
+        } finally { setSaving(false) }
+      })()
     })
+  }
+
+  const applyRestore = async (): Promise<void> => {
+    if (!restorePreview || saving) return
+    setSaving(true)
+    setLoadError('')
+    try {
+      const response = await window.electronAPI.toolRegistry.restoreArtifactBackup(restorePreview.backup.backupId, restorePreview.expectedRevision, restorePreview.backupRevision)
+      if (!response.success || !response.data) throw new Error(response.error || panelText.restoreError)
+      const saved = response.data
+      applySavedContent(saved.artifactId, saved)
+      setArtifacts(current => [...current.filter(item => item.artifactId !== saved.artifactId || item.path !== saved.path), saved])
+      setRestorePreview(undefined)
+      setBackupHistoryOpen(false)
+      message.success(panelText.restored)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : panelText.restoreError)
+    } finally { setSaving(false) }
   }
 
   useAgentDraftGuard('native-config', { dirty: dirtyParts.length > 0, busy: saving, save: persistDraft, discard: () => setEditorParts([]) })
@@ -480,6 +507,8 @@ const AIToolManagementPanel: React.FC = () => {
         width="min(1100px, 92vw)"
         footer={null}
         destroyOnHidden
+        closable={!saving}
+        keyboard={!saving}
         maskClosable={false}
         onCancel={() => useAgentContextStore.getState().requestChange(() => setEditorParts([]))}
       >
@@ -511,9 +540,9 @@ const AIToolManagementPanel: React.FC = () => {
             <Space wrap className="artifact-actions">
               <Tag>{activePart.definition.format}</Tag>
               {!canEdit && <Tag color="gold">{panelText.readOnly}</Tag>}
-              {canValidate && <Button onClick={() => void validateDraft()}>{panelText.validate}</Button>}
-              {canBackup && activePart.content && <Button onClick={() => void createBackup()}>{panelText.backup}</Button>}
-              {canRestore && activePart.content && <Button onClick={() => void openBackupHistory()}>{panelText.backupHistory}</Button>}
+              {canValidate && <Button disabled={saving} onClick={() => void validateDraft()}>{panelText.validate}</Button>}
+              {canBackup && activePart.content && <Button disabled={saving} onClick={() => void createBackup()}>{panelText.backup}</Button>}
+              {canRestore && <Button disabled={saving} onClick={() => void openBackupHistory()}>{panelText.backupHistory}</Button>}
               {canEdit && dirtyParts.length > 0 && (
                 <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={saveDraft}>
                   {t('common.save')}
@@ -528,7 +557,7 @@ const AIToolManagementPanel: React.FC = () => {
                   [activePart.definition.artifactId]: value
                 }))}
                 language={mapEditorLanguage(activePart.definition.format)}
-                readOnly={!canEdit}
+                readOnly={!canEdit || saving}
                 showPreview={activePart.definition.format === 'MARKDOWN'}
                 height="55vh"
               />
@@ -538,13 +567,30 @@ const AIToolManagementPanel: React.FC = () => {
       </Modal>
 
       <Modal
-        title={panelText.backupHistory}
+        title={restorePreview ? panelText.restoreTitle : panelText.backupHistory}
         open={backupHistoryOpen}
-        footer={null}
-        width={720}
+        footer={restorePreview ? <Space>
+          <Button disabled={saving} onClick={() => setRestorePreview(undefined)}>{panelText.backToBackups}</Button>
+          <Button type="primary" danger disabled={!restoreCanCreate} loading={saving} onClick={() => void applyRestore()}>{panelText.restoreApply}</Button>
+        </Space> : null}
+        width={restorePreview ? 920 : 720}
         destroyOnHidden
-        onCancel={() => setBackupHistoryOpen(false)}
+        closable={!saving}
+        keyboard={!saving}
+        maskClosable={false}
+        onCancel={() => { setBackupHistoryOpen(false); setRestorePreview(undefined) }}
       >
+        {loadError && <Alert type="error" showIcon title={loadError} />}
+        {restorePreview ? <div className="artifact-restore-preview">
+          <Alert type="warning" showIcon title={panelText.restoreScope} />
+          {!restoreCanCreate && <Alert type="warning" showIcon title={panelText.missingReadOnly} />}
+          {restorePreview.backup.integrity === 'LEGACY_UNVERIFIED' && <Alert type="warning" showIcon title={panelText.legacyBackup} />}
+          <Text className="artifact-path">{restorePreview.backup.originalPath}</Text>
+          <div className="artifact-restore-diff">
+            <div><h4>{panelText.currentContent}</h4><pre>{restorePreview.expectedRevision === 'MISSING' ? panelText.missingContent : restorePreview.current}</pre></div>
+            <div><h4>{panelText.backupContent}</h4><pre>{restorePreview.content}</pre></div>
+          </div>
+        </div> :
         <Spin spinning={loadingBackups}>
           <List
             dataSource={backups}
@@ -553,7 +599,7 @@ const AIToolManagementPanel: React.FC = () => {
               <List.Item
                 className="ccb-list-item-structured"
                 actions={[
-                  <Button key="restore" type="link" onClick={() => restoreBackup(backup)}>
+                  <Button key="restore" type="link" disabled={saving} onClick={() => restoreBackup(backup)}>
                     {panelText.restore}
                   </Button>
                 ]}
@@ -564,13 +610,14 @@ const AIToolManagementPanel: React.FC = () => {
                     <div className="backup-meta-description">
                       <Text className="artifact-path" title={backup.originalPath}>{backup.originalPath}</Text>
                       <Tag>{Math.max(1, Math.ceil(backup.size / 1024))} KB</Tag>
+                      <Tag color={backup.integrity === 'SHA256' ? 'success' : 'warning'}>{backup.integrity === 'SHA256' ? panelText.verifiedBackup : panelText.legacyBackup}</Tag>
                     </div>
                   )}
                 />
               </List.Item>
             )}
           />
-        </Spin>
+        </Spin>}
       </Modal>
     </div>
   )

@@ -10,6 +10,7 @@ vi.mock('../../../src/main/utils/logger', () => ({ logger: { info: vi.fn(), erro
 
 import { AgentResourceService } from '../../../src/main/services/agent-resource-service'
 import { ToolDetectionService } from '../../../src/main/services/tool-detection-service'
+import { ToolArtifactManagementService } from '../../../src/main/services/tool-artifact-management-service'
 import type { ToolRegistryService } from '../../../src/main/services/tool-registry-service'
 import { withAgentResourceMutation } from '../../../src/main/utils/agent-resource-queue'
 import { mergeToolRegistryBundles } from '../../../src/main/services/tool-registry-service'
@@ -188,7 +189,7 @@ describe('AgentResourceService', () => {
     await rm(source.location)
     await mkdir(path.join(root, 'linked-backup'))
     await symlink(path.join(root, 'linked-backup'), source.location, process.platform === 'win32' ? 'junction' : 'dir')
-    await expect(service.discoverResourceBackups(query, 32)).rejects.toThrow('链接')
+    expect((await service.discoverResourceBackups(query, 32)).some(item => item.status === 'INVALID' && item.warnings.some(warning => warning.includes('链接')))).toBe(true)
   })
 
   it('restores safely labelled legacy backups and rechecks current registry write permissions before recovery', async () => {
@@ -354,6 +355,145 @@ describe('AgentResourceService', () => {
     await expect(readFile(path.join(root, '.claude.json'))).rejects.toMatchObject({ code: 'ENOENT' })
     await put('.gemini/mcp-server-enablement.json', '// invalid native sidecar\n{}')
     await expect(preview('gemini-cli', 'antigravity')).rejects.toThrow('启停状态损坏')
+  })
+
+  it('preserves Qoder allowed/excluded state and invalidates a preview when policy changes', async () => {
+    await put('.qoder/settings.json', '{"mcp":{"excluded":["blocked"]},"mcpServers":{"blocked":{"command":"node"}}}')
+    const plan = await preview('qoder', 'codex-cli')
+    expect(plan.items[0].proposedContent).toMatch(/enabled\s*=\s*false/)
+    const receipt = await service.applyResourceImport({ previewId: plan.previewId, decisions: [{ resourceId: plan.items[0].resourceId, action: 'IMPORT' }] }, 5)
+    expect(receipt.results[0].status).toBe('IMPORTED')
+    expect((await preview('qoder', 'claude-code')).items[0].status).toBe('BLOCKED')
+    const stale = await preview('qoder', 'antigravity')
+    await put('.qoder/settings.json', '{"mcp":{"allowed":["blocked"]},"mcpServers":{"blocked":{"command":"node"}}}')
+    await expect(service.applyResourceImport({ previewId: stale.previewId, decisions: [{ resourceId: stale.items[0].resourceId, action: 'IMPORT' }] }, 5)).rejects.toThrow('来源')
+    await put('.qoder/settings.json', '{"mcp":{"allowed":[]},"mcpServers":{"blocked":{"command":"node"}}}')
+    expect((await preview('qoder', 'antigravity')).items[0].proposedContent).toContain('"disabled": true')
+  })
+
+  it('isolates damaged directory backup records and retains valid selectable recovery points', async () => {
+    const query = { toolId: 'claude-code' as const, kind: 'SUBAGENT' as const }
+    const current = await service.saveResource({ ...query, name: 'reviewer', content: content('reviewer') })
+    await service.deleteResource({ ...query, resourceId: current.resourceId, expectedRevision: current.revision })
+    await put('.ccb/resource-backups/11111111-1111-4111-8111-111111111111/metadata.json', '{broken')
+    const sources = await service.discoverResourceBackups(query, 41)
+    const valid = sources.filter(item => item.kinds.includes(query.kind))
+    expect(valid).toHaveLength(1)
+    const invalid = sources.find(item => item.status === 'INVALID')!
+    expect(invalid.kinds).toEqual([])
+    expect(invalid.warnings[0]).toContain('JSON')
+    await expect(service.listImportResources({ sourceId: invalid.sourceId, kind: query.kind }, 41)).rejects.toThrow()
+    const item = (await service.listImportResources({ sourceId: valid[0].sourceId, kind: query.kind }, 41)).resources[0]
+    const plan = await service.previewResourceImport({ sourceId: valid[0].sourceId, kind: query.kind, targetToolId: query.toolId, resourceIds: [item.resourceId] }, 41)
+    expect((await service.applyResourceImport({ previewId: plan.previewId, decisions: [{ resourceId: item.resourceId, action: 'IMPORT' }] }, 41)).results[0].status).toBe('IMPORTED')
+  })
+
+  it.each([
+    { toolId: 'claude-code', file: '.claude.json' }, { toolId: 'codex-cli', file: '.codex/config.toml' },
+    { toolId: 'gemini-cli', file: '.gemini/settings.json' }, { toolId: 'antigravity', file: '.gemini/config/mcp_config.json' }
+  ] as const)('$toolId restores a selected historical server without reverting unrelated current settings or servers', async ({ toolId, file }) => {
+    const query = { toolId, kind: 'MCP' as const }
+    const original = toolId === 'codex-cli' ? 'model="old"\n[mcp_servers.restore]\ncommand="node"\n[mcp_servers.oldpeer]\ncommand="old"\n' : '{"theme":"old","mcpServers":{"restore":{"command":"node"},"oldpeer":{"command":"old"}}}'
+    await put(file, original)
+    const current = (await service.listResources(query)).resources.find(item => item.name === 'restore')!
+    await service.deleteResource({ ...query, resourceId: current.resourceId, expectedRevision: current.revision })
+    const external = toolId === 'codex-cli' ? 'model="new"\n# keep current\n[mcp_servers.later]\ncommand="later"\n' : '{"theme":"new","large":9007199254740993123,"mcpServers":{"later":{"command":"later"}}}'
+    await put(file, external)
+    const sources = (await service.discoverResourceBackups(query, 45)).filter(source => source.kinds.includes('MCP'))
+    expect(sources).toHaveLength(1)
+    const server = (await service.listImportResources({ sourceId: sources[0].sourceId, kind: 'MCP' }, 45)).resources.find(item => item.name === 'restore')!
+    const plan = await service.previewResourceImport({ sourceId: sources[0].sourceId, targetToolId: toolId, kind: 'MCP', resourceIds: [server.resourceId] }, 45)
+    expect(plan.items[0].status).toBe('READY')
+    expect((await service.applyResourceImport({ previewId: plan.previewId, decisions: [{ resourceId: server.resourceId, action: 'IMPORT' }] }, 45)).results[0].status).toBe('IMPORTED')
+    const saved = await readFile(path.join(root, file), 'utf8')
+    expect(saved).toContain(toolId === 'codex-cli' ? 'model="new"' : '"theme":"new"')
+    expect(saved).toContain('later')
+    expect(saved).not.toContain('oldpeer')
+    if (toolId !== 'codex-cli') expect(saved).toContain('9007199254740993123')
+    expect((await service.discoverResourceBackups(query, 45)).filter(source => source.kinds.includes('MCP'))).toHaveLength(2)
+  })
+
+  it('lists historical MCP servers when the native file is absent and rejects backup changes after preview', async () => {
+    await put('.claude.json', '{"mcpServers":{"restore":{"command":"node"}}}')
+    const query = { toolId: 'claude-code' as const, kind: 'MCP' as const }
+    const current = (await service.listResources(query)).resources[0]
+    await service.deleteResource({ ...query, resourceId: current.resourceId, expectedRevision: current.revision })
+    await rm(path.join(root, '.claude.json'))
+    const source = (await service.discoverResourceBackups(query, 46)).find(item => item.kinds.includes('MCP'))!
+    const item = (await service.listImportResources({ sourceId: source.sourceId, kind: 'MCP' }, 46)).resources[0]
+    const plan = await service.previewResourceImport({ sourceId: source.sourceId, targetToolId: query.toolId, kind: 'MCP', resourceIds: [item.resourceId] }, 46)
+    const backupId = source.location.split(' · ').at(-1)!
+    await put(`.ccb/resource-backups/artifacts/${backupId}.backup`, '{"mcpServers":{"restore":{"command":"evil"}}}')
+    await expect(service.applyResourceImport({ previewId: plan.previewId, decisions: [{ resourceId: item.resourceId, action: 'IMPORT' }] }, 46)).rejects.toThrow()
+    await expect(readFile(path.join(root, '.claude.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('marks unsigned historical integrity as unverified and explicitly replaces only the selected same-path server', async () => {
+    const query = { toolId: 'claude-code' as const, kind: 'MCP' as const }
+    const initial = await service.saveResource({ ...query, name: 'restore', content: '{"command":"old"}' })
+    await service.saveResource({ ...query, name: initial.name, resourceId: initial.resourceId, expectedRevision: initial.revision, content: '{"command":"new"}' })
+    const first = (await service.discoverResourceBackups(query, 48)).find(item => item.kinds.includes('MCP'))!
+    const backupId = first.location.split(' · ').at(-1)!
+    const metadataFile = path.join(root, '.ccb/resource-backups/artifacts', `${backupId}.json`)
+    const metadata = JSON.parse(await readFile(metadataFile, 'utf8'))
+    delete metadata.sha256
+    delete metadata.metadataVersion
+    await writeFile(metadataFile, JSON.stringify(metadata))
+    const source = (await service.discoverResourceBackups(query, 48)).find(item => item.kinds.includes('MCP'))!
+    expect(source.warnings.join()).toContain('没有历史摘要')
+    const item = (await service.listImportResources({ sourceId: source.sourceId, kind: 'MCP' }, 48)).resources[0]
+    const plan = await service.previewResourceImport({ sourceId: source.sourceId, targetToolId: query.toolId, kind: 'MCP', resourceIds: [item.resourceId] }, 48)
+    expect(plan.items[0].conflict).toBe(true)
+    expect((await service.applyResourceImport({ previewId: plan.previewId, decisions: [{ resourceId: item.resourceId, action: 'REPLACE' }] }, 48)).results[0].status).toBe('IMPORTED')
+    const restored = (await service.listResources(query)).resources[0]
+    expect((await service.readResource({ ...query, resourceId: restored.resourceId })).content).toContain('"old"')
+  })
+
+  it.each(['save', 'delete', 'legacy-raw'] as const)('refuses MCP $operation when the artifact backup captured a different transient snapshot', async operation => {
+    const original = '{"mcpServers":{"docs":{"command":"old"}}}'
+    const replacement = '{"mcpServers":{"docs":{"command":"new"}}}'
+    await put('.claude.json', original)
+    const query = { toolId: 'claude-code' as const, kind: 'MCP' as const }
+    const initial = (await service.listResources(query)).resources[0]
+    const createBackup = ToolArtifactManagementService.prototype.createBackup
+    const spy = vi.spyOn(ToolArtifactManagementService.prototype, 'createBackup').mockImplementation(async function (this: ToolArtifactManagementService, toolId, artifactId, file) {
+      await writeFile(file, original.replace('"old"', '"transient"'))
+      const snapshot = await createBackup.call(this, toolId, artifactId, file)
+      await writeFile(file, original)
+      return snapshot
+    })
+    try {
+      const mutation = operation === 'save' ? service.saveResource({ ...query, name: initial.name, content: '{"command":"new"}', resourceId: initial.resourceId, expectedRevision: initial.revision }) : operation === 'delete' ? service.deleteResource({ ...query, resourceId: initial.resourceId, expectedRevision: initial.revision }) : service.saveLegacyMcpConfig(JSON.parse(replacement))
+      await expect(mutation).rejects.toThrow('备份快照')
+      expect(await readFile(path.join(root, '.claude.json'), 'utf8')).toBe(original)
+    } finally { spy.mockRestore() }
+  })
+
+  it('keeps Qoder project approval constraints in the source revision and refuses ambiguous policy names', async () => {
+    await put('workspace/.qoder/settings.json', '{"mcp":{"enableAllProjectMcpServers":true},"mcpServers":{"docs":{"command":"node"}}}')
+    const project = await service.registerProject(path.join(root, 'workspace'), 47)
+    const source = (await service.discoverImportSources(project, 47)).find(item => item.toolId === 'qoder')!
+    const item = (await service.listImportResources({ sourceId: source.sourceId, kind: 'MCP' }, 47)).resources[0]
+    const plan = await service.previewResourceImport({ sourceId: source.sourceId, targetToolId: 'codex-cli', kind: 'MCP', resourceIds: [item.resourceId] }, 47)
+    expect(plan.items[0].status).toBe('READY')
+    await put('workspace/.qoder/settings.json', '{"mcp":{"enabledProjectMcpServers":[]},"mcpServers":{"docs":{"command":"node"}}}')
+    await expect(service.applyResourceImport({ previewId: plan.previewId, decisions: [{ resourceId: item.resourceId, action: 'IMPORT' }] }, 47)).rejects.toThrow('来源')
+    const blocked = await service.previewResourceImport({ sourceId: source.sourceId, targetToolId: 'codex-cli', kind: 'MCP', resourceIds: [item.resourceId] }, 47)
+    expect(blocked.items[0].errors.join()).toContain('审批')
+    await put('.qoder/settings.json', '{"mcp":{"allowed":["DOCS"]},"mcpServers":{"docs":{"command":"node"}}}')
+    expect((await preview('qoder', 'codex-cli')).items[0].errors.join()).toContain('歧义')
+  })
+
+  it('keeps restrictions from other known Qoder file layers and invalidates the preview when those layers change', async () => {
+    await put('workspace/.qoder/settings.json', '{"mcp":{"excluded":["docs"]}}')
+    await put('workspace/.qoder/settings.local.json', '{"mcp":{"enableAllProjectMcpServers":true},"mcpServers":{"docs":{"command":"node"}}}')
+    const project = await service.registerProject(path.join(root, 'workspace'), 49)
+    const source = (await service.discoverImportSources(project, 49)).find(item => item.toolId === 'qoder')!
+    const item = (await service.listImportResources({ sourceId: source.sourceId, kind: 'MCP' }, 49)).resources[0]
+    const plan = await service.previewResourceImport({ sourceId: source.sourceId, targetToolId: 'codex-cli', kind: 'MCP', resourceIds: [item.resourceId] }, 49)
+    expect(plan.items[0].proposedContent).toMatch(/enabled\s*=\s*false/)
+    await put('workspace/.qoder/settings.json', '{"mcp":{"excluded":[]}}')
+    await expect(service.applyResourceImport({ previewId: plan.previewId, decisions: [{ resourceId: item.resourceId, action: 'IMPORT' }] }, 49)).rejects.toThrow('来源')
   })
 
   it('Gemini policy changes expire an import preview instead of activating a disabled source', async () => {

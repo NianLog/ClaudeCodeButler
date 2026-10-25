@@ -26,6 +26,8 @@ export interface SkillFileStructure {
  * Skill目录接口
  */
 export interface SkillDirectory {
+  /** 完整目录快照版本；旧数据对象缺失时须重新读取后才能修改。 */
+  revision?: string
   /** Skill唯一标识（目录名） */
   id: string
   /** Skill元数据 */

@@ -29,7 +29,7 @@ const SESSION_MS = 30 * 60 * 1000
 
 interface ResourceEntry extends AgentResourceContent { nativePath: string; nativeName: string; packagePath?: string; mcpDisabled?: boolean; policyError?: string }
 interface Location { paths: string[]; primary: string; tool?: ToolDefinition; artifact?: ConfigArtifactDefinition; singlePackage?: boolean }
-interface SourceSession { owner: number; expires: number; public: ImportSource; locations: Partial<Record<AgentResourceKind, string[]>>; backup?: ResourceBackup }
+interface SourceSession { owner: number; expires: number; public: ImportSource; locations: Partial<Record<AgentResourceKind, string[]>>; backup?: ResourceBackup; artifactBackup?: { backupId: string; revision: string } }
 interface PreviewSession {
   owner: number; expires: number; public: ResourceImportPreview; source: SourceSession; sourceRevisions: Map<string, string>;
   targetRevision: string; registryRevision: string; converted: Map<string, string>;
@@ -157,7 +157,7 @@ export class AgentResourceService {
       if (next === original) return
       this.assertContent(next)
       parseJson(next)
-      if (initial) await this.artifactManagement.createBackup(query.toolId, location.artifact!.artifactId, location.primary)
+      if (initial) await this.backupMcpSnapshot(query, location, initial)
       const latest = await readBounded(location.primary)
       if ((latest ? digest(latest) : MISSING_REVISION) !== (initial ? digest(initial) : MISSING_REVISION)) throw new Error('Claude 配置在备份期间发生变化，未覆盖')
       await this.reauthorize(query, location)
@@ -169,6 +169,11 @@ export class AgentResourceService {
     const current = await this.location(input, true)
     if (digest(JSON.stringify(current.tool)) !== digest(JSON.stringify(original.tool))) throw new Error('规则库在写入期间发生变化，未覆盖旧路径')
     await this.discovery.authorizeArtifact(input.toolId, original.artifact!.artifactId, original.primary, input.kind === 'MCP' ? 'MANAGE_MCP' : 'MANAGE_DIRECTORY')
+  }
+
+  private async backupMcpSnapshot(input: AgentResourceQuery, location: Location, snapshot: Buffer): Promise<void> {
+    const backup = await this.artifactManagement.createBackup(input.toolId, location.artifact!.artifactId, location.primary)
+    if (backup.sha256 !== digest(snapshot)) throw new Error('配置备份快照与待修改原件不一致，未写入')
   }
 
   private assertMcpRevision(document: string, input: AgentResourceQuery, name: string, current?: ResourceEntry): void {
@@ -204,21 +209,7 @@ export class AgentResourceService {
     }
     if (kind === 'MCP') {
       const data = await readBounded(location.primary)
-      if (!data) return []
-      const document = parseMcpDocument(utf8(data), tool)
-      const contents = extractMcpItems(utf8(data), tool, document)
-      for (const [name, value] of Object.entries(document)) {
-        if (!record(value)) throw new Error('MCP 定义必须是对象')
-        const content = contents.get(name)
-        if (content === undefined) throw new Error('无法定位 MCP 定义')
-        const warnings: string[] = []
-        if (MANAGED_AGENT_IDS.includes(tool as ManagedAgentId)) {
-          try { this.validateTargetName(name, kind, tool as ManagedAgentId) }
-          catch (error) { warnings.push(error instanceof Error ? error.message : '现有名称不符合原生规则，保留原文件并等待明确另名') }
-        }
-        results.push({ resourceId: digest(`${kind}\0${location.primary}\0${name}`), nativePath: location.primary, nativeName: name, name, kind, description: typeof value.description === 'string' ? value.description : '', location: location.primary, format: tool === 'codex-cli' ? 'TOML' : 'JSON', revision: digest(content), content, warnings })
-      }
-      return results
+      return data ? this.mcpEntries(tool, location.primary, utf8(data)) : []
     }
     let visited = 0
     const walk = async (directory: string, depth: number): Promise<void> => {
@@ -244,6 +235,24 @@ export class AgentResourceService {
     for (const root of location.paths) {
       const key = normalizePathForComparison(root)
       if (!unique.has(key)) { unique.add(key); await walk(root, 0) }
+    }
+    return results
+  }
+
+  private mcpEntries(tool: ImportToolId, nativePath: string, content: string): ResourceEntry[] {
+    const results: ResourceEntry[] = []
+    const document = parseMcpDocument(content, tool)
+    const contents = extractMcpItems(content, tool, document)
+    for (const [name, value] of Object.entries(document)) {
+      if (!record(value)) throw new Error('MCP 定义必须是对象')
+      const definition = contents.get(name)
+      if (definition === undefined) throw new Error('无法定位 MCP 定义')
+      const warnings: string[] = []
+      if (MANAGED_AGENT_IDS.includes(tool as ManagedAgentId)) {
+        try { this.validateTargetName(name, 'MCP', tool as ManagedAgentId) }
+        catch (error) { warnings.push(error instanceof Error ? error.message : '现有名称不符合原生规则，保留原文件并等待明确另名') }
+      }
+      results.push({ resourceId: digest(`MCP\0${nativePath}\0${name}`), nativePath, nativeName: name, name, kind: 'MCP', description: typeof value.description === 'string' ? value.description : '', location: nativePath, format: tool === 'codex-cli' ? 'TOML' : 'JSON', revision: digest(definition), content: definition, warnings })
     }
     return results
   }
@@ -321,7 +330,7 @@ export class AgentResourceService {
       const document = initial ? utf8(initial) : input.toolId === 'codex-cli' ? '' : '{}\n'
       this.assertMcpRevision(document, input, input.name, current)
       const next = editMcpDocument(document, input.toolId, input.name, definition, input.toolId === 'codex-cli' ? undefined : input.content)
-      if (initial) await this.artifactManagement.createBackup(input.toolId, location.artifact!.artifactId, location.primary)
+      if (initial) await this.backupMcpSnapshot(input, location, initial)
       const latest = await readBounded(location.primary)
       if ((latest ? digest(latest) : MISSING_REVISION) !== (initial ? digest(initial) : MISSING_REVISION)) throw new Error('配置在备份期间发生变化，未覆盖')
       await this.reauthorize(input, location)
@@ -364,7 +373,7 @@ export class AgentResourceService {
         if (!initial) throw new Error('配置文件已消失')
         this.assertMcpRevision(utf8(initial), input, current.name, current)
         const next = editMcpDocument(utf8(initial), input.toolId, current.name)
-        await this.artifactManagement.createBackup(input.toolId, location.artifact!.artifactId, location.primary)
+        await this.backupMcpSnapshot(input, location, initial)
         const latest = await readBounded(location.primary)
         if (!latest || digest(latest) !== digest(initial)) throw new Error('配置在备份期间发生变化，未删除')
         await this.reauthorize(input, location)
@@ -408,12 +417,18 @@ export class AgentResourceService {
     return { sourceContextId }
   }
 
-  private addSource(tool: ImportToolId, scope: ImportSource['scope'], locations: SourceSession['locations'], owner: number, label?: string, warnings: string[] = []): ImportSource {
-    const previous = [...this.sources.values()].find(source => source.owner === owner && source.public.toolId === tool && source.public.scope === scope && JSON.stringify(source.locations) === JSON.stringify(locations))
-    if (previous) { previous.expires = Date.now() + SESSION_MS; return previous.public }
+  private addSource(tool: ImportToolId, scope: ImportSource['scope'], locations: SourceSession['locations'], owner: number, label?: string, warnings: string[] = [], diagnostic?: { location: string; status: ImportSource['status'] }): ImportSource {
+    const location = diagnostic?.location ?? Object.values(locations).flat().join('\n')
+    const previous = [...this.sources.values()].find(source => source.owner === owner && source.public.toolId === tool && source.public.scope === scope && source.public.location === location && source.public.status === (diagnostic?.status ?? 'FOUND') && JSON.stringify(source.locations) === JSON.stringify(locations))
+    if (previous) {
+      previous.expires = Date.now() + SESSION_MS
+      previous.public.label = label ?? SOURCE_LABELS[tool]
+      previous.public.warnings = warnings
+      return previous.public
+    }
     if (this.sources.size > 500) throw new Error('导入来源会话过多，请重新打开资源页')
     const sourceId = randomUUID()
-    const value: ImportSource = { sourceId, toolId: tool, label: label ?? SOURCE_LABELS[tool], scope, location: Object.values(locations).flat().join('\n'), kinds: Object.keys(locations) as AgentResourceKind[], warnings }
+    const value: ImportSource = { sourceId, toolId: tool, label: label ?? SOURCE_LABELS[tool], scope, location, kinds: Object.keys(locations) as AgentResourceKind[], warnings, status: diagnostic?.status ?? 'FOUND' }
     this.sources.set(sourceId, { owner, public: value, locations, expires: Date.now() + SESSION_MS })
     return value
   }
@@ -490,8 +505,27 @@ export class AgentResourceService {
   async discoverResourceBackups(input: AgentResourceQuery, owner = 0): Promise<ImportSource[]> {
     this.purge()
     const location = await this.location(input)
+    if (input.kind === 'MCP') {
+      const backups = await this.artifactManagement.listBackups(input.toolId, location.artifact!.artifactId)
+      const sources: ImportSource[] = []
+      for (const backup of backups) {
+        try {
+          const snapshot = await this.artifactManagement.readBackup(backup.backupId)
+          const warnings = ['只恢复选中的 MCP 服务器；其他服务器、Agent 设置和独立启停文件保持当前状态。']
+          if (snapshot.backup.integrity === 'LEGACY_UNVERIFIED') warnings.push('此旧备份没有历史摘要；本次读取校验不能证明历史内容未损坏，请核对差异后恢复。')
+          const source = this.addSource(input.toolId, 'BACKUP', { MCP: [snapshot.backup.originalPath] }, owner, `${SOURCE_LABELS[input.toolId]} · MCP · ${backup.createdAt}`, warnings, { location: `${backup.originalPath} · ${backup.backupId}`, status: 'FOUND' })
+          source.createdAt = backup.createdAt
+          this.sources.get(source.sourceId)!.artifactBackup = { backupId: backup.backupId, revision: snapshot.revision }
+          sources.push(source)
+        } catch (error) {
+          sources.push(this.addSource(input.toolId, 'BACKUP', {}, owner, `${SOURCE_LABELS[input.toolId]} · MCP 备份不可用`, [error instanceof Error ? error.message : '备份无法读取'], { location: `${backup.originalPath} · ${backup.backupId}`, status: 'INVALID' }))
+        }
+      }
+      return sources
+    }
     const backups = await findResourceBackups(this.backupDirectory, input, location.paths)
     return backups.map(backup => {
+      if ('error' in backup) return this.addSource(input.toolId, 'BACKUP', {}, owner, `${SOURCE_LABELS[input.toolId]} · 备份不可用`, [backup.error], { location: backup.directory, status: 'INVALID' })
       const source = this.addSource(input.toolId, 'BACKUP', { [input.kind]: [path.join(backup.directory, 'content')] }, owner, `${SOURCE_LABELS[input.toolId]} · ${input.kind} · ${backup.createdAt} · ${backup.name}`, ['恢复会重新预览并按当前规则库写入；不会按备份原路径覆盖。'])
       source.createdAt = backup.createdAt
       this.sources.get(source.sourceId)!.backup = backup
@@ -508,6 +542,15 @@ export class AgentResourceService {
 
   private async sourceEntries(source: SourceSession, kind: AgentResourceKind): Promise<ResourceEntry[]> {
     const paths = source.locations[kind]!
+    if (source.artifactBackup) {
+      await this.location({ toolId: source.public.toolId as ManagedAgentId, kind })
+      const snapshot = await this.artifactManagement.readBackup(source.artifactBackup.backupId)
+      if (snapshot.backup.toolId !== source.public.toolId || snapshot.backup.artifactId !== MCP_ARTIFACTS[source.public.toolId as ManagedAgentId] || snapshot.revision !== source.artifactBackup.revision) throw new Error('MCP 备份内容或授权已变化，请重新选择')
+      const entries = this.mcpEntries(source.public.toolId, snapshot.backup.originalPath, snapshot.content)
+      await this.protectSourceMcpState(source, entries, snapshot.content)
+      for (const entry of entries) entry.revision = digest(`${entry.revision}\0${snapshot.revision}`)
+      return entries
+    }
     if (source.backup) {
       await this.location({ toolId: source.public.toolId as ManagedAgentId, kind })
       const metadata = await readBounded(path.join(source.backup.directory, 'metadata.json'), 16 * 1024)
@@ -528,11 +571,11 @@ export class AgentResourceService {
     return entries
   }
 
-  private async protectSourceMcpState(source: SourceSession, entries: ResourceEntry[]): Promise<void> {
+  private async protectSourceMcpState(source: SourceSession, entries: ResourceEntry[], snapshot?: string): Promise<void> {
     const tool = source.public.toolId
-    if (tool !== 'gemini-cli' && tool !== 'claude-code') return
+    if (tool !== 'gemini-cli' && tool !== 'claude-code' && tool !== 'qoder') return
     const primary = source.locations.MCP![0]
-    const configBytes = await readBounded(primary)
+    const configBytes = snapshot !== undefined ? Buffer.from(snapshot) : await readBounded(primary)
     if (!configBytes) throw new Error('来源配置在读取期间消失')
     const config = parseJson(utf8(configBytes))
     const asList = (value: unknown): string[] | undefined => {
@@ -540,19 +583,28 @@ export class AgentResourceService {
       if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) throw new Error('来源 MCP 策略列表格式无效，不能视为全部启用')
       return value as string[]
     }
-    const matches = (list: string[] | undefined, name: string) => list?.some(item => item.toLowerCase().trim() === name.toLowerCase().trim()) ?? false
-    if (tool === 'gemini-cli') {
+    const matches = (list: string[] | undefined, name: string) => list?.some(item => tool === 'qoder' ? item === name : item.toLowerCase().trim() === name.toLowerCase().trim()) ?? false
+    if (tool === 'gemini-cli' || tool === 'qoder') {
       const roots = [config]
       if (source.public.scope === 'PROJECT') {
-        const global = await readBounded(path.join(this.home, '.gemini', 'settings.json'))
+        const global = await readBounded(path.join(this.home, tool === 'qoder' ? '.qoder' : '.gemini', 'settings.json'))
         if (global) roots.push(parseJson(utf8(global)))
+        if (tool === 'qoder') {
+          const project = path.basename(path.dirname(primary)) === '.qoder' ? path.dirname(path.dirname(primary)) : path.dirname(primary)
+          for (const candidate of [path.join(project, '.qoder', 'settings.json'), path.join(project, '.mcp.json'), path.join(project, '.qoder', 'settings.local.json')]) {
+            if (normalizePathForComparison(candidate) === normalizePathForComparison(primary)) continue
+            const layer = await readBounded(candidate)
+            if (layer) roots.push(parseJson(utf8(layer)))
+          }
+        }
       }
       const policies = roots.map(root => {
         if (root.mcp !== undefined && !record(root.mcp)) throw new Error('来源全局 MCP 策略损坏')
         const policy = record(root.mcp) ? root.mcp : {}
-        return { allowed: asList(policy.allowed), excluded: asList(policy.excluded), serverCommand: policy.serverCommand }
+        if (tool === 'qoder' && policy.enableAllProjectMcpServers !== undefined && typeof policy.enableAllProjectMcpServers !== 'boolean') throw new Error('Qoder 项目 MCP 审批策略损坏')
+        return { allowed: asList(policy.allowed), excluded: asList(policy.excluded), serverCommand: policy.serverCommand, projectAll: policy.enableAllProjectMcpServers, projectNames: tool === 'qoder' ? asList(policy.enabledProjectMcpServers) : undefined }
       })
-      const enablementBytes = await readBounded(path.join(this.home, '.gemini', 'mcp-server-enablement.json'))
+      const enablementBytes = tool === 'gemini-cli' ? await readBounded(path.join(this.home, '.gemini', 'mcp-server-enablement.json')) : undefined
       let enablement: Record<string, unknown> = {}
       if (enablementBytes) {
         try { JSON.parse(utf8(enablementBytes)) } catch { throw new Error('Gemini 启停状态损坏，不能假定服务器全部启用') }
@@ -564,12 +616,18 @@ export class AgentResourceService {
         const state = enablement[entry.name.toLowerCase().trim()]
         entry.mcpDisabled = record(state) && state.enabled === false || policies.some(policy => policy.allowed !== undefined && !matches(policy.allowed, entry.name) || matches(policy.excluded, entry.name))
         if (policies.some(policy => policy.serverCommand !== undefined)) entry.policyError = '来源使用全局 mcp.serverCommand，不能假装成等价的单项启动配置'
-        if (entry.mcpDisabled) entry.warnings.push('来源被 Gemini 持久化启停状态或 allowed/excluded 策略停用；导入必须保持停用。')
+        if (tool === 'qoder') {
+          if (policies.some(policy => [...(policy.allowed ?? []), ...(policy.excluded ?? []), ...(policy.projectNames ?? [])].some(name => name !== entry.name && name.toLowerCase().trim() === entry.name.toLowerCase().trim()))) entry.policyError = 'Qoder 策略名称大小写或空白存在歧义，不能确认等价权限'
+          const approvals = policies.filter(policy => policy.projectAll !== undefined || policy.projectNames !== undefined)
+          if (source.public.scope === 'PROJECT' && (!approvals.length || approvals.some(policy => policy.projectAll !== true && !matches(policy.projectNames, entry.name)))) entry.policyError = 'Qoder 项目 MCP 需要原生逐项审批；未读取私有审批状态，不能将未知授权转换成启用'
+          if (source.public.scope === 'PROJECT') entry.warnings.push('此来源按文件层列出；已知用户/项目/本地层限制按保守交集保持，不声称读取原生会话审批或合成最终配置。')
+        }
+        if (entry.mcpDisabled) entry.warnings.push(`来源被 ${SOURCE_LABELS[tool]} 持久化启停状态或 allowed/excluded 策略停用；导入必须保持停用。`)
         entry.revision = digest(`${entry.revision}\0${stateHash}`)
       }
     } else {
       let homeConfig = config
-      if (normalizePathForComparison(primary) !== normalizePathForComparison(path.join(this.home, '.claude.json'))) {
+      if (snapshot === undefined && normalizePathForComparison(primary) !== normalizePathForComparison(path.join(this.home, '.claude.json'))) {
         const homeBytes = await readBounded(path.join(this.home, '.claude.json'))
         homeConfig = homeBytes ? parseJson(utf8(homeBytes)) : {}
       }
@@ -723,7 +781,7 @@ export class AgentResourceService {
           const parsed = parseRole(content, query.kind === 'SKILL' ? 'claude-code' : query.toolId)
           content = emitRole({ ...parsed.metadata, name }, parsed.prompt, query.kind === 'SKILL' ? 'claude-code' : query.toolId)
         }
-        if (current && normalizePathForComparison(current.packagePath ?? current.nativePath) === normalizePathForComparison(sourceEntry.packagePath ?? sourceEntry.nativePath)) { results.push({ name, status: 'SKIPPED' }); continue }
+        if (current && !source.artifactBackup && normalizePathForComparison(current.packagePath ?? current.nativePath) === normalizePathForComparison(sourceEntry.packagePath ?? sourceEntry.nativePath)) { results.push({ name, status: 'SKIPPED' }); continue }
         await this.saveInternal({ ...query, name: current?.name ?? name, content, resourceId: current?.resourceId, expectedRevision: current?.revision }, files)
         expectedTarget = await this.targetRevision(query, await this.location(query))
         results.push({ name, status: 'IMPORTED' })

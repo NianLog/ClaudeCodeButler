@@ -6,6 +6,8 @@ Last-verified: 2026-10-25
 
 ## Problem
 
+2026-10-25 后续复核发现本记录的样例验收遗漏真实 junction、旧高级表单和文件恢复。当前补修与剩余工作见[资源闭环记录](../bug-fix/2026-10-25-resource-management-closure.md)。本记录保留原实现及历史验证；其中 MCP 整文件恢复选择由后继记录的按项恢复取代。
+
 日常维护多个 Agent 时，各模块分别选择目标容易误写；原 MCP、Skill、子 Agent 面板只覆盖 Claude。用户于 2026-10-25 批准：四款现有工具做管理与互导，新增六款仅作导入来源；采用已评审交互原型，保留原路径与用户数据，分批提交，暂不发布。
 
 复用[代理协议与 Skill 覆盖保护](../bug-fix/2026-10-20-proxy-protocol-and-skill-import.md)和[持久化失败边界](../bug-fix/2026-10-19-persistence-and-proxy-safety.md)。[稳定工具链](../process/2026-10-25-latest-stable-dependency-upgrades.md)为前置；[后续产品路线](../../proposed/feature/2026-10-20-configuration-reliability-roadmap.md)仍为 proposed，未把云同步、账号和运行编排带入本版。

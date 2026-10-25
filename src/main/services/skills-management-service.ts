@@ -11,17 +11,16 @@
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { load } from 'js-yaml'
+import { dump, load, JSON_SCHEMA } from 'js-yaml'
 import { logger } from '../utils/logger'
 import type {
   SkillDirectory,
   SkillMetadata,
   SkillFormData,
-  SkillImportOptions,
-  SkillFileStructure
+  SkillImportOptions
 } from '@shared/types/skills'
 import { ensureSafePathSegment, resolveSafeChildPath, sanitizeFileName, normalizePathForComparison } from '../utils/path-security'
-import { assertNoLinks } from './agent-resource-files'
+import { assertNoLinks, readSkillPackage, skillRevision, utf8 } from './agent-resource-files'
 
 const MAX_IMPORT_FILES = 2000
 const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024
@@ -117,6 +116,7 @@ export class SkillsManagementService {
    */
   private async parseSkillDirectory(dirPath: string): Promise<SkillDirectory | null> {
     try {
+      await assertNoLinks(dirPath)
       // 检查目录是否存在
       try {
         const stats = await fs.stat(dirPath)
@@ -138,22 +138,22 @@ export class SkillsManagementService {
       }
 
       // 读取SKILL.md内容
-      const skillMdContent = await fs.readFile(skillMdPath, 'utf-8')
+      const members = await readSkillPackage(dirPath)
+      const definition = members.find(member => member.relativePath === 'SKILL.md')
+      if (!definition) throw new Error('Skill 包缺少 SKILL.md')
+      const skillMdContent = utf8(definition.content)
       const metadata = this.parseSkillFrontmatter(skillMdContent)
-
-      if (!metadata.name || !metadata.description) {
-        logger.warn(`SKILL.md缺少必填字段: ${skillMdPath}`)
-        return null
-      }
+      metadata.name ||= path.basename(dirPath)
 
       // 获取目录结构
-      const structure = await this.getSkillStructure(dirPath)
+      const structure = { skillMdPath, additionalFiles: members.filter(member => member.relativePath !== 'SKILL.md').map(member => path.join(dirPath, member.relativePath)) }
 
       // 获取目录统计信息
       const dirStats = await fs.stat(dirPath)
       const dirName = path.basename(dirPath)
 
       return {
+        revision: skillRevision(members),
         id: dirName,
         metadata,
         directoryPath: dirPath,
@@ -167,69 +167,6 @@ export class SkillsManagementService {
       logger.error(`解析Skill目录失败: ${dirPath}`, error)
       return null
     }
-  }
-
-  /**
-   * 获取Skill目录的文件结构
-   */
-  private async getSkillStructure(dirPath: string): Promise<SkillFileStructure> {
-    try {
-      const skillMdPath = path.join(dirPath, 'SKILL.md')
-      const entries = await fs.readdir(dirPath, { withFileTypes: true })
-
-      const additionalFiles: string[] = []
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name)
-
-        if (entry.isFile()) {
-          // 跳过SKILL.md，添加其他文件
-          if (entry.name !== 'SKILL.md') {
-            additionalFiles.push(fullPath)
-          }
-        } else if (entry.isDirectory()) {
-          // 添加子目录中的文件
-          const subFiles = await this.getFilesRecursively(fullPath)
-          additionalFiles.push(...subFiles)
-        }
-      }
-
-      return {
-        skillMdPath,
-        additionalFiles
-      }
-    } catch (error) {
-      logger.error(`获取Skill文件结构失败: ${dirPath}`, error)
-      return {
-        skillMdPath: path.join(dirPath, 'SKILL.md'),
-        additionalFiles: []
-      }
-    }
-  }
-
-  /**
-   * 递归获取目录下所有文件
-   */
-  private async getFilesRecursively(dirPath: string): Promise<string[]> {
-    const files: string[] = []
-
-    try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true })
-
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name)
-
-        if (entry.isFile()) {
-          files.push(fullPath)
-        } else if (entry.isDirectory()) {
-          const subFiles = await this.getFilesRecursively(fullPath)
-          files.push(...subFiles)
-        }
-      }
-    } catch (error) {
-      logger.warn(`递归读取目录失败: ${dirPath}`, error)
-    }
-
-    return files
   }
 
   /**
@@ -570,17 +507,9 @@ export class SkillsManagementService {
 
   /**
    * 构建SKILL.md文件内容（frontmatter + 正文）
-   * 使用字符串拼接确保 YAML 格式符合标准（无引号）
    */
   private buildSkillContent(formData: SkillFormData): string {
-    // 使用自定义格式生成YAML，确保无引号
-    let yamlContent = '---\n'
-    yamlContent += `name: ${formData.name}\n`
-    yamlContent += `description: ${formData.description}\n`
-    yamlContent += '---\n'
-    yamlContent += `\n${formData.content}`
-
-    return yamlContent
+    return `---\n${dump({ name: formData.name, description: formData.description }, { schema: JSON_SCHEMA, lineWidth: -1 })}---\n\n${formData.content}`
   }
 
   /**

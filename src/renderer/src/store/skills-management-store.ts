@@ -131,25 +131,18 @@ export const useSkillsManagementStore = create<SkillsManagementState>((set, get)
     }
   },
 
-  // 更新Skill（通过删除+重新添加实现）
+  // 保留整个目录，由主进程核对原始版本后更新。
   updateSkill: async (skillId, formData) => {
     set({ isLoading: true, error: null })
     try {
-      // 先删除旧Skill
-      const deleteResult = await window.electronAPI.skills.delete(skillId)
-      if (!deleteResult?.success) {
-        const errorMessage = deleteResult?.error || '删除旧Skill失败'
-        set({ error: errorMessage })
-        throw new Error(errorMessage)
-      }
-
-      // 添加新Skill
-      const addResult = await window.electronAPI.skills.add(formData)
+      const revision = (get().editingSkill?.id === skillId ? get().editingSkill : get().skills.find(skill => skill.id === skillId))?.revision
+      if (!revision) throw new Error('缺少原始版本，请刷新列表后再修改')
+      const addResult = await window.electronAPI.skills.update(skillId, formData, revision)
       if (addResult?.success) {
         set({ isFormModalOpen: false })
         await get().loadSkills()
       } else {
-        const errorMessage = addResult?.error || '添加新Skill失败'
+        const errorMessage = addResult?.error || '更新Skill失败'
         set({ error: errorMessage })
         throw new Error(errorMessage)
       }
@@ -166,7 +159,9 @@ export const useSkillsManagementStore = create<SkillsManagementState>((set, get)
   deleteSkill: async (skillId) => {
     set({ isLoading: true, error: null })
     try {
-      const result = await window.electronAPI.skills.delete(skillId)
+      const revision = get().skills.find(skill => skill.id === skillId)?.revision
+      if (!revision) throw new Error('缺少原始版本，请刷新列表后再删除')
+      const result = await window.electronAPI.skills.delete(skillId, revision)
       if (result?.success) {
         await get().loadSkills()
       } else {

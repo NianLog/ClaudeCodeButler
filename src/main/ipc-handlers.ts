@@ -22,6 +22,7 @@ import { mcpManagementService } from './services/mcp-management.service'
 import { managedModeService } from './services/managed-mode-service'
 import { agentsManagementService } from './services/agents-management-service'
 import { skillsManagementService } from './services/skills-management-service'
+import { legacyResourceEditor } from './services/legacy-resource-editor'
 import { environmentCheckService } from './services/environment-check-service'
 import { terminalManagementService } from './services/terminal-management-service'
 import { toolRegistryService } from './services/tool-registry-service'
@@ -78,10 +79,6 @@ function createResourceMutationHandler<T extends unknown[], R>(handler: (...args
     if (kind) await agentResourceService.authorizeLegacyWrite(kind)
     return handler(...args)
   }))
-}
-
-function createAgentMutationHandler<T extends unknown[], R>(handler: (...args: T) => Promise<R> | R) {
-  return createResourceMutationHandler(handler, 'SUBAGENT')
 }
 
 function createSkillMutationHandler<T extends unknown[], R>(handler: (...args: T) => Promise<R> | R) {
@@ -183,8 +180,9 @@ function setupToolRegistryHandlers(): void {
     toolId: string,
     artifactId: string,
     requestedPath: string,
-    content: string
-  ) => toolArtifactManagementService.editArtifact(toolId, artifactId, requestedPath, content)))
+    content: string,
+    expectedRevision: string
+  ) => toolArtifactManagementService.editArtifact(toolId, artifactId, requestedPath, content, expectedRevision)))
   ipcMain.handle('toolRegistry:createArtifactBackup', createResourceMutationHandler((
     toolId: string,
     artifactId: string,
@@ -195,8 +193,11 @@ function setupToolRegistryHandlers(): void {
     artifactId: string,
     requestedPath: string
   ) => toolArtifactManagementService.listBackups(toolId, artifactId, requestedPath)))
-  ipcMain.handle('toolRegistry:restoreArtifactBackup', createResourceMutationHandler((backupId: string) =>
-    toolArtifactManagementService.restoreBackup(backupId)
+  ipcMain.handle('toolRegistry:readArtifactBackup', createSimpleHandler((backupId: string) =>
+    toolArtifactManagementService.readBackup(backupId)
+  ))
+  ipcMain.handle('toolRegistry:restoreArtifactBackup', createResourceMutationHandler((backupId: string, expectedRevision: string, expectedBackupRevision?: string) =>
+    toolArtifactManagementService.restoreBackup(backupId, expectedRevision, expectedBackupRevision)
   ))
   ipcMain.handle('toolRegistry:listConfigSets', createSimpleHandler((toolId: string) =>
     toolConfigSetService.listConfigSets(toolId)
@@ -795,29 +796,30 @@ function setupAgentsHandlers(): void {
   ipcMain.handle('agents:get', createSimpleHandler((agentId: string) => agentsManagementService.getAgent(agentId)))
 
   // 添加新Agent
-  ipcMain.handle('agents:add', createAgentMutationHandler((formData: Parameters<typeof agentsManagementService.addAgent>[0]) => agentsManagementService.addAgent(formData)))
+  ipcMain.handle('agents:add', createSimpleHandler((formData: Parameters<typeof agentsManagementService.addAgent>[0]) => legacyResourceEditor.create('SUBAGENT', formData)))
+  ipcMain.handle('agents:update', createSimpleHandler((agentId: string, formData: Parameters<typeof agentsManagementService.addAgent>[0], expectedRevision: string) => legacyResourceEditor.updateAgent(agentId, formData, expectedRevision)))
 
   // 删除Agent
-  ipcMain.handle('agents:delete', createAgentMutationHandler((agentId: string) => agentsManagementService.deleteAgent(agentId)))
+  ipcMain.handle('agents:delete', createSimpleHandler((agentId: string, expectedRevision: string) => legacyResourceEditor.delete('SUBAGENT', agentId, expectedRevision)))
 
   // 导入单个Agent
-  ipcMain.handle('agents:import', createAgentMutationHandler((sourceFilePath: string, options?: Parameters<typeof agentsManagementService.importAgent>[1]) =>
-    agentsManagementService.importAgent(sourceFilePath, options)
+  ipcMain.handle('agents:import', createSimpleHandler((sourceFilePath: string, options?: Parameters<typeof agentsManagementService.importAgent>[1]) =>
+    legacyResourceEditor.importAgentFile(sourceFilePath, options)
   ))
 
   // 导入Agent内容
-  ipcMain.handle('agents:import-content', createAgentMutationHandler((content: string, options?: Parameters<typeof agentsManagementService.importAgentContent>[1]) =>
-    agentsManagementService.importAgentContent(content, options)
+  ipcMain.handle('agents:import-content', createSimpleHandler((content: string, options?: Parameters<typeof agentsManagementService.importAgentContent>[1]) =>
+    legacyResourceEditor.importAgentContent(content, options)
   ))
 
   // 批量导入Agent
-  ipcMain.handle('agents:batch-import', createAgentMutationHandler((sourceFilePaths: string[], options?: Parameters<typeof agentsManagementService.batchImportAgents>[1]) =>
-    agentsManagementService.batchImportAgents(sourceFilePaths, options)
+  ipcMain.handle('agents:batch-import', createSimpleHandler((sourceFilePaths: string[], options?: Parameters<typeof agentsManagementService.batchImportAgents>[1]) =>
+    legacyResourceEditor.importAgents(sourceFilePaths.map(source => ({ path: source })), options)
   ))
 
   // 批量导入Agent内容
-  ipcMain.handle('agents:batch-import-content', createAgentMutationHandler((contents: Parameters<typeof agentsManagementService.batchImportAgentsContent>[0], options?: Parameters<typeof agentsManagementService.batchImportAgentsContent>[1]) =>
-    agentsManagementService.batchImportAgentsContent(contents, options)
+  ipcMain.handle('agents:batch-import-content', createSimpleHandler((contents: Parameters<typeof agentsManagementService.batchImportAgentsContent>[0], options?: Parameters<typeof agentsManagementService.batchImportAgentsContent>[1]) =>
+    legacyResourceEditor.importAgents(contents.map((item, index) => ({ path: item.name || `agent-${index + 1}`, content: item.content })), options)
   ))
 }
 
@@ -832,10 +834,11 @@ function setupSkillsHandlers(): void {
   ipcMain.handle('skills:get', createSimpleHandler((skillId: string) => skillsManagementService.getSkill(skillId)))
 
   // 添加新Skill
-  ipcMain.handle('skills:add', createSkillMutationHandler((formData: Parameters<typeof skillsManagementService.addSkill>[0]) => skillsManagementService.addSkill(formData)))
+  ipcMain.handle('skills:add', createSimpleHandler((formData: Parameters<typeof skillsManagementService.addSkill>[0]) => legacyResourceEditor.create('SKILL', formData)))
+  ipcMain.handle('skills:update', createSimpleHandler((skillId: string, formData: Parameters<typeof skillsManagementService.addSkill>[0], expectedRevision: string) => legacyResourceEditor.updateSkill(skillId, formData, expectedRevision)))
 
   // 删除Skill
-  ipcMain.handle('skills:delete', createSkillMutationHandler((skillId: string) => skillsManagementService.deleteSkill(skillId)))
+  ipcMain.handle('skills:delete', createSimpleHandler((skillId: string, expectedRevision: string) => legacyResourceEditor.delete('SKILL', skillId, expectedRevision)))
 
   // 导入单个Skill
   ipcMain.handle('skills:import', createSkillMutationHandler((sourceDirPath: string, options?: Parameters<typeof skillsManagementService.importSkill>[1]) =>

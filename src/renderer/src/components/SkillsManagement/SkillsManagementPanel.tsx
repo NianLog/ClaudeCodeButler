@@ -104,7 +104,7 @@ const SkillsManagementPanel: React.FC = () => {
       // 提取Skill内容（移除YAML frontmatter）
       const frontmatterRegex = /^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)$/
       const match = editingSkill.skillMdContent.match(frontmatterRegex)
-      const content = match ? match[1].trim() : editingSkill.skillMdContent
+      const content = match ? match[1] : editingSkill.skillMdContent
 
       form.setFieldsValue({
         name: editingSkill.metadata.name,

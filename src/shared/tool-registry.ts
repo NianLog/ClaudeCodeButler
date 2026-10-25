@@ -242,12 +242,16 @@ export interface DiscoveredConfigArtifact {
   size: number
   /** ISO-8601 修改时间 */
   lastModifiedAt: string
+  /** false 表示 registry 仍授权恢复的缺失目标；此时 size 为 0，修改时间为空 */
+  exists?: boolean
 }
 
 /** 只读配置资产内容 */
 export interface ConfigArtifactContent extends DiscoveredConfigArtifact {
   /** 原始 UTF-8 文本（保留注释与格式，保存同样以原文写回） */
   content: string
+  /** 实际文件原始 bytes 的 SHA-256；创建缺失文件时 expectedRevision 使用 MISSING */
+  revision: string
 }
 
 /** 配置集内单文件摘要 */
@@ -321,6 +325,12 @@ export interface ConfigArtifactBackup {
   size: number
   /** ISO-8601 创建时间 */
   createdAt: string
+  /** 新备份元数据版本；旧记录不补写 */
+  metadataVersion?: 1
+  /** 创建备份时记录的实际快照 bytes 摘要；旧记录可能缺少 */
+  sha256?: string
+  /** SHA256 表示已记录历史摘要，读取内容时仍须重新核验 */
+  integrity: 'SHA256' | 'LEGACY_UNVERIFIED'
 }
 
 /** Artifact template 生效来源枚举值。 */

@@ -131,25 +131,18 @@ export const useAgentsManagementStore = create<AgentsManagementState>((set, get)
     }
   },
 
-  // 更新Agent（通过删除+重新添加实现）
+  // 保留原文件与未展示的权限字段，由主进程一次性更新。
   updateAgent: async (agentId, formData) => {
     set({ isLoading: true, error: null })
     try {
-      // 先删除旧Agent
-      const deleteResult = await window.electronAPI.agents.delete(agentId)
-      if (!deleteResult?.success) {
-        const errorMessage = deleteResult?.error || '删除旧Agent失败'
-        set({ error: errorMessage })
-        throw new Error(errorMessage)
-      }
-
-      // 添加新Agent
-      const addResult = await window.electronAPI.agents.add(formData)
+      const revision = (get().editingAgent?.id === agentId ? get().editingAgent : get().agents.find(agent => agent.id === agentId))?.revision
+      if (!revision) throw new Error('缺少原始版本，请刷新列表后再修改')
+      const addResult = await window.electronAPI.agents.update(agentId, formData, revision)
       if (addResult?.success) {
         set({ isFormModalOpen: false })
         await get().loadAgents()
       } else {
-        const errorMessage = addResult?.error || '添加新Agent失败'
+        const errorMessage = addResult?.error || '更新Agent失败'
         set({ error: errorMessage })
         throw new Error(errorMessage)
       }
@@ -166,7 +159,9 @@ export const useAgentsManagementStore = create<AgentsManagementState>((set, get)
   deleteAgent: async (agentId) => {
     set({ isLoading: true, error: null })
     try {
-      const result = await window.electronAPI.agents.delete(agentId)
+      const revision = get().agents.find(agent => agent.id === agentId)?.revision
+      if (!revision) throw new Error('缺少原始版本，请刷新列表后再删除')
+      const result = await window.electronAPI.agents.delete(agentId, revision)
       if (result?.success) {
         await get().loadAgents()
       } else {

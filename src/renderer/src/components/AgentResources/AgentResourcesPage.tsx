@@ -11,7 +11,6 @@ const CodeEditor = lazy(() => import('../Common/CodeEditor'))
 const ClaudeMCP = lazy(() => import('../MCP/MCPManagementPanel'))
 const ClaudeSkills = lazy(() => import('../SkillsManagement/SkillsManagementPanel'))
 const ClaudeAgents = lazy(() => import('../AgentsManagement/AgentsManagementPanel'))
-const NativeFiles = lazy(() => import('../AIToolManagement/AIToolManagementPanel'))
 
 interface ResourceDraft {
   name: string; content: string; baseline: string; baselineName: string
@@ -185,11 +184,6 @@ export default function AgentResourcesPage({ kind }: { kind: AgentResourceKind }
       <Suspense fallback={<Skeleton active />}>{kind === 'MCP' ? <ClaudeMCP /> : kind === 'SKILL' ? <ClaudeSkills /> : <ClaudeAgents />}</Suspense>
     </Drawer>
     {importOpen && <ResourceImportDialog toolId={toolId} kind={kind} onClose={() => setImportOpen(false)} onImported={() => void load()} />}
-    {recoverOpen && kind !== 'MCP' && <ResourceImportDialog toolId={toolId} kind={kind} recover onClose={() => setRecoverOpen(false)} onImported={() => void load()} />}
-    <Drawer open={recoverOpen && kind === 'MCP'} title={t('resources.recover')} width="min(1200px, 96vw)" maskClosable={false}
-      onClose={() => guarded(() => { setRecoverOpen(false); void load() })} destroyOnHidden>
-      <p>{t('resources.nativeRecoveryHint')}</p>
-      <Suspense fallback={<Skeleton active />}><NativeFiles /></Suspense>
-    </Drawer>
+    {recoverOpen && <ResourceImportDialog toolId={toolId} kind={kind} recover onClose={() => setRecoverOpen(false)} onImported={() => void load()} />}
   </section>
 }

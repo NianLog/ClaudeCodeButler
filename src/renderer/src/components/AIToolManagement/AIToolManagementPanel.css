@@ -21,6 +21,33 @@
   margin-bottom: 4px;
 }
 
+.artifact-restore-preview {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.artifact-restore-diff {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.artifact-restore-diff pre {
+  margin: 0;
+  max-height: 48vh;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 800px) {
+  .artifact-restore-diff { grid-template-columns: minmax(0, 1fr); }
+}
+
 .ai-tool-list-item {
   cursor: pointer;
   padding-inline: 12px !important;
