@@ -3,9 +3,9 @@
 > 活文档。新增/移动模块、改变分层边界、引入新依赖或新数据流时，必须在同一提交更新本文件。
 > 更新时间：2026-10-25（1.5.1 未发布候选，分支 `codex/v1.5.1-agents-ux-upgrades`）。
 
-> 2026-10-25 真实路径复核：三批补修已落地，19 个原反例、555 项回归及 19 组真实 Electron 流程通过。新候选包正在核验，暂不发布；历史旧包不能证明本轮修复。见[资源闭环记录](.agents/notes/implemented/bug-fix/2026-10-25-resource-management-closure.md)。
+> 2026-10-25 真实路径复核：三批补修已落地，含 19 个原反例的 555 项回归及 19 组真实 Electron 流程通过。干净源码 37e020e 的新候选已完成载荷/ASAR/SBOM/摘要核验，暂不发布；目标机、云 CI 和跨平台分别待验。见[资源闭环记录](.agents/notes/implemented/bug-fix/2026-10-25-resource-management-closure.md)。
 
-### 资源闭环前两批
+### 资源闭环三批
 
 - `LegacyResourceEditor` 将旧 Skill/子 Agent 的新增、更新、删除与角色导入委托资源服务，旧表单提交完整包/文件 revision；不再用 delete/add 更新。字段修改保留未知权限元数据和附件，路径不变；不支持的 YAML 布局明确要求原文编辑。
 - 原生文件读取返回字节 revision；编辑/恢复必须提供 expectedRevision。恢复前备份当前版本，另可核对预览时的 backup revision；新副本存 SHA-256/实际大小，旧副本标记无历史摘要。备份内容和目录继续受路径、链接、大小与当前规则授权限制。

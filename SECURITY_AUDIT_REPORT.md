@@ -12,7 +12,15 @@
 
 最终本机回归：57 files / 555 tests 全通过，无跳过（提供既有 rehearsal 配置及 web staging）。statements 50.25%、branches 54.37%、functions 48.91%、lines 50.50%，范围 main/proxy/shared；不表示全部路径已覆盖。类型零错误，lint 零错误/15 个既有非空断言 warning，lint:changed、root/proxy 构建、preflight 与双全依赖 audit（0 漏洞）通过。
 
-Windows 真实 Electron 45 使用生产 out 和真实 preload/IPC，在隔离 HOME/AppData 下完成 19 组资源全流程，renderer 未捕获异常为零，正常退出，5 个用户配置文件摘要不变。九张原生截图覆盖四主题、1280 布局、默认/项目导入和整文件差异预览。可用 `npm.cmd run build` + `npm.cmd run test:electron` 复跑。新候选包正在从干净提交重建核验，旧 289a832 包不含补修。本轮没有重跑 Semgrep，不发布。官方依据、限度及拒绝方案见[资源闭环记录](.agents/notes/implemented/bug-fix/2026-10-25-resource-management-closure.md)。
+Windows 真实 Electron 45 使用生产 out 和真实 preload/IPC，在隔离 HOME/AppData 下完成 19 组资源全流程，renderer 未捕获异常为零，正常退出，5 个用户配置文件摘要不变。九张原生截图覆盖四主题、1280 布局、默认/项目导入和整文件差异预览。可用 `npm.cmd run build` + `npm.cmd run test:electron` 复跑。本轮没有重跑 Semgrep，不发布。官方依据、限度及拒绝方案见[资源闭环记录](.agents/notes/implemented/bug-fix/2026-10-25-resource-management-closure.md)。
+
+补修候选从干净源码 `37e020ee59432fa499bc7b0e6aa07acccb9abfdb` 构建（Node 24.22.1 / npm 12.2.1），旧 289a832 包不含补修。Portable、ZIP 解压版业务通过；ZIP/NSIS 程序与 ASAR 载荷匹配；52 个生产输出文件与 out 字节一致，无私钥/axios，两项 ASAR fuse 开启。篡改副本退出 2147483651，未创建 settings；两份 SBOM 与六项 SHA-256 通过，sourceDirty=false。真实 1.5.0 旧 profile、离线 worker/编辑器、运行时窗口安全和编译独立代理鉴权通过。NSIS 只解包核验，未安装/写注册表；签名按用户要求跳过。云 CI、目标机安装/覆盖/卸载、其他平台及厂商内嵌 Node 回补仍待分别确认。
+
+| 补修产物 | 大小（bytes） | SHA-256 |
+| --- | ---: | --- |
+| CCB-Portable-1.5.1.exe | 105469047 | `6a5a5072311b0efd41baf383f1a37564618712168f2cf8a49961484cb7475572` |
+| CCB-Setup-1.5.1.exe | 116493857 | `861dddc666af9e6ad6dc10483c25cabf9613b31de8c6a132f48c9dab7f5cf188` |
+| CCB-1.5.1-win.zip | 145701419 | `f75b1c2eb7568a619bba1ebd873a8bbf2803779db889533a2a69b55a0cbfd735` |
 
 ## 2026-10-25：多 Agent、稳定依赖与安全边界
 
