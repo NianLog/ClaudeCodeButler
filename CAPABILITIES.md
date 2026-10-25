@@ -13,6 +13,8 @@
 
 状态标记：`稳定`（v1.4.0 已发布且回归通过）｜`1.5.0 新增`（本版落地，待实机验收）｜`基础`（foundation 完成，能力受限）｜`规划`（未实现）。
 
+内嵌运行时门禁（2026-10-25）：复核确认当前 Electron 45 尚未包含七项 Node 24 上游修复；TLS/DNS 旧行为在实际候选中可复现。Brotli 已有修复证据，c-ares/Undici 另有公告版本风险。功能与依赖 audit 通过不表示该门禁通过；签名、安装/覆盖升级/卸载按用户要求暂缓，未发布。见[运行时 DDE](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)。
+
 ## 1. 面板级功能矩阵
 
 | 功能 | 说明 | 状态 |

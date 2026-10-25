@@ -1,6 +1,30 @@
 # Semgrep 安全审计与改进报告
 
-## 2026-10-25：资源真实路径复核与三批补修（进行中）
+## 2026-10-25：内嵌 Node 回补复核（安全门禁未通过）
+
+当前官方稳定版仍为 Electron 45.0.0，内嵌 Node 24.22.0。本轮确认 Node 24.22.1 的八项 Node 24 相关修复中，七项上游修复未进入当前内嵌实现；Brotli 由 Chromium 包含修复。另核对到内置 c-ares / Undici 的公告版本风险。正式内嵌运行时安全门禁保持未通过，不能用 npm audit 或功能回归通过替代。
+
+证据来自 [Electron DEPS](https://github.com/electron/electron/blob/v45.0.0/DEPS)、发行的全部 [58 个 Node 补丁](https://github.com/electron/electron/blob/v45.0.0/patches/node/.patches)、79 份经 Git blob/SHA-256 校验的参考源码，以及实际源码 37e020e 候选 exe 的内置 JS 和 API。九份相关内置源码与未修复 Node 24.22.0 字节一致，已修复 Node 对照在仅统一源码 CRLF/LF 后匹配；不改写用户文件。
+
+| 受控检查 | Node 24.22.1 对照 | 官方 Electron 45 | 当前候选 exe |
+| --- | ---: | ---: | ---: |
+| 拒绝 6 个非规范 IP 的 TLS API 反例 | 6/6 | 0/6 | 0/6 |
+| 按上游规则拒绝 6 个 DNS NUL 反例 | 6/6 | 0/6 | 0/6 |
+| 发往本机夹具的截短 DNS 请求 | 0 | 2 | 2 |
+
+另有合法 DNS/IP SAN 接受及规范 IP 拒绝 DNS-only SAN 的控制检查。TLS 测试针对 checkServerIdentity，不等同于完成证书链网络攻击；DNS 仅访问受控回环 UDP 服务器。诊断使用 RUN_AS_NODE，不启动 CCB 应用初始化或安装器。
+
+- [Node 详细安全公告](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)中，DNS NUL、TLS 三项、HTTP Agent pending-read、快照随机缓存、realpathSync Permission Model 检查的上游修复缺失。严重程度和逐项提交见[运行时 DDE](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)；不包含只影响 Node 26 的两项，也不声称每项都能经 CCB 当前入口利用。
+- Brotli：GN 链接 Chromium dec；[Chromium 156 的固定版本](https://github.com/chromium/chromium/blob/156.0.8078.48/third_party/brotli/README.chromium) cfa184a 含 [0ed4268 修复祖先](https://github.com/google/brotli/compare/0ed4268a4401abcb4472096340477cf4af7d1a2b...cfa184a997ac19454d5a3ae97f6d600aac2445a6)，decoder 的永久格式错误分支已验证。保留 br。
+- c-ares 1.34.8 命中抽查的 [高危取消查询内存问题](https://github.com/c-ares/c-ares/security/advisories/GHSA-wpr3-8q3r-4q8c)、[异源 DNS 应答问题](https://github.com/c-ares/c-ares/security/advisories/GHSA-fqh5-3x7m-wp44)范围；官方修复版 1.34.9。未进行内存破坏实验。
+- Undici 7.29.1 的内置 bundle 与未修复参考源码一致，命中 [7.30.1 修复](https://github.com/nodejs/undici/releases/tag/v7.30.1)的四项高危公告范围。版本命中不是当前应用可利用性证明，未实测全部攻击条件。
+- Electron 使用 Chromium BoringSSL，OpenSSL 0.0.0 不能按普通 OpenSSL 版本比较；发行补丁确有阻止特定证书公钥链的 C++ 回补，但不包含上述 JS 主机检查修复。
+
+现有缓解保持：规范 URL、移除来路 Host、无代理 agent:false、逐请求代理 agent、鉴权前置及 MCP net.fetch。项目未发现显式使用受影响的 Resolver、自定义 Node 快照/SEA 或 Permission Model。upstream-http-client / managed-mode-lifetime 两文件 28 项定向回归通过。这只验证缓解实现；现有 release:preflight 不验证上述内嵌补丁。
+
+本轮仅补证据和文档，未改应用代码、依赖、配置或用户数据，未重新打包、未发布。用户明确暂缓安装/覆盖升级/卸载，签名仍跳过；现有 1.5.0 安装不动。等待含修复的稳定 Electron，并逐项复核源码、实际候选、内置组件及完整应用/包回归后才能关闭该安全门禁；不采用预发布版或手换 Node/DLL 规避结论。
+
+## 2026-10-25：资源真实路径复核与三批补修（本机功能验收完成）
 
 对 80d2979 的复核确认此前样例回归遗漏了真实 junction 安装、旧高级表单和通用文件恢复。19 个反例失败；原生 Electron 另复现 5 个问题场景。下方“扩展已完成”的测试和包校验属于补修前历史证据，不能证明这些路径正确；旧包不含本次修复。
 

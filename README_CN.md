@@ -30,6 +30,7 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 - **资源闭环补修**：先识别默认位置，逐项显示缺失/受限/损坏状态；保留现有路径、Skill 附件与权限字段。MCP 按服务器恢复，原生文件明确按整文件恢复；保存过期版本会被拒绝，失败保留草稿。自动化规则与环境排查归入“工具”。
 - **本地验收**：57 个测试文件 / 555 项全通过，无跳过，包含 19 个原始反例；真实 Electron 的 19 组流程通过，未捕获异常为零。类型、lint（0 error / 15 warning）、双构建和两套全依赖审计通过；干净源码 37e020e 的未签名 Portable/NSIS/ZIP 已完成载荷、ASAR、SBOM、摘要及旧 profile 核验，未发布。详见 [验收报告](./SECURITY_AUDIT_REPORT.md)。
 - **发布门禁**：两套生产依赖审计、预检、Authenticode 校验、ASAR 完整性、依赖 SBOM、SHA-256 和来源证明。本地未签名包仅供测试，验证记录及开发链告警见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
+- **运行时安全复核**：当前 Electron 45 尚未包含七项 Node 24 上游修复，TLS/DNS 旧行为已在实际候选中验证；Brotli 修复已确认，内置 c-ares/Undici 另有公告范围风险。现有缓解回归通过，正式内嵌安全门禁仍未通过。安装/覆盖升级/卸载与签名按用户要求暂缓，未发布。
 
 产品名称继续使用 **Claude Code Butler**。名称用于记录项目起源，不再承担描述全部管理范围的职责；新增工具通过受约束 registry 与内置 capabilities 接入，`CCB`、`.ccb`、应用 identity 和仓库标识保持稳定。
 
