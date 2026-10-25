@@ -7,6 +7,8 @@
 
 ### 资源闭环三批
 
+网络缓解 B：main/独立代理复用现有 ESLint 限制 Node 原生 fetch、Resolver、WebSocket/EventSource 和快照入口，保留 OS lookup、Chromium 与 renderer 接口。健康检查以请求时的服务实例为边界，旧成功/失败回调不操作重启后的新实例；两条回归先失败后转绿。62 项规则与 20 项生命周期测试通过，完整与最终候选验收继续。
+
 网络缓解 A（2026-10-25）：上游 TLS 显式绑定规范目标；下载 HEAD 委托现有 HTTP 工具，禁复用、收尾响应并设五秒总时限，保持 2xx/3xx 和 Chromium 下载语义。此处 Node HEAD 经用户批准暂留，B 批约束与完整验收进行中。配置路径、数据格式与公共 IPC 不变，见[决定与证据更正](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。下段是实施前的厂商回补复核记录。
 
 运行时安全复核（2026-10-25）：当前 Electron 45 的 9 份相关内置 JS 源码与未修复 Node 24.22.0 一致，TLS/DNS 反例仍未拒绝。Brotli 已由 Chromium 包含修复，其余七项 Node 上游修复缺失，内置 c-ares/Undici 另有公告版本风险。宿主 Node/npm 更新不能替换内嵌运行时；现有 URL/Host/鉴权/agent:false 缓解保持。用户本轮暂缓安装生命周期和签名，不改程序代码，不发布。详见[运行时证据](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)。

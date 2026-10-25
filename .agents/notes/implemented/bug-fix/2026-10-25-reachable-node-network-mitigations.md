@@ -1,7 +1,7 @@
 # Agent Note: Node 可达网络风险缓解与下载 HEAD 临时例外
 
 Status: implemented
-Scope: src/main/utils/upstream-http-client.ts, src/main/ipc-handlers.ts, eslint.config.cjs, tests/unit/**, tests/e2e/**, ARCHITECTURE.md, CAPABILITIES.md, SECURITY_AUDIT_REPORT.md
+Scope: src/main/utils/upstream-http-client.ts, src/main/ipc-handlers.ts, src/main/services/managed-mode-service.ts, eslint.config.cjs, tests/unit/**, tests/e2e/**, ARCHITECTURE.md, CAPABILITIES.md, SECURITY_AUDIT_REPORT.md
 Last-verified: 2026-10-25
 
 ## Problem
@@ -26,7 +26,47 @@ postUpstream 保持签名和原始流协议。HTTPS 证书检查显式使用 URL
 
 [依赖与内嵌运行时记录](../process/2026-10-25-latest-stable-dependency-upgrades.md)中的七项未回补事实继续保留。应用风险按入口、触发条件、缓解及复核日期验收；未识别入口不写成组件已修复。B 批的入口约束和完整/真实 Electron 验收尚未完成前，不宣布本轮整体通过；签名、安装生命周期、云 CI 与跨平台也不自动记为通过。不发布。
 
-当前排除条件：不使用 Node Resolver 查询；lookup 走 uv/OS；Node c-ares 绑定关闭查询缓存，部分公告 API 未暴露；桌面普通请求走 Chromium，无 Node Undici 网络入口；独立代理实际选择 Axios HTTP adapter，启动已有 Node 24.22.1 / major 24 检查。没有用户 Node snapshot/SEA 构建，也不以 Node Permission Model 替代路径授权。B 批将把这些边界加入现有 lint 与回归，不重复实现运行时检查。
+当前排除条件：不使用 Node Resolver 查询；lookup 走 uv/OS；Node c-ares 绑定关闭查询缓存，部分公告 API 未暴露；桌面普通请求走 Chromium，无 Node Undici 网络入口；独立代理实际选择 Axios HTTP adapter，启动已有 Node 24.22.1 / major 24 检查。没有用户 Node snapshot/SEA 构建，也不以 Node Permission Model 替代路径授权。B 批已把这些边界加入现有 lint 与回归，不重复实现运行时检查。
+
+### B：限制新增 Node 网络与快照入口
+
+现有 ESLint 对 main 和独立代理源码禁止原生 fetch、Node WebSocket/EventSource、Undici 和 c-ares Resolver 入口；保留命名 OS lookup/lookupService、Electron net.fetch 与 renderer 的 Chromium API。静态导入、导入/解构别名、require、dynamic import 和 getBuiltinModule 均有反例。V8 startupSnapshot 禁止未复核接入，普通堆统计保留；受支持构建配置不得新增 Node 用户快照、SEA 或 Permission Model 启动参数。preload 保持现有 sandbox 合同，不把浏览器 API 误判为 Node 网络入口。
+
+规则先得到 46 fail / 15 pass，补齐后 62 tests 通过；只给 TypeScript parser 冷初始化设置单独预算，规则用例与应用五秒网络时限不放宽。这些规则防止已知写法误接入，不是对刻意混淆代码或传递依赖的完备证明；锁文件、网络调用或启动方式变化时仍须人工复核。
+
+### 剩余风险的跟踪边界
+
+验收补充修复：快速连续切换服务商时，重启前健康请求的迟到失败曾关闭新服务，迟到成功也会重新调度检查。两条回归先复现失败；现有检查捕获当时的服务实例，成功/失败回调在实例已变更时均返回，不修改新实例、计数或调度。只增加实例身份判断，不扩展服务架构或健康策略。
+
+真实验收夹具保留原生 BrowserWindow 构造器，避免 Electron 按 constructor.name 枚举时漏掉派生窗口；下载写入独立 Downloads，打开文件夹仅记录动作。Host 干扰使用原生 HTTP 发送并核对 X-Forwarded-Host，不能用会重写 Host 的 fetch 代替。此处只修测试忠实性，不改生产窗口、安全属性或用户路径。
+
+复核日期为下次依赖/入口变更或 2026-11-01，以先到为准。七项 Node 的上游源码缺失继续保留：DNS NUL 无 Resolver 入口；TLS 三项由统一 URL 规范化及目标绑定处理；Agent 在两个客户端均禁复用；用户快照及 Permission Model 未启用。此处是应用缓解，不是厂商补丁。
+
+以下 19 项当前均未识别触发路径，按低应用风险跟踪；官方高危等级不被改写，版本命中仍记录。独立代理受 Node 24.22.1 / major 24 的现有启动检查约束，实际使用 HTTP adapter；不重复加检查，不替换内嵌 c-ares/Undici。
+
+| 公告 | 内置组件 | 必要条件 | 当前排除依据 |
+| --- | --- | --- | --- |
+| [GHSA-wpr3-8q3r-4q8c](https://github.com/c-ares/c-ares/security/advisories/GHSA-wpr3-8q3r-4q8c) | c-ares 1.34.8 | 失败查询回调中重入 ares_cancel | 无 c-ares 查询/取消入口；HTTP 与 SSRF lookup 走 OS |
+| [GHSA-fqh5-3x7m-wp44](https://github.com/c-ares/c-ares/security/advisories/GHSA-fqh5-3x7m-wp44) | c-ares 1.34.8 | c-ares 接收非原查询服务器的 DNS 回复 | 当前没有发出该类查询的应用入口 |
+| [GHSA-97vq-4mxv-7vhm](https://github.com/c-ares/c-ares/security/advisories/GHSA-97vq-4mxv-7vhm) | c-ares 1.34.8 | 并发查询发送失败时在回调取消 | 无 Resolver 查询与回调取消 |
+| [GHSA-rf6g-ww74-97qh](https://github.com/c-ares/c-ares/security/advisories/GHSA-rf6g-ww74-97qh) | c-ares 1.34.8 | cancel/destroy 回调中再查询或改服务器 | 无取消/销毁回调重入 |
+| [GHSA-mw23-pfg6-2x9r](https://github.com/c-ares/c-ares/security/advisories/GHSA-mw23-pfg6-2x9r) | c-ares 1.34.8 | socket-state 回调中取消/改服务器 | CCB 无查询入口；Node 的该原生回调管理 uv poll，不向应用暴露此类重入 |
+| [GHSA-v33j-65h4-4ch8](https://github.com/c-ares/c-ares/security/advisories/GHSA-v33j-65h4-4ch8) | c-ares 1.34.8 | server-state 回调中取消/改服务器 | 该回调未在当前 Node 绑定注册 |
+| [GHSA-pj7p-v3cw-hq66](https://github.com/c-ares/c-ares/security/advisories/GHSA-pj7p-v3cw-hq66) | c-ares 1.34.8 | 查询回调中更改 DNS 服务器 | 无该回调或 setServers 入口 |
+| [GHSA-grv7-fq5q-9vfc](https://github.com/c-ares/c-ares/security/advisories/GHSA-grv7-fq5q-9vfc) | c-ares 1.34.8 | 查询缓存命中后重入并继续读原答案 | Node ChannelWrap 固定 qcache_max_ttl=0 |
+| [GHSA-ph6c-3cvx-mq6v](https://github.com/c-ares/c-ares/security/advisories/GHSA-ph6c-3cvx-mq6v) | c-ares 1.34.8 | 跨线程 dup/save_options 与配置变更并发 | Node 绑定不使用/暴露 dup 或 save_options，CCB 无该并发模型 |
+| [GHSA-cfcv-8v2j-qj6r](https://github.com/c-ares/c-ares/security/advisories/GHSA-cfcv-8v2j-qj6r) | c-ares 1.34.8 | 向 c-ares 名称解析 API 传 IPv6/prefix | 当前 lookup 使用 uv_getaddrinfo，不走公告所指名称 API；URL hostname 不含路径前缀 |
+| [GHSA-wrgc-prmw-27xh](https://github.com/c-ares/c-ares/security/advisories/GHSA-wrgc-prmw-27xh) | c-ares 1.34.8 | 同一通道发送 EDNS 参数不同的原始查询并命中缓存 | Node 查询缓存关闭，CCB 无原始 EDNS 调用 |
+| [GHSA-qrxm-fqhp-jwvm](https://github.com/nodejs/undici/security/advisories/GHSA-qrxm-fqhp-jwvm) | Undici 7.29.1 | Undici 连接收到 TLS1.2 换证重协商 | 桌面请求不进入 Undici 网络引擎 |
+| [GHSA-2m5v-pch6-74hx](https://github.com/nodejs/undici/security/advisories/GHSA-2m5v-pch6-74hx) | Undici 7.29.1 | Undici Agent 自定义证书校验回调丢失 | 未配置 Undici Agent；独立代理实际选择 Axios HTTP adapter |
+| [GHSA-4w7w-5xrc-9h26](https://github.com/nodejs/undici/security/advisories/GHSA-4w7w-5xrc-9h26) | Undici 7.29.1 | 共享 Agent 组合 redirect/cache 拦截器 | 未配置该共享缓存/拦截器，不能把普通重定向等同此条件 |
+| [GHSA-xjj6-f33q-929c](https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c) | Undici 7.29.1 | Undici fetch 处理超长编码链且对端提前关闭 | MCP/更新等使用 Chromium net.fetch，转发使用 Node http/https 原始流 |
+| [GHSA-55wc-3pg8-jfw6](https://github.com/nodejs/undici/security/advisories/GHSA-55wc-3pg8-jfw6) | Undici 7.29.1 | 组合 decompress 与会抛错的下游处理器 | 没有 Undici decompress/dump 拦截器调用 |
+| [GHSA-f72v-6w45-q472](https://github.com/nodejs/undici/security/advisories/GHSA-f72v-6w45-q472) | Undici 7.29.1 | Undici fetch 使用大写/混合大小写 SRI token | 没有该调用；registry 使用独立签名与 SHA-256，不依赖 net.fetch.integrity |
+| [GHSA-4qv8-2p9j-2685](https://github.com/nodejs/undici/security/advisories/GHSA-4qv8-2p9j-2685) | Undici 7.29.1 | 保持 Node/Undici EventSource 连接 | MCP 探测取得响应后取消正文；未使用 Node EventSource |
+| [GHSA-9fm3-97px-rjf6](https://github.com/nodejs/undici/security/advisories/GHSA-9fm3-97px-rjf6) | Undici 7.29.1 | Node/Undici WebSocket 处理 PING/PONG 洪泛 | 没有 Node WebSocket 客户端；renderer 的浏览器实现另属 Chromium |
+
+Node 原生绑定关闭查询缓存并让 lookup 进入 uv_getaddrinfo，参见 [固定源码](https://github.com/nodejs/node/blob/v24.22.0/src/cares_wrap.cc)。普通请求走 [Chromium net.fetch](https://www.electronjs.org/docs/latest/api/net)，其 Request/Response 对象不证明请求进入 Undici 网络状态机。registry 继续独立校验签名/SHA-256，不依赖被 net.fetch 忽略的 integrity 选项。
 
 ## Historical decision review
 
@@ -48,4 +88,4 @@ A 批新增测试先得到 16 fail / 6 pass；最小修复后相关 4 files / 51
 
 ## Consequences
 
-多次握手有开销，换取当前已知边界的安全和兼容性。当前版本仍包含未修复的底层代码；新增原生 fetch/Resolver、快照、权限模型或传递依赖网络出口时必须重新分级。不能用 lint 或这些有限探针证明所有调用均不可利用。B 批与最终验收结果将原地补充，本记录不授权发布。
+多次握手有开销，换取当前已知边界的安全和兼容性。当前版本仍包含未修复的底层代码；新增原生 fetch/Resolver、快照、权限模型或传递依赖网络出口时必须重新分级。不能用 lint 或这些有限探针证明所有调用均不可利用。B 批已完成入口约束，完整回归与真实 Electron/新包验收结果继续原地补充；本记录不授权发布。

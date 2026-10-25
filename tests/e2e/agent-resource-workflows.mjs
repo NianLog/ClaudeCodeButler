@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { createHash } from 'node:crypto'
+import { createNetworkSafetyFixture } from './network-safety-fixture.mjs'
 
 const base = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(base, '../..')
@@ -66,6 +67,7 @@ const realHashes = async () => Object.fromEntries(await Promise.all(realFiles.ma
   catch (e) { if (e.code === 'ENOENT') return [file, null]; throw e }
 })))
 const before = await realHashes()
+const networkFixture = await createNetworkSafetyFixture(profile)
 const server = net.createServer()
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 const port = server.address().port
@@ -73,7 +75,7 @@ await new Promise(resolve => server.close(resolve))
 const env = { ...process.env, CCB_QA_PROFILE: profile, USERPROFILE: profile, HOME: profile,
   HOMEDRIVE: path.parse(profile).root.slice(0, 2), HOMEPATH: profile.slice(2), APPDATA: path.join(profile, 'AppData/Roaming'),
   LOCALAPPDATA: path.join(profile, 'AppData/Local'), XDG_CONFIG_HOME: path.join(profile, '.config'),
-  CLAUDE_CONFIG_DIR: path.join(profile, '.claude'), NODE_ENV: 'production', ANTHROPIC_API_KEY: 'fixture-only', OPENAI_API_KEY: 'fixture-only', GEMINI_API_KEY: 'fixture-only', NO_PROXY: 'localhost,127.0.0.1,::1' }
+  CLAUDE_CONFIG_DIR: path.join(profile, '.claude'), NODE_ENV: 'production', ANTHROPIC_API_KEY: 'fixture-only', OPENAI_API_KEY: 'fixture-only', GEMINI_API_KEY: 'fixture-only', NO_PROXY: 'localhost,127.0.0.1,::1', NODE_EXTRA_CA_CERTS: networkFixture.caPath }
 delete env.ELECTRON_RUN_AS_NODE
 const child = spawn(path.join(repo, 'node_modules/electron/dist/electron.exe'), [wrapper,
   `--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1'], { env, cwd: wrapper, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -473,6 +475,7 @@ try {
   await shot('desktop-1280-navigation')
   pass('All four themes, 1280 desktop layout and corrected Tools navigation render in real Electron')
 
+  await networkFixture.run(bridge, pass)
   assert.equal(await evaluate('window.__CCB_HAS_PENDING_CHANGES__'),false)
   assert.deepEqual(report.errors,[],'Renderer exceptions must be handled, including expected save conflicts')
   await evaluate('void window.electronAPI.app.quit()')
@@ -492,6 +495,7 @@ try {
   await wait(1200)
   if (child.exitCode === null) child.kill()
   socket?.close()
+  await networkFixture.close()
   report.realUserFilesUnchanged = JSON.stringify(before) === JSON.stringify(await realHashes())
   assert(report.realUserFilesUnchanged, 'Real user configuration changed')
   await fs.writeFile(path.join(shots, 'qa-report.json'), JSON.stringify(report, null, 2))

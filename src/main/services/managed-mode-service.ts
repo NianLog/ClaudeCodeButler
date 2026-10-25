@@ -1225,6 +1225,8 @@ export class ManagedModeService extends EventEmitter {
    * @description 执行检查后根据结果调整间隔并重新调度
    */
   private performHealthCheck(): void {
+    const checkedProxy = this.proxyProcess
+    if (!checkedProxy) return
     const port = this.config?.port || ManagedModeService.DEFAULT_PORT
 
     managedModeLogger.debug(`开始执行健康检查，端口: ${port}`)
@@ -1239,6 +1241,7 @@ export class ManagedModeService extends EventEmitter {
       return (await response.json()) as { status?: string }
     })
     .then((data) => {
+      if (this.proxyProcess !== checkedProxy) return
       managedModeLogger.debug('健康检查成功，准备调度下次检查')
       // 健康检查成功
       this.consecutiveSuccessCount++
@@ -1300,6 +1303,8 @@ export class ManagedModeService extends EventEmitter {
       this.scheduleNextHealthCheck()
     })
     .catch(error => {
+      // 重启前的请求可能迟到；它只能影响当时被检查的服务实例。
+      if (this.proxyProcess !== checkedProxy) return
       managedModeLogger.error('健康检查失败，服务可能已停止', error)
 
       // 发送健康检查失败日志

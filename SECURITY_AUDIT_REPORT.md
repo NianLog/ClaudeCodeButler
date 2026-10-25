@@ -1,5 +1,11 @@
 # Semgrep 安全审计与改进报告
 
+## 2026-10-25：A+B 代码与针对性回归完成，完整门禁进行中
+
+A 为 TLS 目标绑定及 Node HEAD 禁复用/回收；B 为入口 lint、快照/权限模型构建边界及逐项风险跟踪。62 项规则回归通过（先 46 fail / 15 pass），不限制 renderer 的 Chromium API。真实 Host 请求进一步发现旧健康回调会关闭重启后的新服务；两条先失败的回归转绿，现以服务实例身份限制成功/失败回调。不是靠等待或重试掩盖连接拒绝。
+
+真实验收补齐完整 IPC 转发、IPv4/IPv6/DNS、可信/不可信证书、Host、代理、下载与原始 settings 恢复；隐藏夹具保留原生 BrowserWindow 类型，下载和 shell 动作均隔离。最终全量和干净候选的结论将在本节补充。详见[可达性、19 项组件风险和例外清单](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。未修改配置路径/数据格式，未发布。
+
 ## 2026-10-25：可达网络风险补修 A 完成，B 与最终验收进行中
 
 用户已批准按可达性实施 A+B，并明确允许暂留 Node HEAD。A 将上游证书验证绑定规范化目标，下载 HEAD 委托现有 HTTP 工具并禁用复用、释放响应、设置五秒总时限，保持既有 2xx/3xx、IPC 与实际下载行为。新增反例先得到 16 fail / 6 pass，修复后相关 4 files / 51 tests 和类型检查通过；Node 24.22.1 与 Electron 45 内嵌 Node 的受控 TLS/HEAD helper 对照通过。完整业务、B 批入口约束与新包验收尚未完成，不计为全量通过。

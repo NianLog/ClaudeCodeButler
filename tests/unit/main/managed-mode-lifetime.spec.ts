@@ -37,6 +37,32 @@ afterEach(async () => {
 })
 
 describe('集成代理连接生命周期', () => {
+  it.each(['success', 'failure'])('重启前健康检查的迟到 %s 不修改新服务或调度', async outcome => {
+    const service = new ManagedModeService()
+    const internal = service as unknown as {
+      config: Partial<ManagedModeConfig>
+      proxyProcess: { close(): void } | null
+      performHealthCheck(): void
+      scheduleNextHealthCheck(): void
+    }
+    let succeed!: (response: Response) => void
+    let fail!: (error: Error) => void
+    vi.mocked(net.fetch).mockImplementationOnce(() => new Promise<Response>((resolve, reject) => { succeed = resolve; fail = reject }))
+    const original = { close: vi.fn() }
+    const replacement = { close: vi.fn() }
+    internal.config = { port: 12345, providers: [], enabled: true, autoStart: false }
+    internal.proxyProcess = original
+    const schedule = vi.spyOn(internal, 'scheduleNextHealthCheck').mockImplementation(() => {})
+    internal.performHealthCheck()
+    internal.proxyProcess = replacement
+    if (outcome === 'failure') fail(new Error('old server closed'))
+    else succeed(new Response('{"status":"ok"}'))
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(internal.proxyProcess).toBe(replacement)
+    expect(replacement.close).not.toHaveBeenCalled()
+    expect(schedule).not.toHaveBeenCalled()
+  })
+
   it('未鉴权时不解析损坏或压缩正文，health 仍公开', async () => {
     const reservation = http.createServer()
     const port = await listen(reservation)

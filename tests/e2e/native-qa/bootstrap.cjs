@@ -1,8 +1,11 @@
 const electron = require('electron')
 const { app, BrowserWindow, dialog } = electron
-const OffscreenWindow = class extends BrowserWindow {
-  constructor(options) { super({ ...options, show: false, webPreferences: { ...options.webPreferences, offscreen: true } }); globalThis.__nativeQaWindow = this }
-}
+// Electron 按 constructor.name 识别窗口；保留原生类，避免派生类令 getAllWindows 返回空。
+const OffscreenWindow = new Proxy(BrowserWindow, { construct(target, [options]) {
+  const window = new target({ ...options, show: false, webPreferences: { ...options.webPreferences, offscreen: true } })
+  globalThis.__nativeQaWindow = window
+  return window
+} })
 const electronProxy = new Proxy(electron, { get: (target, key) => key === 'BrowserWindow' ? OffscreenWindow : Reflect.get(target, key) })
 const Module = require('node:module')
 const originalLoad = Module._load
@@ -17,6 +20,11 @@ app.setPath('home', root)
 app.setPath('userData', path.join(root, 'electron-user-data'))
 app.setPath('appData', path.join(root, 'AppData/Roaming'))
 app.setPath('temp', path.join(root, 'temp'))
+fs.mkdirSync(path.join(root, 'Downloads'), { recursive: true })
+app.setPath('downloads', path.join(root, 'Downloads'))
+const recordFolder = file => fs.appendFileSync(path.join(root, 'shell-actions.jsonl'), JSON.stringify({ file }) + '\n')
+electron.shell.showItemInFolder = recordFolder
+if (electron.shell.showItemInFolder !== recordFolder) throw Error('Refuse real shell interaction during QA')
 BrowserWindow.prototype.show = function () {}
 BrowserWindow.prototype.showInactive = function () {}
 app.on('web-contents-created', (_, contents) => {
