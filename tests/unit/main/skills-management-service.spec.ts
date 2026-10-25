@@ -29,7 +29,7 @@ async function expectOriginal(): Promise<void> {
 
 describe('transactional Skill import', () => {
   it('keeps every original byte when replacement metadata is invalid', async () => {
-    await expect(service.importSkillFiles(files('invalid'), { overwrite: true })).rejects.toThrow(/SKILL.md/)
+    await expect(service.importSkillFiles(files('---\nname: [\n---\nInvalid YAML'), { overwrite: true })).rejects.toThrow(/YAML/)
     await expectOriginal()
   })
   it('validates all relative paths before overwriting', async () => {
@@ -73,6 +73,15 @@ describe('transactional Skill import', () => {
     vi.spyOn(os, 'homedir').mockReturnValue(directory)
     expect(await service.importSkill(source, { overwrite: true })).toBe('fixture')
     expect(await fs.readFile(path.join(target(), 'assets/data.bin'))).toEqual(binary)
+  })
+  it.each(['# Plain native Skill\nRead changes.\n', '---\nuser-invocable: true\n---\nRead changes.\n'])('imports optional native metadata without inserting fields into the file: %s', async content => {
+    expect(await service.importSkillFiles(files(content), { overwrite: true })).toBe('fixture')
+    expect(await fs.readFile(path.join(target(), 'SKILL.md'), 'utf8')).toBe(content)
+    const source = path.join(directory, 'source', 'fixture')
+    await fs.mkdir(source, { recursive: true })
+    await fs.writeFile(path.join(source, 'SKILL.md'), content)
+    expect(await service.importSkill(source, { overwrite: true })).toBe('fixture')
+    expect(await fs.readFile(path.join(target(), 'SKILL.md'), 'utf8')).toBe(content)
   })
   it('preserves a recoverable backup and reports its path if rollback also fails', async () => {
     const rename = fs.rename.bind(fs)

@@ -12,7 +12,7 @@ Last-verified: 2026-10-25
 
 ## Decision
 
-当前已完成第一批。第 2、3 项为已批准的后续批次，尚未完成，不能视为验收通过。
+当前前两批已落地；第三批交互和最终全量验收仍在进行，不能视为发布验收通过。
 
 1. 数据与权限：旧表单通过主进程委托统一资源更新和备份，不再组合 delete/add；保留完整原文中的未知字段与附件。原生文件保存/恢复核对 expectedRevision，恢复前备份当前文件。新备份校验字节摘要与大小，旧副本标记无历史摘要并保持可恢复。Qoder 顶层停用策略参与转换与 revision。
 2. 发现与格式：按当前资源种类有界扫描，逐候选诊断；有效 registry 中的现有路径优先，列举所有配置层。坏条目不隐藏正常项，未知写入边界仍拒绝。链接只在目标独立命中有效白名单时作为只读引用展示。按 tool/kind 解释原生字段；MCP 从受控历史副本拆分服务器并走现有 preview/apply，避免覆盖无关配置。
@@ -34,9 +34,24 @@ Last-verified: 2026-10-25
 
 ## Verification
 
-19 个审查反例作为仓库回归逐项转绿；真实 Electron 验证发现、导入、旧编辑、附件/权限保持、保存冲突、删除及按项/整文件恢复、缺失原件、dirty/busy 与失败反馈。所有验证使用隔离目录；完整类型、lint、测试、双构建、preflight 和依赖审计完成，分批本地提交，暂不发布。
+验收要求：19 个审查反例入库转绿；真实 Electron 验证发现、导入、旧编辑、附件/权限保持、保存冲突、删除及按项/整文件恢复、缺失原件、dirty/busy 与失败反馈。验证使用隔离目录，随后完成类型、lint、测试、双构建、preflight、依赖审计和干净提交候选核验；分批本地提交，暂不发布。
 
-第一批验证：10 个写入/恢复反例全部转绿；相关 8 files / 134 tests 通过，类型检查零错误，全量 lint 零错误（16 个既有非空断言 warning）。其余 9 个发现/格式反例待第二批。
+第一批验证：10 个写入/恢复反例全部转绿；相关 8 files / 134 tests 通过，类型检查零错误，全量 lint 零错误（16 个既有非空断言 warning）。
+
+第二批验证：其余 9 项全部转绿，R1～R19 均已入库。资源、发现、路径、旧兼容编辑、MCP/归档、artifact、registry 和 preload 的核心组合 20 files / 267 tests 通过，无跳过；后端类型与 lint 零错误。补充预算停止、链接改向/授权撤销、保存后单项回读失败和外部改写、OpenCode 权限变化等反例。
+
+扫描按当前 kind，空来源继续检查其他候选，错误单独诊断。链接先逐段检查本机路径，再读取目标并独立授权；链式链接和 UNC 不读取。总预算用尽后保留已发现项及一条诊断，集合未完整确认时拒绝写入。保存后需核实实际计划；写成但回读失败明确要求核对，不能返回空内容成功或自动重试。
+
+## 官方格式核对（2026-10-25）
+
+| 来源 | 已确认与适配 | 边界与依据 |
+| --- | --- | --- |
+| Claude / Cursor | Claude Skill 前言字段可选；Cursor 支持纯正文与共享 Skill，MCP 使用 `.cursor/mcp.json` | [Claude Skills](https://code.claude.com/docs/en/skills)、[Cursor MCP](https://cursor.com/docs/mcp)、[Cursor Skills](https://prod.cursor.com/help/customization/skills)。源文件有效与目标必填字段分别验证，不补造描述。 |
+| Qoder | CLI 用户配置、项目 settings / `.mcp.json` / local 分层单列 | [CLI MCP](https://docs.qoder.com/cli/mcp-reference)、[Subagent](https://docs.qoder.com/cli/subagent)、[Skills](https://docs.qoder.com/cli/Skills)。不隐式合层，不声称覆盖 IDE 私有配置。 |
+| WorkBuddy | `.codebuddy` 的代码项目/用户兼容 profile | [官方项目说明](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Project)。桌面连接器私有存储未确认。 |
+| TRAE | 项目 `.trae/mcp.json` 保留为兼容候选 | [MCP 文档](https://docs.trae.ai/ide/model-context-protocol)本次未能取回正文，不作为全局路径证据。用户级 MCP 返回不可选的未确认诊断，要求手选导出文件，不猜 HOME/APPDATA。 |
+| Pi | 用户 `.pi/agent/mcp.json` 与项目 `.pi/mcp.json` 内置协议 | [官方 MCP](https://pi.dev/docs/latest/mcp)。扩展可替换内置实现，不猜扩展角色或复制鉴权会话。 |
+| OpenCode | `opencode.json[c]` MCP、以文件名命名的 Markdown agents、原生 Skill 字段 | [MCP](https://opencode.ai/docs/mcp-servers/)、[Agents](https://opencode.ai/docs/agents/)、[Skills](https://opencode.ai/docs/skills/)。已知全局权限、工具限制或 JSON 同名覆盖无法映射则 BLOCKED，配置变化中止；不宣称迁移企业审批与远程授权。 |
 
 ## Consequences
 

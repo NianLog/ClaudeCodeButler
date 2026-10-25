@@ -37,6 +37,8 @@ export default function AgentResourcesPage({ kind }: { kind: AgentResourceKind }
   const dirty = !!draft && !draft.readOnly && (draft.content !== draft.baseline || draft.name !== draft.baselineName)
   const active = list?.resources.find((resource) => resource.resourceId === selected)
   const writable = list?.writable ?? false
+  const viewable = !!active && active.status !== 'BLOCKED' && active.status !== 'INVALID'
+  const activeWritable = writable && viewable && active?.writable !== false && active?.status !== 'READ_ONLY'
   const guardId = `resource:${toolId}:${kind}`
 
   const load = useCallback(async (): Promise<void> => {
@@ -88,7 +90,7 @@ export default function AgentResourcesPage({ kind }: { kind: AgentResourceKind }
       if (version !== generation.current) return
       if (!result.success || !result.data) throw new Error(result.error)
       setDraft({ name: result.data.name, content: result.data.content, baselineName: result.data.name,
-        baseline: result.data.content, original: result.data, readOnly })
+        baseline: result.data.content, original: result.data, readOnly: readOnly || result.data.writable === false || !writable })
       setEditorOpen(true)
     } catch (e) { if (version === generation.current) setError(String(e)) }
   }
@@ -137,18 +139,18 @@ export default function AgentResourcesPage({ kind }: { kind: AgentResourceKind }
         {filtered.length ? filtered.map((resource) => <button key={resource.resourceId} type="button"
           className={`resource-row ${selected === resource.resourceId ? 'selected' : ''}`} onClick={() => setSelected(resource.resourceId)}>
           <span><strong>{resource.name}</strong><small>{resource.description}</small></span>
-          <Tag>{resource.format}</Tag><span className="resource-muted">{t('resources.configured')}</span>
+          <Tag>{resource.format}</Tag><span className="resource-muted">{t(resource.status && resource.status !== 'READY' ? `resources.${resource.status}` : 'resources.configured')}</span>
         </button>) : <Empty description={t('resources.empty')} />}
       </div>
       {active && <aside className="resource-inspector" aria-label={t('resources.details')}>
         <h2>{active.name}</h2><p>{active.description}</p>
         <dl><dt>{t('resources.location')}</dt><dd className="resource-path">{active.location}</dd>
-          <dt>{t('resources.configured')}</dt><dd>{t('resources.notVerified')}</dd></dl>
+          <dt>{t('resources.state')}</dt><dd>{t(active.status === 'BLOCKED' || active.status === 'INVALID' ? `resources.${active.status}` : 'resources.notVerified')}</dd></dl>
         {active.warnings.map((warning) => <Alert key={warning} type="warning" title={warning} />)}
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Button block onClick={() => guarded(() => void openResource(active, true))}>{t('resources.details')}</Button>
-          <Button block icon={<EditOutlined />} disabled={!writable} onClick={() => guarded(() => void openResource(active))}>{t('resources.edit')}</Button>
-          <Button block danger icon={<DeleteOutlined />} disabled={writing || !writable} onClick={() => guarded(() => remove(active))}>{t('resources.deleteAction')}</Button>
+          <Button block disabled={!viewable || writing} onClick={() => guarded(() => void openResource(active, true))}>{t('resources.details')}</Button>
+          <Button block icon={<EditOutlined />} disabled={!activeWritable || writing} onClick={() => guarded(() => void openResource(active))}>{t('resources.edit')}</Button>
+          <Button block danger icon={<DeleteOutlined />} disabled={writing || !activeWritable} onClick={() => guarded(() => remove(active))}>{t('resources.deleteAction')}</Button>
         </Space>
       </aside>}
     </div>}
@@ -170,7 +172,7 @@ export default function AgentResourcesPage({ kind }: { kind: AgentResourceKind }
               : draft.content
             setDraft({ ...draft, name, content, baseline: draft.content === draft.baseline ? content : draft.baseline })
           }} />
-        <p className="resource-muted">{t('resources.keepDraft')}</p>
+        <p className="resource-muted">{t(draft.readOnly ? 'resources.readOnly' : 'resources.keepDraft')}</p>
         <Suspense fallback={<Skeleton active />}><CodeEditor value={draft.content}
           onChange={(content) => setDraft((current) => current ? { ...current, content } : current)}
           language={draft.original?.format === 'TOML' || toolId === 'codex-cli' && kind !== 'SKILL' ? 'plaintext' : kind === 'MCP' ? 'json' : 'markdown'}

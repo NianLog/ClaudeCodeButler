@@ -47,3 +47,17 @@
   .resource-diff { grid-template-columns: minmax(0, 1fr); }
   .resource-row { gap: 12px; padding: 18px 10px; }
 }
+.resource-scan-results {
+  margin-block: 12px;
+}
+
+.resource-scan-results .ant-collapse-body {
+  max-height: 30vh;
+  overflow: auto;
+}
+
+.resource-scan-row {
+  padding-block: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

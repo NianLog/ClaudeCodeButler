@@ -19,7 +19,7 @@ import { pathManager } from '../utils/path-manager'
 import { writeJsonAtomic, writeTextAtomic } from '../utils/atomic-json-writer'
 import { withAgentResourceMutation } from '../utils/agent-resource-queue'
 import { normalizePathForComparison } from '../utils/path-security'
-import { assertNoLinks, digest, exists, MISSING_REVISION, readBounded, readSkillPackage, RESOURCE_MAX_BYTES, safeResourceName, skillRevision, utf8 } from './agent-resource-files'
+import { assertNoLinks, digest, exists, MISSING_REVISION, readBounded, readSkillPackage, resolveLocalReference, RESOURCE_MAX_BYTES, safeResourceName, skillRevision, utf8 } from './agent-resource-files'
 import { bounded, convertMcp, convertRole, editJsonSubtree, editMcpDocument, emitMcpItem, emitRole, extractMcpItem, extractMcpItems, jsonEqual, normalizeMcp, parseJson, parseMcpDocument, parseMcpItem, parseRole, record, redactPreview, validateSkill } from './agent-resource-codecs'
 
 const SOURCE_TOOLS = IMPORT_AGENT_IDS
@@ -27,9 +27,9 @@ const MCP_ARTIFACTS = { 'claude-code': 'mcp-registry', 'codex-cli': 'user-config
 const SOURCE_LABELS: Record<ImportToolId, string> = { 'claude-code': 'Claude Code', 'codex-cli': 'Codex CLI', 'gemini-cli': 'Gemini CLI', antigravity: 'Antigravity', cursor: 'Cursor', qoder: 'Qoder CLI', workbuddy: 'WorkBuddy / CodeBuddy', trae: 'TRAE', pi: 'Pi (pi.dev compatible)', opencode: 'OpenCode' }
 const SESSION_MS = 30 * 60 * 1000
 
-interface ResourceEntry extends AgentResourceContent { nativePath: string; nativeName: string; packagePath?: string; mcpDisabled?: boolean; policyError?: string }
-interface Location { paths: string[]; primary: string; tool?: ToolDefinition; artifact?: ConfigArtifactDefinition; singlePackage?: boolean }
-interface SourceSession { owner: number; expires: number; public: ImportSource; locations: Partial<Record<AgentResourceKind, string[]>>; backup?: ResourceBackup; artifactBackup?: { backupId: string; revision: string } }
+interface ResourceEntry extends AgentResourceContent { nativePath: string; nativeName: string; packagePath?: string; packageRevision?: string; mcpDisabled?: boolean; policyError?: string; incomplete?: boolean }
+interface Location { paths: string[]; primary: string; tool?: ToolDefinition; artifact?: ConfigArtifactDefinition; singlePackage?: boolean; singleFile?: boolean; blockedPaths?: Array<{ path: string; error: string }> }
+interface SourceSession { owner: number; expires: number; public: ImportSource; locations: Partial<Record<AgentResourceKind, string[]>>; backup?: ResourceBackup; artifactBackup?: { backupId: string; revision: string }; projectDirectory?: string }
 interface PreviewSession {
   owner: number; expires: number; public: ResourceImportPreview; source: SourceSession; sourceRevisions: Map<string, string>;
   targetRevision: string; registryRevision: string; converted: Map<string, string>;
@@ -96,11 +96,21 @@ export class AgentResourceService {
     if (input.kind !== 'MCP' && artifact.handler !== (input.kind === 'SKILL' ? 'SKILL_DIRECTORY_V1' : 'SUBAGENT_DIRECTORY_V1')) throw new Error('资源目录 handler 不匹配')
     if (input.kind !== 'MCP' && artifact.format !== (input.toolId === 'codex-cli' && input.kind === 'SUBAGENT' ? 'TOML' : 'MARKDOWN')) throw new Error('资源目录 format 不匹配')
     const paths = (artifact.paths[this.detection.getPlatform()] ?? []).map(template => this.detection.resolvePath(template))
-    for (const candidate of paths) await this.discovery.authorizeArtifact(input.toolId, id, candidate, write ? input.kind === 'MCP' ? 'MANAGE_MCP' : 'MANAGE_DIRECTORY' : 'READ')
     if (!paths.length) throw new Error('当前平台没有已授权的资源路径')
+    const allowed: string[] = []
+    const blockedPaths: NonNullable<Location['blockedPaths']> = []
+    for (const candidate of paths) {
+      try {
+        await this.discovery.authorizeArtifact(input.toolId, id, candidate, write ? input.kind === 'MCP' ? 'MANAGE_MCP' : 'MANAGE_DIRECTORY' : 'READ')
+        allowed.push(candidate)
+      } catch (error) {
+        if (write) throw error
+        blockedPaths.push({ path: candidate, error: error instanceof Error ? error.message : '该候选未获读取授权' })
+      }
+    }
     const existing = []
-    for (const candidate of paths) if (await exists(candidate)) existing.push(candidate)
-    return { paths, primary: existing[0] ?? paths[0], tool, artifact }
+    for (const candidate of allowed) if (await exists(candidate)) existing.push(candidate)
+    return { paths: allowed, primary: existing[0] ?? allowed[0] ?? paths[0], tool, artifact, blockedPaths }
   }
 
   async authorizeLegacyWrite(kind: AgentResourceKind): Promise<void> {
@@ -185,58 +195,164 @@ export class AgentResourceService {
 
   private async entries(tool: ImportToolId, kind: AgentResourceKind, location: Location): Promise<ResourceEntry[]> {
     const results: ResourceEntry[] = []
+    let truncated = false
+    const failure = (nativePath: string, name: string, error: unknown, status?: 'BLOCKED' | 'INVALID') => {
+      const message = error instanceof Error ? error.message : String(error)
+      results.push({ resourceId: digest(`${kind}\0${nativePath}\0${name}`), name, nativeName: name, nativePath, kind, description: '', location: nativePath, format: tool === 'codex-cli' && kind !== 'SKILL' ? 'TOML' : kind === 'MCP' ? 'JSON' : 'MARKDOWN', revision: MISSING_REVISION, content: '', warnings: [message], status: status ?? (/EACCES|EPERM|授权|链接|symbolic|junction/i.test(message) ? 'BLOCKED' : 'INVALID'), writable: false, incomplete: truncated })
+    }
     let definitionBytes = 0
-    let packageMembers = 0
-    const make = async (nativePath: string, nativeName: string, packagePath?: string): Promise<void> => {
-      const data = await readBounded(nativePath)
-      if (!data) return
-      const content = utf8(data)
-      definitionBytes += data.length
-      if (definitionBytes > 16 * 1024 * 1024 || results.length >= 1000) throw new Error('资源发现超过 1000 个定义或总计 16 MiB，请缩小导入目录')
-      let description = ''
-      const warnings: string[] = []
-      try { description = String(parseRole(content, kind === 'SKILL' ? 'claude-code' : tool).metadata.description) }
-      catch (error) { warnings.push(error instanceof Error ? error.message : '定义格式有误') }
-      let revision = digest(data)
-      let files: Array<{ name: string; bytes: number }> | undefined
-      if (packagePath) {
-        const members = await readSkillPackage(packagePath)
-        revision = skillRevision(members)
-        files = members.map(file => ({ name: file.relativePath, bytes: file.content.length }))
-        if ((packageMembers += files.length) > 20_000) throw new Error('资源发现包含过多 Skill 附件，请缩小导入目录')
+    const packageBudget = { files: 0, maximumFiles: 20_000 }
+    const make = async (nativePath: string, nativeName: string, packagePath?: string, reference?: string): Promise<void> => {
+      if (truncated) return
+      try {
+        if (results.length >= 1000 || definitionBytes >= 16 * 1024 * 1024) {
+          truncated = true
+          throw new Error('本次资源发现已达到 1000 项或 16 MiB 预算；后续路径未扫描，请缩小范围')
+        }
+        const remainingBytes = 16 * 1024 * 1024 - definitionBytes
+        if (remainingBytes < RESOURCE_MAX_BYTES) {
+          await assertNoLinks(nativePath)
+          const info = await lstat(nativePath)
+          if (info.size <= RESOURCE_MAX_BYTES && info.size > remainingBytes) {
+            truncated = true
+            throw new Error('本次发现的剩余定义预算不足，后续文件未读取')
+          }
+        }
+        const data = await readBounded(nativePath, Math.min(RESOURCE_MAX_BYTES, remainingBytes))
+        if (!data) throw new Error('资源在读取期间消失')
+        const content = utf8(data)
+        definitionBytes += data.length
+        if (definitionBytes > 16 * 1024 * 1024) {
+          truncated = true
+          throw new Error('本次资源定义超过 16 MiB 预算；后续路径未扫描，请缩小范围')
+        }
+        const metadata = parseRole(content, tool, { kind: kind === 'SKILL' ? 'SKILL' : 'SUBAGENT', name: nativeName }).metadata
+        const description = typeof metadata.description === 'string' ? metadata.description : ''
+        const warnings: string[] = reference ? [`只读引用：实际目标 ${packagePath ?? nativePath} 已独立命中有效规则库白名单；链接不可编辑或删除。`] : []
+        let revision = digest(data)
+        let files: Array<{ name: string; bytes: number }> | undefined
+        if (packagePath) {
+          const members = await readSkillPackage(packagePath, packageBudget)
+          revision = skillRevision(members)
+          files = members.map(file => ({ name: file.relativePath, bytes: file.content.length }))
+        }
+        const displayPath = reference ? kind === 'SKILL' ? path.join(reference, 'SKILL.md') : reference : nativePath
+        results.push({ resourceId: digest(`${kind}\0${displayPath}\0${nativeName}`), name: nativeName, nativeName, nativePath: displayPath, packagePath, kind, description, location: displayPath, format: tool === 'codex-cli' && kind === 'SUBAGENT' ? 'TOML' : 'MARKDOWN', revision, content, files, fileCount: files?.length, warnings, status: reference ? 'READ_ONLY' : 'READY', writable: !reference })
+        if (results.length >= 1000 || definitionBytes >= 16 * 1024 * 1024 || packageBudget.files >= packageBudget.maximumFiles) {
+          truncated = true
+          failure(location.primary, '后续资源未扫描', '本次发现达到定义数量、16 MiB 或 2 万附件预算；请缩小范围', 'BLOCKED')
+        }
+      } catch (error) {
+        if (packageBudget.files >= packageBudget.maximumFiles) truncated = true
+        failure(reference ?? nativePath, nativeName, error, truncated ? 'BLOCKED' : 'INVALID')
       }
-      results.push({ resourceId: digest(`${kind}\0${nativePath}\0${nativeName}`), name: nativeName, nativeName, nativePath, packagePath, kind, description, location: nativePath, format: tool === 'codex-cli' && kind === 'SUBAGENT' ? 'TOML' : 'MARKDOWN', revision, content, files, fileCount: files?.length, warnings })
     }
     if (kind === 'MCP') {
-      const data = await readBounded(location.primary)
-      return data ? this.mcpEntries(tool, location.primary, utf8(data)) : []
+      const read = async (candidate: string, error?: string): Promise<void> => {
+        try {
+          const reference = error !== undefined
+          const target = reference ? await this.authorizeReference(candidate, kind, true) : candidate
+          const data = await readBounded(target)
+          if (!data) return
+          const entries = this.mcpEntries(tool, candidate, utf8(data))
+          if (reference) for (const entry of entries) {
+            entry.writable = false
+            if (entry.status === 'READY') entry.status = 'READ_ONLY'
+            entry.warnings.push(`只读引用：真实文件 ${target} 已独立命中有效规则库白名单；链接不可写入。`)
+          }
+          results.push(...entries)
+        } catch (caught) {
+          if (error === undefined && /链接|symbolic|junction/i.test(caught instanceof Error ? caught.message : String(caught))) await read(candidate, caught instanceof Error ? caught.message : String(caught))
+          else failure(candidate, path.basename(candidate), caught, error === undefined ? 'INVALID' : 'BLOCKED')
+        }
+      }
+      for (const blocked of location.blockedPaths ?? []) {
+        if (location.artifact?.capabilities.includes('READ') && /链接|symbolic|junction/i.test(blocked.error)) await read(blocked.path, blocked.error)
+        else failure(blocked.path, path.basename(blocked.path), blocked.error, 'BLOCKED')
+      }
+      if (location.paths.length) await read(location.primary)
+      return results
+    }
+    if (location.singleFile && kind === 'SUBAGENT') {
+      await make(location.primary, path.basename(location.primary).replace(/\.(md|toml)$/, ''))
+      return results
+    }
+    const linked = async (file: string, name: string, alias = file): Promise<void> => {
+      try {
+        const target = await this.authorizeReference(file, kind)
+        if (kind === 'SKILL' && (await lstat(target)).isDirectory()) await make(path.join(target, 'SKILL.md'), name, target, alias)
+        else if (kind === 'SUBAGENT' && (await lstat(target)).isFile()) await make(target, name.replace(/\.(md|toml)$/, ''), undefined, alias)
+        else throw new Error('链接真实目标不是所需资源类型')
+      } catch (error) { failure(alias, name.replace(/\.(md|toml)$/, ''), error, 'BLOCKED') }
     }
     let visited = 0
-    const walk = async (directory: string, depth: number): Promise<void> => {
+    const walk = async (directory: string, depth: number, reference?: { root: string; alias: string }): Promise<void> => {
+      if (truncated) return
       if (depth > 8) throw new Error('资源分类目录超过 8 层')
       await assertNoLinks(directory)
       if (kind === 'SKILL' && (depth > 0 || location.singlePackage) && await exists(path.join(directory, 'SKILL.md'))) {
-        await make(path.join(directory, 'SKILL.md'), path.basename(directory), directory)
+        await make(path.join(directory, 'SKILL.md'), path.basename(directory), directory, reference ? path.join(reference.alias, path.relative(reference.root, directory)) : undefined)
         return
       }
       let children
       try { children = await readdir(directory, { withFileTypes: true }) }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
-      if ((visited += children.length) > 5000) throw new Error('资源发现超过 5000 个目录项')
+      if ((visited += children.length) > 5000) { truncated = true; throw new Error('资源发现超过 5000 个目录项；后续路径未扫描') }
       for (const child of children.sort((a, b) => a.name.localeCompare(b.name))) {
+        if (truncated) break
         if (child.name.startsWith('.')) continue
-        if (child.isSymbolicLink()) throw new Error('资源目录不能包含链接')
         const file = path.join(directory, child.name)
-        if (child.isDirectory()) await walk(file, depth + 1)
-        else if (kind === 'SUBAGENT' && child.isFile() && child.name.endsWith(tool === 'codex-cli' ? '.toml' : '.md')) await make(file, child.name.replace(/\.(md|toml)$/, ''))
+        const alias = reference ? path.join(reference.alias, path.relative(reference.root, file)) : file
+        if (child.isSymbolicLink()) await linked(file, child.name, alias)
+        else if (child.isDirectory()) {
+          try { await walk(file, depth + 1, reference) }
+          catch (error) { failure(alias, child.name, error, truncated ? 'BLOCKED' : 'INVALID') }
+        }
+        else if (kind === 'SUBAGENT' && child.isFile() && child.name.endsWith(tool === 'codex-cli' ? '.toml' : '.md')) await make(file, child.name.replace(/\.(md|toml)$/, ''), undefined, reference ? alias : undefined)
       }
     }
     const unique = new Set<string>()
+    const readRoot = async (root: string, error?: string): Promise<void> => {
+      try {
+        if (error !== undefined) {
+          const target = await this.authorizeReference(root, kind, true)
+          await walk(target, 0, { root: target, alias: root })
+        } else await walk(root, 0)
+      } catch (caught) {
+        if (error === undefined && /链接|symbolic|junction/i.test(caught instanceof Error ? caught.message : String(caught))) await readRoot(root, caught instanceof Error ? caught.message : String(caught))
+        else failure(root, path.basename(root), caught, error === undefined ? 'INVALID' : 'BLOCKED')
+      }
+    }
+    for (const blocked of location.blockedPaths ?? []) {
+      if (location.artifact?.capabilities.includes('READ') && /链接|symbolic|junction/i.test(blocked.error)) await readRoot(blocked.path, blocked.error)
+      else failure(blocked.path, path.basename(blocked.path), blocked.error, 'BLOCKED')
+    }
     for (const root of location.paths) {
       const key = normalizePathForComparison(root)
-      if (!unique.has(key)) { unique.add(key); await walk(root, 0) }
+      if (!unique.has(key) && !truncated) {
+        unique.add(key)
+        await readRoot(root)
+      }
     }
     return results
+  }
+
+  private async authorizeReference(link: string, kind: AgentResourceKind, allowRoot = false): Promise<string> {
+    const target = await resolveLocalReference(link)
+    for (const toolId of MANAGED_AGENT_IDS) {
+      const tool = await this.registry.getTool(toolId)
+      const artifact = tool?.artifacts.find(item => item.artifactId === (kind === 'MCP' ? MCP_ARTIFACTS[toolId] : kind === 'SKILL' ? 'skills' : 'subagents'))
+      if (!artifact || (kind === 'MCP' ? !['JSON_FILE_V1', 'TOML_FILE_V1'].includes(artifact.handler) : artifact.handler !== (kind === 'SKILL' ? 'SKILL_DIRECTORY_V1' : 'SUBAGENT_DIRECTORY_V1'))) continue
+      for (const template of artifact.paths[this.detection.getPlatform()] ?? []) {
+        const root = this.detection.resolvePath(template)
+        const relative = path.relative(normalizePathForComparison(root), normalizePathForComparison(target))
+        if (kind === 'MCP' ? Boolean(relative) : (!relative && !allowRoot) || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue
+        try { await this.discovery.authorizeArtifact(toolId, artifact.artifactId, root, 'READ') }
+        catch { continue }
+        return target
+      }
+    }
+    throw new Error('链接真实目标未独立命中有效规则库白名单；仅显示受限条目，不读取内容')
   }
 
   private mcpEntries(tool: ImportToolId, nativePath: string, content: string): ResourceEntry[] {
@@ -244,21 +360,25 @@ export class AgentResourceService {
     const document = parseMcpDocument(content, tool)
     const contents = extractMcpItems(content, tool, document)
     for (const [name, value] of Object.entries(document)) {
-      if (!record(value)) throw new Error('MCP 定义必须是对象')
       const definition = contents.get(name)
-      if (definition === undefined) throw new Error('无法定位 MCP 定义')
       const warnings: string[] = []
+      let status: AgentResource['status'] = 'READY'
+      try {
+        if (!record(value)) throw new Error('MCP 定义必须是对象')
+        if (definition === undefined) throw new Error('无法定位 MCP 定义')
+        parseMcpItem(definition, tool)
+      } catch (error) { status = 'INVALID'; warnings.push(error instanceof Error ? error.message : 'MCP 条目无法读取') }
       if (MANAGED_AGENT_IDS.includes(tool as ManagedAgentId)) {
         try { this.validateTargetName(name, 'MCP', tool as ManagedAgentId) }
         catch (error) { warnings.push(error instanceof Error ? error.message : '现有名称不符合原生规则，保留原文件并等待明确另名') }
       }
-      results.push({ resourceId: digest(`MCP\0${nativePath}\0${name}`), nativePath, nativeName: name, name, kind: 'MCP', description: typeof value.description === 'string' ? value.description : '', location: nativePath, format: tool === 'codex-cli' ? 'TOML' : 'JSON', revision: digest(definition), content: definition, warnings })
+      results.push({ resourceId: digest(`MCP\0${nativePath}\0${name}`), nativePath, nativeName: name, name, kind: 'MCP', description: record(value) && typeof value.description === 'string' ? value.description : '', location: nativePath, format: tool === 'codex-cli' ? 'TOML' : 'JSON', revision: definition === undefined ? MISSING_REVISION : digest(definition), content: definition ?? '', warnings, status, writable: status === 'READY' })
     }
     return results
   }
 
   private summary(entry: ResourceEntry): AgentResource {
-    return { resourceId: entry.resourceId, name: entry.name, kind: entry.kind, description: entry.description, location: entry.location, format: entry.format, revision: entry.revision, fileCount: entry.fileCount, warnings: entry.warnings }
+    return { resourceId: entry.resourceId, name: entry.name, kind: entry.kind, description: entry.description, location: entry.location, format: entry.format, revision: entry.revision, fileCount: entry.fileCount, warnings: entry.warnings, writable: entry.writable, status: entry.status }
   }
 
   private publicEntry(entry: ResourceEntry): AgentResourceContent {
@@ -267,16 +387,22 @@ export class AgentResourceService {
 
   async listResources(input: AgentResourceQuery): Promise<AgentResourceList> {
     const location = await this.location(input)
-    const resources = (await this.entries(input.toolId, input.kind, location)).map(entry => this.summary(entry))
-    return { ...input, location: location.paths.join('\n'), resources, writable: Boolean(location.artifact?.capabilities.includes(input.kind === 'MCP' ? 'MANAGE_MCP' : 'MANAGE_DIRECTORY')), warnings: location.paths.some(p => /[\\/]\.agents[\\/]skills$/.test(p)) ? ['共享 Skills 目录也可能被其他工具读取；修改会影响其使用者。'] : [] }
+    const entries = await this.entries(input.toolId, input.kind, location)
+    const writable = location.paths.length > 0 && !entries.some(entry => entry.incomplete) && Boolean(location.artifact?.capabilities.includes(input.kind === 'MCP' ? 'MANAGE_MCP' : 'MANAGE_DIRECTORY'))
+    const resources = entries.map(entry => ({ ...this.summary(entry), writable: writable && entry.writable !== false }))
+    const warnings = [...new Set(resources.flatMap(entry => entry.status && entry.status !== 'READY' ? entry.warnings : []))]
+    if (location.paths.some(p => /[\\/]\.agents[\\/]skills$/.test(p))) warnings.push('共享 Skills 目录也可能被其他工具读取；修改会影响其使用者。')
+    return { ...input, location: [...location.paths, ...(location.blockedPaths ?? []).map(item => item.path)].join('\n'), resources, writable, warnings }
   }
 
   async readResource(input: ReadAgentResourceInput): Promise<AgentResourceContent> {
     this.validateResourceId(input?.resourceId)
-    const entries = await this.entries(input.toolId, input.kind, await this.location(input))
+    const location = await this.location(input)
+    const entries = await this.entries(input.toolId, input.kind, location)
     const found = entries.find(entry => entry.resourceId === input.resourceId)
     if (!found) throw new Error('资源不存在或已经变化，请刷新')
-    return this.publicEntry(found)
+    if (found.status === 'BLOCKED' || found.status === 'INVALID') throw new Error(found.warnings.join('；') || '资源受限或损坏')
+    return this.publicEntry({ ...found, writable: found.writable !== false && !entries.some(entry => entry.incomplete) && Boolean(location.artifact?.capabilities.includes(input.kind === 'MCP' ? 'MANAGE_MCP' : 'MANAGE_DIRECTORY')) })
   }
 
   private assertContent(content: unknown): asserts content is string {
@@ -316,13 +442,18 @@ export class AgentResourceService {
     this.validateTargetName(input.name, input.kind, input.toolId)
     if (input.resourceId !== undefined) this.validateResourceId(input.resourceId)
     const before = await this.entries(input.toolId, input.kind, location)
+    if (before.some(entry => entry.incomplete)) throw new Error('资源发现达到预算，集合未完整确认；未修改原件，请缩小范围')
     const current = input.resourceId ? before.find(entry => entry.resourceId === input.resourceId) : undefined
     if (input.resourceId && !current) throw new Error('资源不存在，请刷新')
+    if (current && (current.writable === false || current.status === 'BLOCKED' || current.status === 'INVALID' || current.status === 'READ_ONLY')) throw new Error('该资源只读、受限或损坏，不能编辑或覆盖原件')
     if (current && (current.revision !== input.expectedRevision || current.name !== input.name)) throw new Error('资源已变化或改名，保留草稿并刷新后重试')
     const key = (name: string) => process.platform === 'win32' ? name.toLowerCase() : name
     if (!current && before.some(entry => key(entry.name) === key(input.name))) throw new Error('同名资源已存在，请保留或另名')
     const expectedPath = current?.nativePath ?? (input.kind === 'MCP' ? location.primary : input.kind === 'SKILL' ? path.join(location.primary, input.name, 'SKILL.md') : path.join(location.primary, `${input.name}.${input.toolId === 'codex-cli' ? 'toml' : 'md'}`))
     const expectedId = current?.resourceId ?? digest(`${input.kind}\0${expectedPath}\0${input.name}`)
+    let plannedContent = input.content
+    let plannedRevision = digest(input.content)
+    let plannedFiles: Awaited<ReturnType<typeof readSkillPackage>> | undefined
     if (input.kind === 'MCP') {
       const definition = parseMcpItem(input.content, input.toolId)
       if (normalizeMcp(definition, input.toolId).disabled && (input.toolId === 'gemini-cli' || input.toolId === 'claude-code')) throw new Error('此工具的原生停用状态不在 server.disabled；请使用其原生启停或 Claude 兼容归档入口')
@@ -330,6 +461,8 @@ export class AgentResourceService {
       const document = initial ? utf8(initial) : input.toolId === 'codex-cli' ? '' : '{}\n'
       this.assertMcpRevision(document, input, input.name, current)
       const next = editMcpDocument(document, input.toolId, input.name, definition, input.toolId === 'codex-cli' ? undefined : input.content)
+      plannedContent = extractMcpItem(next, input.toolId, input.name, definition)
+      plannedRevision = digest(plannedContent)
       if (initial) await this.backupMcpSnapshot(input, location, initial)
       const latest = await readBounded(location.primary)
       if ((latest ? digest(latest) : MISSING_REVISION) !== (initial ? digest(initial) : MISSING_REVISION)) throw new Error('配置在备份期间发生变化，未覆盖')
@@ -341,6 +474,7 @@ export class AgentResourceService {
       if (current?.packagePath && !packageFiles && skillRevision(members) !== current.revision) throw new Error('Skill 在读取期间发生变化，未覆盖')
       const nextFiles = members.filter(file => file.relativePath !== 'SKILL.md')
       nextFiles.push({ relativePath: 'SKILL.md', content: Buffer.from(input.content), executable: members.find(file => file.relativePath === 'SKILL.md')?.executable })
+      plannedFiles = nextFiles
       await this.backupNative(current, input.toolId)
       if (current?.packagePath && skillRevision(await readSkillPackage(current.packagePath)) !== current.revision) throw new Error('Skill 在备份期间发生变化，未覆盖')
       await this.reauthorize(input, location)
@@ -356,9 +490,19 @@ export class AgentResourceService {
       await assertNoLinks(file)
       await writeTextAtomic(file, input.content)
     }
-    const updated = (await this.entries(input.toolId, input.kind, await this.location(input))).find(entry => entry.resourceId === expectedId)
-    if (!updated) throw new Error('写入已完成但结果读取失败，请刷新核实，勿重复创建')
-    return this.publicEntry(updated)
+    try {
+      const confirmedLocation = await this.location(input)
+      const updated = (await this.entries(input.toolId, input.kind, confirmedLocation)).find(entry => entry.resourceId === expectedId)
+      if (!updated || updated.status !== 'READY' || updated.writable === false || updated.revision === MISSING_REVISION || !confirmedLocation.artifact?.capabilities.includes(input.kind === 'MCP' ? 'MANAGE_MCP' : 'MANAGE_DIRECTORY')) throw new Error('回读资源不可写、受限或损坏')
+      if (plannedFiles) {
+        const byName = new Map(plannedFiles.map(file => [file.relativePath, file]))
+        const ordered = updated.files?.map(file => byName.get(file.name))
+        if (!ordered || ordered.length !== plannedFiles.length || ordered.some(file => !file)) throw new Error('回读包成员与计划不符')
+        plannedRevision = skillRevision(ordered.filter((file): file is NonNullable<typeof file> => Boolean(file)))
+      }
+      if (updated.content !== plannedContent || updated.revision !== plannedRevision) throw new Error('回读内容与本次写入计划不一致')
+      return this.publicEntry(updated)
+    } catch (error) { throw new Error('写入已完成，回读无法确认，请核实文件，不要重复提交', { cause: error }) }
   }
 
   async deleteResource(input: DeleteAgentResourceInput): Promise<void> {
@@ -366,8 +510,11 @@ export class AgentResourceService {
     this.validateResourceId(input.resourceId)
     return withAgentResourceMutation(async () => {
       const location = await this.location(input, true)
-      const current = (await this.entries(input.toolId, input.kind, location)).find(entry => entry.resourceId === input.resourceId)
+      const entries = await this.entries(input.toolId, input.kind, location)
+      if (entries.some(entry => entry.incomplete)) throw new Error('资源发现达到预算，集合未完整确认；未删除原件')
+      const current = entries.find(entry => entry.resourceId === input.resourceId)
       if (!current || current.revision !== input.expectedRevision) throw new Error('资源不存在或已经变化，未删除')
+      if (current.writable === false || current.status === 'BLOCKED' || current.status === 'INVALID' || current.status === 'READ_ONLY') throw new Error('该资源只读、受限或损坏，不能删除原件')
       if (input.kind === 'MCP') {
         const initial = await readBounded(location.primary)
         if (!initial) throw new Error('配置文件已消失')
@@ -419,11 +566,15 @@ export class AgentResourceService {
 
   private addSource(tool: ImportToolId, scope: ImportSource['scope'], locations: SourceSession['locations'], owner: number, label?: string, warnings: string[] = [], diagnostic?: { location: string; status: ImportSource['status'] }): ImportSource {
     const location = diagnostic?.location ?? Object.values(locations).flat().join('\n')
-    const previous = [...this.sources.values()].find(source => source.owner === owner && source.public.toolId === tool && source.public.scope === scope && source.public.location === location && source.public.status === (diagnostic?.status ?? 'FOUND') && JSON.stringify(source.locations) === JSON.stringify(locations))
+    const previous = [...this.sources.values()].find(source => source.owner === owner && source.public.toolId === tool && source.public.scope === scope && source.public.location === location)
     if (previous) {
       previous.expires = Date.now() + SESSION_MS
       previous.public.label = label ?? SOURCE_LABELS[tool]
       previous.public.warnings = warnings
+      previous.public.location = location
+      previous.public.status = diagnostic?.status ?? 'FOUND'
+      previous.public.kinds = Object.keys(locations) as AgentResourceKind[]
+      previous.locations = locations
       return previous.public
     }
     if (this.sources.size > 500) throw new Error('导入来源会话过多，请重新打开资源页')
@@ -443,7 +594,7 @@ export class AgentResourceService {
       case 'gemini-cli': return { MCP: [p('.gemini', 'settings.json')], SKILL: [p('.gemini', 'skills')], SUBAGENT: [p('.gemini', 'agents')] }
       case 'antigravity': return { MCP: [user ? p('.gemini', 'config', 'mcp_config.json') : p('.agents', 'mcp_config.json')], SKILL: user ? [p('.gemini', 'config', 'skills'), p('.gemini', 'antigravity-cli', 'skills')] : [p('.agents', 'skills'), p('.agent', 'skills')], SUBAGENT: [user ? p('.gemini', 'config', 'agents') : p('.agents', 'agents')] }
       case 'cursor': return { MCP: [p('.cursor', 'mcp.json')], SKILL: [p('.cursor', 'skills'), p('.agents', 'skills')], SUBAGENT: [p('.cursor', 'agents')] }
-      case 'qoder': return { MCP: [...(user ? [] : [p('.qoder', 'settings.local.json')]), p('.qoder', 'settings.json')], SKILL: [p('.qoder', 'skills')], SUBAGENT: [p('.qoder', 'agents')] }
+      case 'qoder': return { MCP: [p('.qoder', 'settings.json'), ...(user ? [] : [p('.mcp.json'), p('.qoder', 'settings.local.json')])], SKILL: [p('.qoder', 'skills')], SUBAGENT: [p('.qoder', 'agents')] }
       case 'workbuddy': return { MCP: user ? [p('.codebuddy', '.mcp.json'), p('.codebuddy', 'mcp.json'), p('.codebuddy.json')] : [p('.mcp.json'), p('.codebuddy', 'mcp.json')], SKILL: [p('.codebuddy', 'skills')], SUBAGENT: [p('.codebuddy', 'agents')] }
       case 'trae': return { ...(user ? {} : { MCP: [p('.trae', 'mcp.json')] }), SKILL: [p('.trae', 'skills')] }
       case 'pi': return { MCP: [user ? p('.pi', 'agent', 'mcp.json') : p('.pi', 'mcp.json')], SKILL: [user ? p('.pi', 'agent', 'skills') : p('.pi', 'skills')] }
@@ -454,9 +605,10 @@ export class AgentResourceService {
     }
   }
 
-  async discoverImportSources(input: { sourceContextId?: string } = {}, owner = 0): Promise<ImportSource[]> {
+  async discoverImportSources(input: { sourceContextId?: string; kind?: AgentResourceKind } = {}, owner = 0): Promise<ImportSource[]> {
     this.purge()
     if (!record(input)) throw new Error('无效来源请求')
+    if (input.kind !== undefined && !AGENT_RESOURCE_KINDS.includes(input.kind)) throw new Error('未知来源资源类型')
     let project: string | undefined
     if (input.sourceContextId !== undefined) {
       const session = this.projects.get(input.sourceContextId)
@@ -464,32 +616,82 @@ export class AgentResourceService {
       project = session.directory
       await assertNoLinks(project)
     }
-    const results: ImportSource[] = []
-    const shared = new Set<string>()
+    const results: Array<{ source: ImportSource; populated: boolean }> = []
+    const shared = new Map<string, ImportSource>()
+    const scope = project ? 'PROJECT' as const : 'USER' as const
     for (const tool of SOURCE_TOOLS) {
-      const candidates = this.sourcePaths(tool, project)
-      const locations: SourceSession['locations'] = {}
-      const warnings: string[] = []
-      for (const kind of AGENT_RESOURCE_KINDS) {
-        const found = []
-        for (const candidate of candidates[kind] ?? []) {
-          if (!(await exists(candidate))) continue
-          if (kind === 'SKILL' && /[\\/]\.agents[\\/]skills$/.test(candidate)) {
-            warnings.push('共享 Skills 目录可能被多个工具读取；来源名称表示兼容 profile。')
-            const key = normalizePathForComparison(candidate)
-            if (shared.has(key)) continue
-            shared.add(key)
-          }
-          found.push(candidate)
+      for (const kind of input.kind ? [input.kind] : AGENT_RESOURCE_KINDS) {
+        let candidates: string[]
+        const warnings: string[] = []
+        if (tool === 'qoder') warnings.push('Qoder CLI 配置候选；不代表已识别 IDE 的私有配置。各文件层单独预览，不隐式合并。')
+        if (tool === 'workbuddy') warnings.push('CodeBuddy / WorkBuddy 代码项目兼容 profile；桌面连接器的私有配置路径仍需发行版确认。')
+        if (tool === 'pi') warnings.push('pi.dev 内置 MCP/Skill profile；扩展替代实现需要单独确认。')
+        if (tool === 'trae') warnings.push('TRAE 本地目录为兼容候选；项目 .trae/mcp.json 与桌面全局配置分开，不声称已认证所有发行版。')
+        if (tool === 'opencode' && kind === 'SUBAGENT') warnings.push('当前列举 Markdown agents；opencode.json 的内嵌 agent 对象不是此目录来源，检测到同名覆盖会阻止转换。')
+        try {
+          if (!project && MANAGED_AGENT_IDS.includes(tool as ManagedAgentId)) {
+            const location = await this.location({ toolId: tool as ManagedAgentId, kind })
+            candidates = [...location.paths]
+            for (const blocked of location.blockedPaths ?? []) {
+              if (location.artifact?.capabilities.includes('READ') && /链接|symbolic|junction/i.test(blocked.error)) candidates.push(blocked.path)
+              else results.push({ source: this.addSource(tool, scope, {}, owner, `${SOURCE_LABELS[tool]} · ${kind} · 受限`, [blocked.error], { location: blocked.path, status: 'BLOCKED' }), populated: false })
+            }
+            warnings.push('使用当前有效规则库的位置，保留自定义配置路径。')
+          } else candidates = this.sourcePaths(tool, project)[kind] ?? []
+        } catch (error) {
+          results.push({ source: this.addSource(tool, scope, {}, owner, `${SOURCE_LABELS[tool]} · ${kind} · 规则不可用`, [error instanceof Error ? error.message : '规则无法读取'], { location: `registry:${tool}/${kind}`, status: 'BLOCKED' }), populated: false })
+          continue
         }
-        if (found.length) locations[kind] = kind === 'MCP' ? found.slice(0, 1) : found
-        if (kind === 'MCP' && found.length > 1) warnings.push('同类配置存在多个候选，当前读取优先路径；其余可通过本机文件选择器单独导入。')
+        if (!candidates.length && (tool === 'trae' || tool === 'pi')) {
+          const message = tool === 'trae' && kind === 'MCP' && !project ? '桌面全局默认位置尚未确认，请手选导出的原生配置；项目 .trae/mcp.json 是独立兼容候选。' : '尚无已确认的通用子 Agent 文件规范；不将扩展或桌面私有定义猜作原生角色。'
+          results.push({ source: this.addSource(tool, scope, {}, owner, `${SOURCE_LABELS[tool]} · ${kind} · 未确认`, [message], { location: `${SOURCE_LABELS[tool]}: ${kind} 公开形态待确认`, status: 'BLOCKED' }), populated: false })
+        }
+        for (let index = 0; index < candidates.length; index++) {
+          const candidate = candidates[index]
+          const candidateWarnings = [...warnings]
+          const label = `${SOURCE_LABELS[tool]} · ${kind} · ${path.basename(candidate)}${candidates.length > 1 ? ` · 候选 ${index + 1}/${candidates.length}` : ''}`
+          try {
+            let actual = candidate
+            try {
+              if (!(await exists(candidate))) {
+                results.push({ source: this.addSource(tool, scope, {}, owner, label, [...candidateWarnings, '已扫描此位置，文件或目录不存在。'], { location: candidate, status: 'NOT_FOUND' }), populated: false })
+                continue
+              }
+            } catch (error) {
+              if (!/链接|symbolic|junction/i.test(error instanceof Error ? error.message : String(error))) throw error
+              actual = await this.authorizeReference(candidate, kind, true)
+              candidateWarnings.push(`只读引用候选：${actual} 已独立命中规则库白名单；链接本身不授予写权限。`)
+            }
+            const info = await lstat(actual)
+            if (kind === 'MCP' ? !info.isFile() : !info.isDirectory()) throw new Error('默认候选的文件/目录类型不匹配')
+            const key = `${kind}:${normalizePathForComparison(actual)}`
+            const previous = kind === 'SKILL' ? shared.get(key) : undefined
+            if (previous) {
+              results.push({ source: this.addSource(tool, scope, {}, owner, label, [...candidateWarnings, `共享位置已列为 ${previous.label}；兼容不代表独占归属，不重复列资源。`], { location: candidate, status: 'FOUND' }), populated: false })
+              continue
+            }
+            let populated = true
+            if (kind === 'MCP') {
+              const bytes = await readBounded(actual)
+              if (!bytes) throw new Error('候选在读取期间消失')
+              populated = this.mcpEntries(tool, candidate, utf8(bytes)).some(entry => entry.status === 'READY')
+              if (!populated) candidateWarnings.push('此文件未包含可转换的 MCP 条目；可选择查看空状态或逐项诊断。')
+            } else populated = (await readdir(actual)).some(name => !name.startsWith('.'))
+            const source = this.addSource(tool, scope, { [kind]: [candidate] }, owner, label, [...candidateWarnings, ...(kind === 'SKILL' && /[\\/]\.agents[\\/]skills$/.test(candidate) ? ['共享 Skills 位置可能被多个工具读取，工具名仅表示兼容 profile。'] : [])])
+            const session = this.sources.get(source.sourceId)
+            if (!session) throw new Error('来源会话未建立，请重新识别')
+            session.projectDirectory = project
+            if (kind === 'SKILL') shared.set(key, source)
+            results.push({ source, populated })
+          } catch (error) {
+            const message = error instanceof Error ? error.message : '候选无法读取'
+            const status = /链接|symbolic|junction|EACCES|EPERM|授权|capability/i.test(message) ? 'BLOCKED' as const : 'INVALID' as const
+            results.push({ source: this.addSource(tool, scope, {}, owner, label, [...candidateWarnings, message], { location: candidate, status }), populated: false })
+          }
+        }
       }
-      if (tool === 'trae') warnings.push('全局 MCP 请手选 Raw Config 文件；未确认通用子 Agent 文件规范。')
-      if (tool === 'pi') warnings.push('此为 pi.dev 内置 MCP profile；旧发行与子 Agent 扩展需要单独确认。')
-      if (Object.keys(locations).length) results.push(this.addSource(tool, project ? 'PROJECT' : 'USER', locations, owner, undefined, warnings))
     }
-    return results
+    return results.sort((a, b) => Number(Boolean(b.source.kinds.length) && b.populated) - Number(Boolean(a.source.kinds.length) && a.populated) || Number(Boolean(b.source.kinds.length)) - Number(Boolean(a.source.kinds.length))).map(item => item.source)
   }
 
   async registerFile(tool: ImportToolId, kind: AgentResourceKind, file: string, owner: number): Promise<ImportSource> {
@@ -505,6 +707,7 @@ export class AgentResourceService {
   async discoverResourceBackups(input: AgentResourceQuery, owner = 0): Promise<ImportSource[]> {
     this.purge()
     const location = await this.location(input)
+    if (!location.paths.length) throw new Error(location.blockedPaths?.map(item => item.error).join('；') || '没有可读取的有效规则库路径')
     if (input.kind === 'MCP') {
       const backups = await this.artifactManagement.listBackups(input.toolId, location.artifact!.artifactId)
       const sources: ImportSource[] = []
@@ -536,14 +739,26 @@ export class AgentResourceService {
   private requireSource(sourceId: string, kind: AgentResourceKind, owner: number): SourceSession {
     this.purge()
     const source = this.sources.get(sourceId)
-    if (!source || source.owner !== owner || !source.locations[kind]) throw new Error('来源授权已过期或资源类型不支持')
+    if (!source || source.owner !== owner) throw new Error('来源授权已过期，请重新扫描或选择')
+    if (source.public.status && source.public.status !== 'FOUND') throw new Error(source.public.warnings.join('；') || '来源受限或损坏')
+    if (!source.locations[kind]) throw new Error('此来源不支持所选资源类型，请选择匹配的文件层')
     return source
   }
 
   private async sourceEntries(source: SourceSession, kind: AgentResourceKind): Promise<ResourceEntry[]> {
     const paths = source.locations[kind]!
+    if (source.public.scope === 'USER' && MANAGED_AGENT_IDS.includes(source.public.toolId as ManagedAgentId)) {
+      const location = await this.location({ toolId: source.public.toolId as ManagedAgentId, kind })
+      for (const candidate of paths) {
+        if (location.paths.some(allowed => normalizePathForComparison(candidate) === normalizePathForComparison(allowed))) continue
+        const blocked = location.blockedPaths?.find(item => normalizePathForComparison(item.path) === normalizePathForComparison(candidate))
+        if (!location.artifact?.capabilities.includes('READ') || !blocked || !/链接|symbolic|junction/i.test(blocked.error)) throw new Error('来源路径不再被当前有效规则库授权，请重新扫描')
+        await this.authorizeReference(candidate, kind, true)
+      }
+    }
     if (source.artifactBackup) {
-      await this.location({ toolId: source.public.toolId as ManagedAgentId, kind })
+      const location = await this.location({ toolId: source.public.toolId as ManagedAgentId, kind })
+      if (!location.paths.length) throw new Error('当前规则库未授权读取此历史资源')
       const snapshot = await this.artifactManagement.readBackup(source.artifactBackup.backupId)
       if (snapshot.backup.toolId !== source.public.toolId || snapshot.backup.artifactId !== MCP_ARTIFACTS[source.public.toolId as ManagedAgentId] || snapshot.revision !== source.artifactBackup.revision) throw new Error('MCP 备份内容或授权已变化，请重新选择')
       const entries = this.mcpEntries(source.public.toolId, snapshot.backup.originalPath, snapshot.content)
@@ -552,7 +767,8 @@ export class AgentResourceService {
       return entries
     }
     if (source.backup) {
-      await this.location({ toolId: source.public.toolId as ManagedAgentId, kind })
+      const location = await this.location({ toolId: source.public.toolId as ManagedAgentId, kind })
+      if (!location.paths.length) throw new Error('当前规则库未授权读取此历史资源')
       const metadata = await readBounded(path.join(source.backup.directory, 'metadata.json'), 16 * 1024)
       if (!metadata || digest(metadata) !== source.backup.metadataRevision) throw new Error('备份元数据已经变化，请重新选择')
       const files = kind === 'SKILL' ? await readSkillPackage(paths[0]) : undefined
@@ -563,12 +779,50 @@ export class AgentResourceService {
       return [{ resourceId: digest(`${kind}\0${source.backup.directory}\0${source.backup.name}`), name: source.backup.name, nativeName: source.backup.name, nativePath: kind === 'SKILL' ? path.join(paths[0], 'SKILL.md') : paths[0], packagePath: files ? paths[0] : undefined, kind, content: utf8(bytes), description: '', location: paths[0], format: source.public.toolId === 'codex-cli' && kind === 'SUBAGENT' ? 'TOML' : 'MARKDOWN', revision, files: files?.map(file => ({ name: file.relativePath, bytes: file.content.length })), fileCount: files?.length, warnings: [] }]
     }
     if (source.public.scope === 'FILE' && kind === 'SUBAGENT') {
-      const content = utf8((await readBounded(paths[0]))!)
-      return [{ resourceId: digest(paths[0]), name: path.basename(paths[0]).replace(/\.(md|toml)$/, ''), nativeName: path.basename(paths[0]), nativePath: paths[0], kind, content, description: '', location: paths[0], format: source.public.toolId === 'codex-cli' ? 'TOML' : 'MARKDOWN', revision: digest(content), warnings: [] }]
+      const entries = await this.entries(source.public.toolId, kind, { paths, primary: paths[0], singleFile: true })
+      await this.protectOpenCodePolicy(source, entries, kind)
+      return entries
     }
     const entries = await this.entries(source.public.toolId, kind, { paths, primary: paths[0], singlePackage: source.public.scope === 'FILE' && kind === 'SKILL' })
+    await this.protectOpenCodePolicy(source, entries, kind)
     if (kind === 'MCP') await this.protectSourceMcpState(source, entries)
     return entries
+  }
+
+  private async protectOpenCodePolicy(source: SourceSession, entries: ResourceEntry[], kind: AgentResourceKind): Promise<void> {
+    if (source.public.toolId !== 'opencode') return
+    const primary = source.locations[kind]?.[0]
+    if (!primary) throw new Error('来源资源位置缺失，请重新识别')
+    const user = this.sourcePaths('opencode')
+    const knownUser = (user[kind] ?? []).some(root => {
+      const relative = path.relative(normalizePathForComparison(root), normalizePathForComparison(primary))
+      return !relative || kind !== 'MCP' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+    })
+    if (source.public.scope === 'FILE' && kind !== 'MCP' && !knownUser) return
+    const candidates = source.public.scope === 'FILE' && !knownUser ? [primary] : [...(user.MCP ?? []), ...(source.projectDirectory ? this.sourcePaths('opencode', source.projectDirectory).MCP ?? [] : [])]
+    const states: string[] = []
+    const configs: Record<string, unknown>[] = []
+    let error: string | undefined
+    for (const candidate of new Set(candidates)) {
+      try {
+        const bytes = await readBounded(candidate)
+        states.push(`${candidate}\0${bytes ? digest(bytes) : MISSING_REVISION}`)
+        if (bytes) configs.push(parseJson(utf8(bytes)))
+      } catch (caught) {
+        error = `OpenCode 原生策略无法核实：${caught instanceof Error ? caught.message : '配置读取失败'}`
+        states.push(`${candidate}\0BLOCKED`)
+      }
+    }
+    for (const entry of entries) {
+      const constrained = configs.some(config => config.permission !== undefined || config.tools !== undefined || kind === 'SUBAGENT' && record(config.agent) && Object.hasOwn(config.agent, entry.name))
+      if (error || constrained) {
+        entry.status = 'BLOCKED'
+        entry.writable = false
+        entry.warnings.push(error ?? 'OpenCode 存在全局权限、工具策略或同名 JSON 角色覆盖；目标无法等价保持，不能只复制当前文件。')
+      }
+      if (kind === 'SKILL') entry.packageRevision = entry.revision
+      entry.revision = digest(`${entry.revision}\0${JSON.stringify(states)}`)
+    }
   }
 
   private async protectSourceMcpState(source: SourceSession, entries: ResourceEntry[], snapshot?: string): Promise<void> {
@@ -651,7 +905,7 @@ export class AgentResourceService {
   async listImportResources(input: { sourceId: string; kind: AgentResourceKind }, owner = 0): Promise<AgentResourceList> {
     const source = this.requireSource(input.sourceId, input.kind, owner)
     const entries = await this.sourceEntries(source, input.kind)
-    return { toolId: source.public.toolId, kind: input.kind, location: source.public.location, warnings: source.public.warnings, writable: false, resources: entries.map(entry => this.summary(entry)) }
+    return { toolId: source.public.toolId, kind: input.kind, location: source.public.location, warnings: [...source.public.warnings, ...entries.flatMap(entry => entry.status && entry.status !== 'READY' ? entry.warnings : [])], writable: false, resources: entries.map(entry => ({ ...this.summary(entry), writable: false })) }
   }
 
   private async targetRevision(input: AgentResourceQuery, location: Location): Promise<string> {
@@ -677,6 +931,7 @@ export class AgentResourceService {
       const warnings = [...entry.warnings]
       let requiresRename = false
       try {
+        if (entry.status === 'BLOCKED' || entry.status === 'INVALID') throw new Error(entry.warnings.join('；') || '来源条目受限或损坏')
         this.validateName(entry.name, input.kind)
         if (input.kind === 'MCP') {
           if (entry.policyError) throw new Error(entry.policyError)
@@ -690,8 +945,8 @@ export class AgentResourceService {
           if (source.public.toolId !== query.toolId && (definition.description !== undefined || definition.name !== undefined)) warnings.push('来源内嵌 name/description 是显示元数据；目标用注册表键命名，不复制这些显示字段。')
         }
         else if (input.kind === 'SUBAGENT') {
-          content = convertRole(entry.content, source.public.toolId, query.toolId)
-          const metadata = parseRole(entry.content, source.public.toolId).metadata
+          content = convertRole(entry.content, source.public.toolId, query.toolId, entry.name)
+          const metadata = parseRole(entry.content, source.public.toolId, { name: entry.name }).metadata
           if (metadata.color !== undefined && query.toolId !== 'claude-code' && source.public.toolId !== query.toolId) warnings.push('目标没有等价角色颜色字段；导入时仅省略显示颜色。')
           if (metadata.name !== entry.name) warnings.push('原生 name 与文件名不同；保留原生 name，目标按预览文件名落盘。')
           if (source.public.toolId !== query.toolId) warnings.push('提示词正文原样保留；原工具专属命令、路径与术语需要人工核对。')
@@ -703,7 +958,7 @@ export class AgentResourceService {
         try { this.validateTargetName(entry.name, input.kind, query.toolId) }
         catch (error) { requiresRename = true; errors.push(error instanceof Error ? error.message : '目标名称无效，请另名') }
       }
-      const identical = target && (input.kind === 'SKILL' ? target.revision === entry.revision : target.content === content)
+      const identical = target && (input.kind === 'SKILL' ? target.revision === (entry.packageRevision ?? entry.revision) : target.content === content)
       return { resourceId: entry.resourceId, name: entry.name, targetName: entry.name, conflict: Boolean(target), status: errors.length ? 'BLOCKED' as const : identical ? 'IDENTICAL' as const : 'READY' as const, sourceContent: redactPreview(entry.content), proposedContent: redactPreview(content), targetContent: target ? redactPreview(target.content) : undefined, warnings, errors, requiresRename, files: entry.files }
     })
     this.purge()
@@ -776,9 +1031,9 @@ export class AgentResourceService {
         if (current && decision.action !== 'REPLACE') throw new Error('目标名称已存在，未覆盖')
         let content = preview.converted.get(item.resourceId)!
         const files = sourceEntry.packagePath ? await readSkillPackage(sourceEntry.packagePath) : undefined
-        if (files && skillRevision(files) !== sourceEntry.revision) throw new Error('来源 Skill 在导入期间发生变化')
+        if (files && skillRevision(files) !== (sourceEntry.packageRevision ?? sourceEntry.revision)) throw new Error('来源 Skill 在导入期间发生变化')
         if (query.kind !== 'MCP' && decision.action === 'RENAME') {
-          const parsed = parseRole(content, query.kind === 'SKILL' ? 'claude-code' : query.toolId)
+          const parsed = parseRole(content, query.toolId, { kind: query.kind === 'SKILL' ? 'SKILL' : 'SUBAGENT', name })
           content = emitRole({ ...parsed.metadata, name }, parsed.prompt, query.kind === 'SKILL' ? 'claude-code' : query.toolId)
         }
         if (current && !source.artifactBackup && normalizePathForComparison(current.packagePath ?? current.nativePath) === normalizePathForComparison(sourceEntry.packagePath ?? sourceEntry.nativePath)) { results.push({ name, status: 'SKIPPED' }); continue }

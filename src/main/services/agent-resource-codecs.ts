@@ -81,8 +81,10 @@ export function editRawJsonSubtree(content: string, keyPath: string[], value: st
   return (bom ? '\uFEFF' : '') + raw.slice(0, node.offset) + rawValue + raw.slice(node.offset + node.length)
 }
 
-export function parseRole(content: string, tool: ImportToolId): { metadata: Record<string, unknown>; prompt: string } {
-  if (tool === 'codex-cli') {
+export function parseRole(content: string, tool: ImportToolId, options: { kind?: 'SKILL' | 'SUBAGENT'; name?: string } = {}): { metadata: Record<string, unknown>; prompt: string } {
+  const skill = options.kind === 'SKILL'
+  const optional = skill && (tool === 'claude-code' || tool === 'cursor')
+  if (tool === 'codex-cli' && !skill) {
     const value = parseTomlObject(content)
     bounded(value)
     if (typeof value.name !== 'string' || typeof value.description !== 'string' || typeof value.developer_instructions !== 'string') {
@@ -92,16 +94,23 @@ export function parseRole(content: string, tool: ImportToolId): { metadata: Reco
     return { metadata, prompt: developer_instructions }
   }
   const match = content.replace(/^\uFEFF/, '').match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/)
-  if (!match) throw new Error('定义需要 YAML frontmatter 与正文')
+  if (!match) {
+    if (optional && !/^---(?:\r?\n|$)/.test(content.replace(/^\uFEFF/, ''))) return { metadata: {}, prompt: content.replace(/^\uFEFF/, '') }
+    throw new Error('定义需要 YAML frontmatter 与正文')
+  }
   let metadata: unknown
   try { metadata = load(match[1], { schema: JSON_SCHEMA }) }
   catch { throw new Error('YAML frontmatter 语法错误，请检查原生定义') }
+  if (metadata === undefined && optional) metadata = {}
   if (!record(metadata)) throw new Error('frontmatter 必须是对象')
   bounded(metadata)
-  if (typeof metadata.name !== 'string' || typeof metadata.description !== 'string' || !metadata.name || !metadata.description) {
+  const fields = !skill && tool === 'opencode' && metadata.name === undefined && options.name ? { ...metadata, name: options.name } : metadata
+  if (optional) {
+    if (fields.name !== undefined && (typeof fields.name !== 'string' || !fields.name) || fields.description !== undefined && typeof fields.description !== 'string') throw new Error('Skill name/description 提供时必须是字符串')
+  } else if (typeof fields.name !== 'string' || typeof fields.description !== 'string' || !fields.name || !fields.description) {
     throw new Error('定义需要 name 和 description')
   }
-  return { metadata, prompt: match[2] }
+  return { metadata: fields, prompt: match[2] }
 }
 
 export function emitRole(metadata: Record<string, unknown>, prompt: string, target: ManagedAgentId): string {
@@ -188,7 +197,7 @@ export function extractMcpItem(content: string, tool: ImportToolId, name: string
 export function extractMcpItems(content: string, tool: ImportToolId, definitions: Record<string, unknown>): Map<string, string> {
   const names = Object.keys(definitions)
   if (names.length > 1000) throw new Error('MCP 注册表超过 1000 个定义，请缩小导入文件')
-  if (tool === 'codex-cli') return new Map(names.map(name => {
+  if (tool === 'codex-cli') return new Map(names.filter(name => record(definitions[name])).map(name => {
     const definition = definitions[name]
     if (!record(definition)) throw new Error('MCP 定义必须是对象')
     return [name, emitMcpItem(definition, tool)]
@@ -199,7 +208,7 @@ export function extractMcpItems(content: string, tool: ImportToolId, definitions
   return new Map((root?.children ?? []).map(property => {
     const key = property.children?.[0]
     const value = property.children?.[1]
-    if (!key || !value || value.type !== 'object') throw new Error('MCP 定义必须是对象')
+    if (!key || !value) throw new Error('无法定位 MCP 条目')
     return [String(key.value), raw.slice(value.offset, value.offset + value.length)]
   }))
 }
@@ -382,9 +391,9 @@ const TOOL_NAMES: Record<string, Record<'claude-code' | 'gemini-cli', string>> =
   Write: { 'claude-code': 'Write', 'gemini-cli': 'write_file' }, Edit: { 'claude-code': 'Edit', 'gemini-cli': 'replace' }, Bash: { 'claude-code': 'Bash', 'gemini-cli': 'run_shell_command' }
 }
 
-export function convertRole(content: string, source: ImportToolId, target: ManagedAgentId): string {
+export function convertRole(content: string, source: ImportToolId, target: ManagedAgentId, name?: string): string {
   if (source === 'trae' || source === 'pi') throw new Error('尚无已确认的通用子 Agent 文件规范，请使用已验证的扩展 profile')
-  const { metadata, prompt } = parseRole(content, source)
+  const { metadata, prompt } = parseRole(content, source, { name })
   if (source === target) return content
   const allowed = new Set(['name', 'description', 'model', 'tools', 'readonly', 'is_background', 'kind', 'mode', 'color'])
   const unknown = Object.keys(metadata).filter(k => !allowed.has(k))
@@ -419,8 +428,10 @@ export function convertRole(content: string, source: ImportToolId, target: Manag
 }
 
 export function validateSkill(content: string, source: ImportToolId, target: ManagedAgentId): void {
-  const { metadata } = parseRole(content, 'claude-code')
+  const { metadata } = parseRole(content, source, { kind: 'SKILL' })
   if (source === target) return
+  try { parseRole(content, target, { kind: 'SKILL' }) }
+  catch (error) { throw new Error(`目标 Skill 格式需要补充字段：${error instanceof Error ? error.message : '请核对目标要求'}`) }
   const common = new Set(['name', 'description', 'license', 'compatibility', 'metadata'])
   const extra = Object.keys(metadata).filter(key => !common.has(key))
   if (extra.length && target !== 'claude-code') throw new Error(`目标未确认支持 Skill 调用或权限字段：${extra.join('、')}`)

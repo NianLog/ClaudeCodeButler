@@ -84,6 +84,41 @@ describe('AgentResourceService', () => {
     }
   })
 
+  it.each(['MCP', 'SKILL', 'SUBAGENT'] as const)('reports committed-but-unconfirmed $kind writes instead of returning an invalid empty placeholder', async kind => {
+    const file = path.join(root, kind === 'MCP' ? '.claude.json' : kind === 'SKILL' ? '.claude/skills/demo/SKILL.md' : '.claude/agents/demo.md')
+    const planned = kind === 'MCP' ? '{"command":"committed-marker"}' : content('demo') + 'committed-marker\n'
+    const read = resourceFiles.readBounded
+    const spy = vi.spyOn(resourceFiles, 'readBounded').mockImplementation(async (candidate, maximum) => {
+      const bytes = await read(candidate, maximum)
+      if (candidate !== file || !bytes?.includes(Buffer.from('committed-marker'))) return bytes
+      if (kind === 'MCP') return Buffer.from('{"mcpServers":{"demo":{"command":null}}}')
+      throw new Error('EACCES injected after commit')
+    })
+    try {
+      await expect(service.saveResource({ toolId: 'claude-code', kind, name: 'demo', content: planned })).rejects.toThrow('写入已完成，回读无法确认')
+      expect(await readFile(file, 'utf8')).toContain('committed-marker')
+    } finally { spy.mockRestore() }
+  })
+
+  it('does not confirm a valid role reread that differs from the just-written plan or overwrite the external result again', async () => {
+    const file = path.join(root, '.claude/agents/demo.md')
+    const planned = content('demo') + 'committed-marker\n'
+    const external = content('demo') + 'external-change\n'
+    const read = resourceFiles.readBounded
+    const spy = vi.spyOn(resourceFiles, 'readBounded').mockImplementation(async (candidate, maximum) => {
+      const bytes = await read(candidate, maximum)
+      if (candidate === file && bytes?.includes(Buffer.from('committed-marker'))) {
+        await writeFile(file, external)
+        return read(candidate, maximum)
+      }
+      return bytes
+    })
+    try {
+      await expect(service.saveResource({ toolId: 'claude-code', kind: 'SUBAGENT', name: 'demo', content: planned })).rejects.toThrow('写入已完成，回读无法确认')
+      expect(await readFile(file, 'utf8')).toBe(external)
+    } finally { spy.mockRestore() }
+  })
+
   it('preserves legacy native directories when canonical alternatives are absent', async () => {
     await put('.codex/skills/old/SKILL.md', content('old'))
     const item = await service.saveResource({ toolId: 'codex-cli', kind: 'SKILL', name: 'new', content: content('new') })
@@ -223,8 +258,8 @@ describe('AgentResourceService', () => {
     for (const sourceTool of tools) for (const targetToolId of tools) {
       if (sourceTool === targetToolId) continue
       const sources = await service.discoverImportSources({}, 9)
-      const source = sources.find(item => item.toolId === sourceTool)!
       for (const kind of ['MCP', 'SKILL', 'SUBAGENT'] as const) {
+        const source = sources.find(item => item.toolId === sourceTool && item.kinds.includes(kind))!
         const resource = (await service.listImportResources({ sourceId: source.sourceId, kind }, 9)).resources.find(item => item.name === sourceTool)!
         const plan = await service.previewResourceImport({ sourceId: source.sourceId, targetToolId, kind, resourceIds: [resource.resourceId] }, 9)
         expect(plan.items[0].status).toBe('READY')
@@ -285,10 +320,11 @@ describe('AgentResourceService', () => {
     await put('.cursor/skills/reviewer/SKILL.md', content('reviewer'))
     const binary = Buffer.from([0, 255, 128, 17])
     await put('.cursor/skills/reviewer/references/image.bin', binary)
+    await put('.cursor/skills/reviewer/z-last.bin', binary)
     await put('.cursor/skills/reviewer/scripts/never-run.js', 'throw new Error("must not execute")')
     if (process.platform !== 'win32') await chmod(path.join(root, '.cursor/skills/reviewer/scripts/never-run.js'), 0o700)
     const plan = await preview('cursor', 'gemini-cli', 'SKILL')
-    expect(plan.items[0].files).toHaveLength(3)
+    expect(plan.items[0].files).toHaveLength(4)
     const receipt = await service.applyResourceImport({ previewId: plan.previewId, decisions: [{ resourceId: plan.items[0].resourceId, action: 'IMPORT' }] }, 5)
     expect(receipt.results[0].status).toBe('IMPORTED')
     const query = { toolId: 'gemini-cli' as const, kind: 'SKILL' as const }
@@ -323,9 +359,11 @@ describe('AgentResourceService', () => {
   it('rejects traversal, linked source trees, oversized files, invalid UTF-8 and malformed target files', async () => {
     await expect(service.saveResource({ toolId: 'claude-code', kind: 'SUBAGENT', name: '../escape', content: content('bad') })).rejects.toThrow('安全文件名')
     await put('.cursor/mcp.json', Buffer.from([0xff, 0xfe]))
-    await expect(preview('cursor', 'claude-code')).rejects.toThrow()
+    expect((await service.discoverImportSources({ kind: 'MCP' }, 5)).find(item => item.toolId === 'cursor')!.status).toBe('INVALID')
     await put('.cursor/mcp.json', ' '.repeat(1024 * 1024 + 1))
-    await expect(preview('cursor', 'claude-code')).rejects.toThrow('大小')
+    const large = (await service.discoverImportSources({ kind: 'MCP' }, 5)).find(item => item.toolId === 'cursor')!
+    expect(large).toMatchObject({ status: 'INVALID', kinds: [] })
+    await expect(service.listImportResources({ sourceId: large.sourceId, kind: 'MCP' }, 5)).rejects.toThrow('大小')
     await put('.claude.json', '{broken')
     await expect(service.saveResource({ toolId: 'claude-code', kind: 'MCP', name: 'docs', content: '{"command":"node"}' })).rejects.toThrow('JSON')
     expect(await readFile(path.join(root, '.claude.json'), 'utf8')).toBe('{broken')
@@ -336,9 +374,13 @@ describe('AgentResourceService', () => {
 
   it('bounds MCP item discovery and refuses poisoned source definitions without writing', async () => {
     await put('.cursor/mcp.json', JSON.stringify({ mcpServers: Object.fromEntries(Array.from({ length: 1001 }, (_, index) => [`server-${index}`, { command: 'node' }])) }))
-    await expect(preview('cursor', 'claude-code')).rejects.toThrow('1000')
+    const excessive = (await service.discoverImportSources({ kind: 'MCP' }, 5)).find(item => item.toolId === 'cursor')!
+    expect(excessive).toMatchObject({ status: 'INVALID', kinds: [] })
+    await expect(service.listImportResources({ sourceId: excessive.sourceId, kind: 'MCP' }, 5)).rejects.toThrow('1000')
     await put('.cursor/mcp.json', '{"mcpServers":{"bad":{"__proto__":{"command":"node"}}}}')
-    await expect(preview('cursor', 'claude-code')).rejects.toThrow('__proto__')
+    const poisoned = (await service.discoverImportSources({ kind: 'MCP' }, 5)).find(item => item.toolId === 'cursor')!
+    expect(poisoned).toMatchObject({ status: 'INVALID', kinds: [] })
+    await expect(service.listImportResources({ sourceId: poisoned.sourceId, kind: 'MCP' }, 5)).rejects.toThrow('__proto__')
     await expect(readFile(path.join(root, '.claude.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
@@ -540,6 +582,56 @@ describe('AgentResourceService', () => {
     expect((await service.listResources({ toolId: 'gemini-cli', kind: 'MCP' })).resources.map(item => item.name)).toEqual(['one', 'two'])
   })
 
+  it('stops the entire collection after its attachment budget is reached without reading the next definition', async () => {
+    await put('.claude/skills/first/SKILL.md', content('first'))
+    await put('.claude/skills/second/SKILL.md', content('second'))
+    const readPackage = resourceFiles.readSkillPackage
+    const packageSpy = vi.spyOn(resourceFiles, 'readSkillPackage').mockImplementation(async (directory, budget) => {
+      const files = await readPackage(directory)
+      if (budget) budget.files = budget.maximumFiles
+      return files
+    })
+    const boundedSpy = vi.spyOn(resourceFiles, 'readBounded')
+    try {
+      const result = await service.listResources({ toolId: 'claude-code', kind: 'SKILL' })
+      expect(result.resources.some(row => row.name === 'first' && row.status === 'READY')).toBe(true)
+      expect(result.resources.filter(row => row.status === 'BLOCKED')).toHaveLength(1)
+      expect(result.writable).toBe(false)
+      expect(result.warnings.join()).toContain('预算')
+      expect(boundedSpy.mock.calls.some(([file]) => file === path.join(root, '.claude/skills/second/SKILL.md'))).toBe(false)
+    } finally { packageSpy.mockRestore(); boundedSpy.mockRestore() }
+  })
+
+  it('stops at the definition byte budget and does not read the next role', async () => {
+    for (let index = 0; index < 17; index++) await put(`.claude/agents/role-${String(index).padStart(2, '0')}.md`, content('role'))
+    const prefix = content('role')
+    const full = Buffer.from(prefix + 'x'.repeat(1024 * 1024 - Buffer.byteLength(prefix)))
+    const spy = vi.spyOn(resourceFiles, 'readBounded').mockResolvedValue(full)
+    try {
+      const result = await service.listResources({ toolId: 'claude-code', kind: 'SUBAGENT' })
+      expect(result.resources.filter(row => row.status === 'READY')).toHaveLength(16)
+      expect(result.resources.filter(row => row.status === 'BLOCKED')).toHaveLength(1)
+      expect(result.writable).toBe(false)
+      expect(spy.mock.calls.some(([file]) => file === path.join(root, '.claude/agents/role-16.md'))).toBe(false)
+    } finally { spy.mockRestore() }
+  })
+
+  it('stops at the definition count budget and leaves unscanned role files untouched', async () => {
+    const names = Array.from({ length: 1001 }, (_, index) => `role-${String(index).padStart(4, '0')}`)
+    for (let index = 0; index < names.length; index += 100) await Promise.all(names.slice(index, index + 100).map(name => put(`.claude/agents/${name}.md`, content(name))))
+    const spy = vi.spyOn(resourceFiles, 'readBounded').mockImplementation(async file => Buffer.from(content(path.basename(file, '.md'))))
+    try {
+      const query = { toolId: 'claude-code' as const, kind: 'SUBAGENT' as const }
+      const result = await service.listResources(query)
+      expect(result.resources.filter(row => row.status === 'READY')).toHaveLength(1000)
+      expect(result.resources.filter(row => row.status === 'BLOCKED')).toHaveLength(1)
+      expect(result.writable).toBe(false)
+      expect(spy.mock.calls.some(([file]) => file === path.join(root, '.claude/agents/role-1000.md'))).toBe(false)
+      await expect(service.saveResource({ ...query, name: 'new', content: content('new') })).rejects.toThrow('预算')
+      expect(await readFile(path.join(root, '.claude/agents/role-1000.md'), 'utf8')).toBe(content('role-1000'))
+    } finally { spy.mockRestore() }
+  }, 10_000)
+
   it.each([
     { tool: 'cursor' as const, base: '.cursor', mcp: '.cursor/mcp.json' },
     { tool: 'qoder' as const, base: '.qoder', mcp: '.qoder/settings.json' },
@@ -556,9 +648,10 @@ describe('AgentResourceService', () => {
     const rolesSupported = profile.tool !== 'pi' && profile.tool !== 'trae'
     if (rolesSupported) await put(`${profile.base}/agents/${name}.md`, profile.tool === 'opencode' ? content(name).replace('description:', 'mode: subagent\ndescription:') : content(name))
     const context = profile.tool === 'trae' ? await service.registerProject(path.join(root, 'workspace'), 12) : {}
-    const source = (await service.discoverImportSources(context, 12)).find(item => item.toolId === profile.tool)!
-    expect(source.kinds.includes('SUBAGENT')).toBe(rolesSupported)
+    const sources = (await service.discoverImportSources(context, 12)).filter(item => item.toolId === profile.tool)
+    expect(sources.some(source => source.kinds.includes('SUBAGENT'))).toBe(rolesSupported)
     for (const kind of ['MCP', 'SKILL', ...(rolesSupported ? ['SUBAGENT'] as const : [])] as const) {
+      const source = sources.find(item => item.kinds.includes(kind))!
       const resource = (await service.listImportResources({ sourceId: source.sourceId, kind }, 12)).resources[0]
       const targetToolId = kind === 'MCP' ? 'codex-cli' : kind === 'SKILL' ? 'antigravity' : 'gemini-cli'
       const plan = await service.previewResourceImport({ sourceId: source.sourceId, targetToolId, kind, resourceIds: [resource.resourceId] }, 12)

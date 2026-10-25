@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { lstat, open, readdir } from 'fs/promises'
+import { lstat, open, readdir, readlink, realpath } from 'fs/promises'
 import path from 'path'
 import { normalizePathForComparison, sanitizeFileName } from '../utils/path-security'
 
@@ -12,16 +12,40 @@ export function safeResourceName(value: unknown): string {
   return value
 }
 
-export async function assertNoLinks(target: string): Promise<void> {
+function assertLocalPath(target: string): void {
   if (!path.isAbsolute(target) || /^[\\/]{2}/.test(target) || target.includes('\0')) throw new Error('只允许本机绝对路径')
-  let current = path.resolve(target)
-  for (;;) {
+}
+
+export async function assertNoLinks(target: string): Promise<void> {
+  assertLocalPath(target)
+  const resolved = path.resolve(target)
+  let current = path.parse(resolved).root
+  for (const segment of resolved.slice(current.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment)
     try { if ((await lstat(current)).isSymbolicLink()) throw new Error('拒绝访问符号链接或目录联接') }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-    const parent = path.dirname(current)
-    if (parent === current) break
-    current = parent
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
   }
+}
+
+/** 在解析真实路径前拒绝 UNC 和链接链，避免先进入未允许的文件系统。 */
+export async function resolveLocalReference(link: string): Promise<string> {
+  assertLocalPath(link)
+  const resolved = path.resolve(link)
+  let current = path.parse(resolved).root
+  const segments = resolved.slice(current.length).split(path.sep).filter(Boolean)
+  for (let index = 0; index < segments.length; index++) {
+    current = path.join(current, segments[index])
+    if (!(await lstat(current)).isSymbolicLink()) continue
+    const raw = await readlink(current)
+    if (/^[\\/]{2}/.test(raw) || raw.includes('\0')) throw new Error('链接目标只允许本机路径，拒绝 UNC 或设备路径')
+    const target = path.resolve(path.dirname(current), raw, ...segments.slice(index + 1))
+    assertLocalPath(target)
+    await assertNoLinks(target)
+    const canonical = await realpath(target)
+    await assertNoLinks(canonical)
+    return canonical
+  }
+  throw new Error('该路径不是可授权的链接引用')
 }
 
 export async function readBounded(file: string, maximum = RESOURCE_MAX_BYTES): Promise<Buffer | undefined> {
@@ -58,8 +82,9 @@ export async function exists(target: string): Promise<boolean> {
 }
 
 export interface SkillPackageFile { relativePath: string; content: Buffer; executable?: boolean }
+export interface SkillReadBudget { files: number; maximumFiles: number }
 
-export async function readSkillPackage(root: string): Promise<SkillPackageFile[]> {
+export async function readSkillPackage(root: string, budget?: SkillReadBudget): Promise<SkillPackageFile[]> {
   await assertNoLinks(root)
   const info = await lstat(root)
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Skill 包必须是普通目录')
@@ -78,6 +103,8 @@ export async function readSkillPackage(root: string): Promise<SkillPackageFile[]
       if (entry.isDirectory()) await walk(target, depth + 1)
       else {
         if (!entry.isFile() || result.length >= 2000) throw new Error('Skill 包包含非普通文件或超过 2000 个文件')
+        if (budget && budget.files >= budget.maximumFiles) throw new Error('本次发现已达到集合附件预算；后续文件未读取')
+        if (budget) budget.files++
         const content = await readBounded(target, 10 * 1024 * 1024)
         if (!content) throw new Error('Skill 包在读取期间发生变化')
         bytes += content.length

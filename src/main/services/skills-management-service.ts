@@ -21,6 +21,7 @@ import type {
 } from '@shared/types/skills'
 import { ensureSafePathSegment, resolveSafeChildPath, sanitizeFileName, normalizePathForComparison } from '../utils/path-security'
 import { assertNoLinks, readSkillPackage, skillRevision, utf8 } from './agent-resource-files'
+import { parseRole } from './agent-resource-codecs'
 
 const MAX_IMPORT_FILES = 2000
 const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024
@@ -279,9 +280,8 @@ export class SkillsManagementService {
       throw new Error('SKILL.md 必须是 10 MiB 以内的普通文件')
     }
     const skillMdContent = await fs.readFile(sourceSkillMdPath, 'utf-8')
-    const metadata = this.parseSkillFrontmatter(skillMdContent)
-    if (!metadata.name || !metadata.description) throw new Error('SKILL.md缺少必填的name或description字段')
-    return this.commitSkillImport(this.slugify(metadata.name), options, async staged => {
+    const { metadata } = parseRole(skillMdContent, 'claude-code', { kind: 'SKILL' })
+    return this.commitSkillImport(typeof metadata.name === 'string' ? this.slugify(metadata.name) : path.basename(sourceDirPath), options, async staged => {
       await this.copyDirectoryRecursive(sourceDirPath, staged, { files: 0, bytes: 0 })
     })
   }
@@ -365,8 +365,7 @@ export class SkillsManagementService {
         await fs.mkdir(staged)
         await populate(staged)
         const content = new TextDecoder('utf-8', { fatal: true }).decode(await fs.readFile(path.join(staged, 'SKILL.md')))
-        const metadata = this.parseSkillFrontmatter(content)
-        if (!metadata.name || !metadata.description) throw new Error('SKILL.md缺少必填的name或description字段')
+        parseRole(content, 'claude-code', { kind: 'SKILL' })
         await this.initializeSkillsDir()
         if (exists) {
           const stats = await fs.lstat(target)
