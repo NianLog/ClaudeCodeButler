@@ -7,6 +7,8 @@
 
 ### 资源闭环三批
 
+网络缓解 A（2026-10-25）：上游 TLS 显式绑定规范目标；下载 HEAD 委托现有 HTTP 工具，禁复用、收尾响应并设五秒总时限，保持 2xx/3xx 和 Chromium 下载语义。此处 Node HEAD 经用户批准暂留，B 批约束与完整验收进行中。配置路径、数据格式与公共 IPC 不变，见[决定与证据更正](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。下段是实施前的厂商回补复核记录。
+
 运行时安全复核（2026-10-25）：当前 Electron 45 的 9 份相关内置 JS 源码与未修复 Node 24.22.0 一致，TLS/DNS 反例仍未拒绝。Brotli 已由 Chromium 包含修复，其余七项 Node 上游修复缺失，内置 c-ares/Undici 另有公告版本风险。宿主 Node/npm 更新不能替换内嵌运行时；现有 URL/Host/鉴权/agent:false 缓解保持。用户本轮暂缓安装生命周期和签名，不改程序代码，不发布。详见[运行时证据](.agents/notes/implemented/process/2026-10-25-latest-stable-dependency-upgrades.md)。
 
 - `LegacyResourceEditor` 将旧 Skill/子 Agent 的新增、更新、删除与角色导入委托资源服务，旧表单提交完整包/文件 revision；不再用 delete/add 更新。字段修改保留未知权限元数据和附件，路径不变；不支持的 YAML 布局明确要求原文编辑。

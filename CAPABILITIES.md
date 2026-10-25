@@ -17,6 +17,8 @@
 
 ## 1. 面板级功能矩阵
 
+网络安全补修 A：代理上的 HTTPS IP 目标按规范目标校验证书；下载预检禁用连接复用并释放响应，保留原有状态和超时反馈。51 项相关回归通过；B 批与完整/真实业务验收进行中，尚未重新打包或发布。见[网络缓解 DDE](.agents/notes/implemented/bug-fix/2026-10-25-reachable-node-network-mitigations.md)。
+
 | 功能 | 说明 | 状态 |
 | --- | --- | --- |
 | 配置管理 | Claude Code 多类型配置（settings/claude.json/claude.md/项目配置）创建、编辑、复制、导入导出、备份、激活切换；Monaco 编辑器 + JSON/Markdown 校验；新建预填按 `USER_OVERRIDE > REGISTRY > EMBEDDED` 解析的 artifact 模板；1.5.1 header 全局选择器统一该工作区、配置集和资源管理目标 | 稳定（模板来源机制与工具下拉框 1.5.0 新增） |

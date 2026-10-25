@@ -39,6 +39,7 @@ import {
   sanitizeFileName
 } from './utils/path-security'
 import { updateService } from './services/update-service'
+import { probeDownloadUrl } from './utils/upstream-http-client'
 import { setupAgentResourceHandlers } from './ipc/agent-resource-handlers'
 import { withAgentResourceMutation } from './utils/agent-resource-queue'
 import { agentResourceService } from './services/agent-resource-service'
@@ -379,29 +380,8 @@ function setupSystemHandlers(): void {
       // 1. 先测试URL是否可访问
       try {
         logger.info(`测试URL访问性...`)
-        const https = await import('https')
-        const http = await import('http')
-        const client = safeUrl.protocol === 'https:' ? https : http
-
-        await new Promise((testResolve, testReject) => {
-          const req = client.request(safeUrl.toString(), { method: 'HEAD' }, (res) => {
-            logger.info(`URL测试响应: statusCode=${res.statusCode}, contentType=${res.headers['content-type']}`)
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
-              testResolve(true)
-            } else {
-              testReject(new Error(`HTTP ${res.statusCode}`))
-            }
-          })
-          req.on('error', (err) => {
-            logger.error(`URL测试失败:`, err)
-            testReject(err)
-          })
-          req.setTimeout(5000, () => {
-            req.destroy()
-            testReject(new Error('URL测试超时'))
-          })
-          req.end()
-        })
+        const status = await probeDownloadUrl(safeUrl)
+        logger.info(`URL测试响应: statusCode=${status}`)
       } catch (testError) {
         logger.error(`URL不可访问:`, testError)
         return {

@@ -1,5 +1,5 @@
 /**
- * 上游 HTTP 转发客户端（托管模式专用）
+ * 受控 Node HTTP 客户端（托管转发与下载 HEAD 预检）
  *
  * 取代 axios 转发路径（v1.5.0 移除 axios 依赖）：
  * - 返回 IncomingMessage 原始流，与 axios responseType:'stream' 等价，
@@ -13,6 +13,7 @@
  */
 import { type ClientRequest, type IncomingMessage, request as httpRequest } from 'http'
 import { request as httpsRequest } from 'https'
+import { checkServerIdentity, type PeerCertificate } from 'tls'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 
 export interface UpstreamRequestOptions {
@@ -61,6 +62,28 @@ export class UpstreamTimeoutError extends Error {
   }
 }
 
+/** 下载预检只取状态；保留既有 2xx/3xx 判定，不跟随重定向。 */
+export function probeDownloadUrl(target: URL): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const transport = target.protocol === 'https:' ? httpsRequest : httpRequest
+    // shortcut: 保留 Node HEAD 的 2xx/3xx 行为；2026-11-01 复核 Chromium 替代路径。
+    const request = transport(target, { method: 'HEAD', agent: false }, (response) => {
+      clearTimeout(deadline)
+      const status = response.statusCode ?? 0
+      response.once('error', reject)
+      response.destroy()
+      if (status >= 200 && status < 400) resolve(status)
+      else reject(new Error(`HTTP ${status}`))
+    })
+    const deadline = setTimeout(() => request.destroy(new Error('URL测试超时')), 5000)
+    request.once('error', (error) => {
+      clearTimeout(deadline)
+      reject(error)
+    })
+    request.end()
+  })
+}
+
 /**
  * 发起上游 POST，返回原始响应流。
  * 非 2xx 不抛错（由调用方读取错误体后构造 UpstreamHttpError，对齐 axios 非 2xx 抛错语义）。
@@ -86,7 +109,10 @@ export function postUpstream(opts: UpstreamRequestOptions): Promise<UpstreamResp
       method: 'POST' as const,
       headers,
       signal: opts.signal,
-      // shortcut: Electron 的 CVE-2026-105481 回补未核实；确认后恢复无代理连接复用。
+      // CONNECT 隧道可能丢失目标 host；校验始终绑定规范化后的目标，而非代理或 Host。
+      checkServerIdentity: (_hostname: string, cert: PeerCertificate) =>
+        checkServerIdentity(target.hostname.replace(/^\[|\]$/g, ''), cert),
+      // shortcut: Electron 45 未包含 CVE-2026-105481 修复；稳定回补及复用回归通过后再恢复。
       agent: opts.proxyUrl ? new HttpsProxyAgent(opts.proxyUrl) : false
     }
 
