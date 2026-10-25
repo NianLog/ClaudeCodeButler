@@ -1,7 +1,7 @@
 # Agent Note: 资源管理真实路径、权限保持与备份恢复闭环
 
 Status: implemented
-Scope: src/main/**, src/preload/index.ts, src/shared/**, src/renderer/src/**, tests/unit/**
+Scope: src/main/**, src/preload/index.ts, src/shared/**, src/renderer/src/**, tests/**, package.json
 Last-verified: 2026-10-25
 
 ## Problem
@@ -12,7 +12,7 @@ Last-verified: 2026-10-25
 
 ## Decision
 
-当前前两批已落地；第三批交互和最终全量验收仍在进行，不能视为发布验收通过。
+三批代码和本机回归已完成；新候选包正在核验，暂不发布，不能视为生产发布验收通过。
 
 1. 数据与权限：旧表单通过主进程委托统一资源更新和备份，不再组合 delete/add；保留完整原文中的未知字段与附件。原生文件保存/恢复核对 expectedRevision，恢复前备份当前文件。新备份校验字节摘要与大小，旧副本标记无历史摘要并保持可恢复。Qoder 顶层停用策略参与转换与 revision。
 2. 发现与格式：按当前资源种类有界扫描，逐候选诊断；有效 registry 中的现有路径优先，列举所有配置层。坏条目不隐藏正常项，未知写入边界仍拒绝。链接只在目标独立命中有效白名单时作为只读引用展示。按 tool/kind 解释原生字段；MCP 从受控历史副本拆分服务器并走现有 preview/apply，避免覆盖无关配置。
@@ -41,6 +41,14 @@ Last-verified: 2026-10-25
 第二批验证：其余 9 项全部转绿，R1～R19 均已入库。资源、发现、路径、旧兼容编辑、MCP/归档、artifact、registry 和 preload 的核心组合 20 files / 267 tests 通过，无跳过；后端类型与 lint 零错误。补充预算停止、链接改向/授权撤销、保存后单项回读失败和外部改写、OpenCode 权限变化等反例。
 
 扫描按当前 kind，空来源继续检查其他候选，错误单独诊断。链接先逐段检查本机路径，再读取目标并独立授权；链式链接和 UNC 不读取。总预算用尽后保留已发现项及一条诊断，集合未完整确认时拒绝写入。保存后需核实实际计划；写成但回读失败明确要求核对，不能返回空内容成功或自动重试。
+
+第三批修复：自动化规则与环境排查移至“工具”，明确独立于全局 Agent 的操作作用域。旧表单使用明确保存动作、提交状态与常驻错误，正文提取不再吞掉起始空行。原生文件保留被点击候选的 main 解析路径，缺失第二候选创建不会退回首路径；历史标签区分“记录摘要”和“实际校验”。确认弹窗等待 Hook Modal 的结果，失败保留弹窗且不产生未捕获 Promise。
+
+完整验证：57 files / 555 tests 全通过，无跳过；本地提供既有 rehearsal 密钥配置和 web staging 样本。覆盖率 statements 50.25%、branches 54.37%、functions 48.91%、lines 50.50%（统计 main/proxy/shared，不含 renderer）。类型零错误，lint 零错误/15 个既有非空断言 warning，lint:changed、root/proxy 构建、正式 preflight 和 root/proxy 全依赖 audit（均零漏洞）通过。
+
+真实 Windows Electron 45 使用生产 out、真实 preload/IPC、独立 HOME/AppData/临时目录完成 19 组验收，未捕获 renderer 异常为零，正常退出，5 个既有用户文件摘要保持不变。包含默认发现、同 sourceId 重扫、空来源后继检查、文件/项目选择、遮罩预览与逐项结果、写中切换/退出保护、失败删除、按项恢复、缺失原件、旧 Skill/角色附件与权限/正文空白、保存失败留稿、外部版本冲突、整文件恢复草稿决策/回退副本、多候选精确创建、四主题和 1280 布局。多候选写错与起始空行丢失均在旧实现先复现失败，再修复转绿。
+
+复跑命令（Windows，使用 `.nvmrc` 工具链）：`npm.cmd run build`，随后 `npm.cmd run test:electron`。脚本只使用 `release/electron-e2e/profile-*` 夹具并保留截图/JSON；打包清理 release 前应另存证据。它不安装外部 Agent，不执行模型付费请求，不放宽 renderer sandbox，不向真实用户路径写入。
 
 ## 官方格式核对（2026-10-25）
 

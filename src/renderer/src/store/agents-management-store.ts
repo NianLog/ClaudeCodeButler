@@ -293,6 +293,7 @@ export const useAgentsManagementStore = create<AgentsManagementState>((set, get)
 
   openAddModal: () => {
     set({
+      error: null,
       formMode: 'add',
       editingAgent: null,
       isFormModalOpen: true
@@ -301,6 +302,7 @@ export const useAgentsManagementStore = create<AgentsManagementState>((set, get)
 
   openEditModal: (agent) => {
     set({
+      error: null,
       formMode: 'edit',
       editingAgent: agent,
       isFormModalOpen: true

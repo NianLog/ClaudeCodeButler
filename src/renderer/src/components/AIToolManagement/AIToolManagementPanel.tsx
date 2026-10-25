@@ -53,7 +53,7 @@ const PANEL_TEXT = {
     scanArtifacts: '扫描配置', open: '打开', readOnly: '只读', validate: '校验', backup: '创建备份', emptyTools: '规则库中没有工具定义',
     backupHistory: '历史备份', emptyBackups: '没有可恢复的备份', restore: '恢复', restoreTitle: '确认恢复备份', restoreContent: '将使用 {time} 的备份覆盖当前配置，是否继续？',
     restoreScope: '恢复将替换整份原生文件及其中的所有设置。请先核对差异；当前版本会先备份。MCP 单项恢复请使用 MCP 管理页。',
-    legacyBackup: '此旧副本没有历史摘要，请逐项核对内容；本次预览后内容变化会阻止恢复。', verifiedBackup: '历史摘要校验通过',
+    legacyBackup: '此旧副本没有历史摘要，请逐项核对内容；本次预览后内容变化会阻止恢复。', recordedBackup: '已记录历史摘要',
     currentContent: '当前文件', backupContent: '所选备份', missingContent: '当前文件不存在，将按授权路径恢复。', restoreApply: '备份当前版本并恢复整份文件', backToBackups: '返回备份列表',
     missingReadOnly: '当前规则未授权创建这个缺失文件。请检查创建权限；MCP 定义可返回 MCP 管理按项恢复。',
     emptyArtifacts: '未发现当前平台的配置文件', securityTitle: '编辑本机配置原文件', securityDescription: '这里的修改可能直接影响 Agent。请核对文件位置；保存和恢复前会按规则校验并备份。',
@@ -70,7 +70,7 @@ const PANEL_TEXT = {
     scanArtifacts: 'Scan configs', open: 'Open', readOnly: 'Read only', validate: 'Validate', backup: 'Create backup', emptyTools: 'No tool definitions in the registry',
     backupHistory: 'Backup history', emptyBackups: 'No restorable backups', restore: 'Restore', restoreTitle: 'Confirm backup restore', restoreContent: 'This replaces the current configuration with the backup from {time}. Continue?',
     restoreScope: 'This replaces the entire native file and all its settings. Review the differences first; the current version is backed up before restoration. Use MCP management to restore individual servers.',
-    legacyBackup: 'This legacy copy has no historical digest. Review its content; changes after this preview will stop restoration.', verifiedBackup: 'Historical digest verified',
+    legacyBackup: 'This legacy copy has no historical digest. Review its content; changes after this preview will stop restoration.', recordedBackup: 'Historical digest recorded',
     currentContent: 'Current file', backupContent: 'Selected backup', missingContent: 'The current file is missing. Restoration will use the authorized path.', restoreApply: 'Back up current version and restore entire file', backToBackups: 'Back to backups',
     missingReadOnly: 'The current registry does not authorize creating this missing file. Check creation permissions; individual MCP definitions can be restored from MCP management.',
     emptyArtifacts: 'No configuration files found for this platform', securityTitle: 'Edit native configuration files', securityDescription: 'Changes here may affect your agent immediately. Check the file location; permissions and backups are checked before writes.',
@@ -107,8 +107,10 @@ interface EditorPart {
   definition: ConfigArtifactDefinition
   /** 已存在文件的内容；文件尚不存在时为 undefined（保存时按 registry 声明路径创建） */
   content?: ConfigArtifactContent
-  /** 展示用 registry 声明候选路径模板；IPC 调用对缺失文件统一传空串，由主进程解析主候选路径 */
+  /** 展示路径；无发现结果时也可能是 registry 模板。 */
   candidatePath: string
+  /** 主进程发现返回的真实候选，用于缺失文件的明确创建位置。 */
+  resolvedPath?: string
 }
 
 /**
@@ -223,9 +225,11 @@ const AIToolManagementPanel: React.FC = () => {
     const nextDrafts: Record<string, string> = {}
     const nextBaselines: Record<string, string> = {}
     for (const member of group) {
-      const discovered = artifacts.find(
+      const candidates = artifacts.filter(
         (item) => item.toolId === tool.toolId && item.artifactId === member.artifactId
       )
+      const discovered = member.artifactId === artifact.artifactId
+        ? artifact : candidates.find((item) => item.exists !== false) ?? candidates[0]
       const candidatePath = discovered?.path ?? member.paths[platform]?.[0] ?? ''
       if (!candidatePath) continue
       if (discovered && discovered.exists !== false) {
@@ -243,7 +247,7 @@ const AIToolManagementPanel: React.FC = () => {
         nextDrafts[member.artifactId] = response.data.content
         nextBaselines[member.artifactId] = response.data.content
       } else {
-        parts.push({ definition: member, candidatePath })
+        parts.push({ definition: member, candidatePath, resolvedPath: discovered?.path })
         const template = member.defaultTemplate ?? ''
         nextDrafts[member.artifactId] = template
         nextBaselines[member.artifactId] = template
@@ -303,7 +307,7 @@ const AIToolManagementPanel: React.FC = () => {
             const response = await window.electronAPI.toolRegistry.validateArtifact(
               toolId,
               artifactId,
-              part.content?.path ?? '',
+              part.content?.path ?? part.resolvedPath ?? '',
               drafts[artifactId] ?? ''
             )
             if (!response.success || !response.data?.valid) {
@@ -318,7 +322,7 @@ const AIToolManagementPanel: React.FC = () => {
             const response = await window.electronAPI.toolRegistry.editArtifact(
               toolId,
               artifactId,
-              part.content?.path ?? '',
+              part.content?.path ?? part.resolvedPath ?? '',
               drafts[artifactId] ?? '',
               part.content?.revision ?? 'MISSING'
             )
@@ -337,14 +341,14 @@ const AIToolManagementPanel: React.FC = () => {
         }
   }
 
-  const saveDraft = (): void => {
+  const saveDraft = async (): Promise<void> => {
     if (!selectedToolId || dirtyParts.length === 0) return
     const editableParts = dirtyParts.filter((part) => part.definition.capabilities.includes('EDIT'))
     if (editableParts.length === 0) return
     const fileList = editableParts
       .map((part) => `${part.content ? panelText.toBeUpdated : panelText.toBeCreated} · ${part.content?.path ?? part.candidatePath}`)
       .join('\n')
-    modal.confirm({
+    await modal.confirm({
       title: compositeMode ? panelText.confirmSaveMultiTitle : panelText.confirmSaveTitle,
       content: compositeMode
         ? `${panelText.confirmSaveMultiContent}\n${fileList}`
@@ -380,7 +384,7 @@ const AIToolManagementPanel: React.FC = () => {
       const response = await window.electronAPI.toolRegistry.listArtifactBackups(
         selectedToolId,
         activePart.definition.artifactId,
-        activePart.content?.path ?? activePart.candidatePath
+        activePart.content?.path ?? activePart.resolvedPath ?? ''
       )
       if (!response.success) throw new Error(response.error || panelText.listBackupsError)
       setBackups(response.data ?? [])
@@ -610,7 +614,7 @@ const AIToolManagementPanel: React.FC = () => {
                     <div className="backup-meta-description">
                       <Text className="artifact-path" title={backup.originalPath}>{backup.originalPath}</Text>
                       <Tag>{Math.max(1, Math.ceil(backup.size / 1024))} KB</Tag>
-                      <Tag color={backup.integrity === 'SHA256' ? 'success' : 'warning'}>{backup.integrity === 'SHA256' ? panelText.verifiedBackup : panelText.legacyBackup}</Tag>
+                      <Tag color={backup.integrity === 'SHA256' ? 'default' : 'warning'}>{backup.integrity === 'SHA256' ? panelText.recordedBackup : panelText.legacyBackup}</Tag>
                     </div>
                   )}
                 />

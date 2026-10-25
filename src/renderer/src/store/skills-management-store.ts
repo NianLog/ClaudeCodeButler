@@ -293,6 +293,7 @@ export const useSkillsManagementStore = create<SkillsManagementState>((set, get)
 
   openAddModal: () => {
     set({
+      error: null,
       formMode: 'add',
       editingSkill: null,
       isFormModalOpen: true
@@ -301,6 +302,7 @@ export const useSkillsManagementStore = create<SkillsManagementState>((set, get)
 
   openEditModal: (skill) => {
     set({
+      error: null,
       formMode: 'edit',
       editingSkill: skill,
       isFormModalOpen: true

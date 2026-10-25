@@ -102,8 +102,8 @@ export default function AgentResourcesPage({ kind }: { kind: AgentResourceKind }
     setDraft({ name: '', baselineName: '', content, baseline: content, readOnly: false })
     setEditorOpen(true)
   }
-  const remove = (resource: AgentResource): void => {
-    modal.confirm({ title: t('resources.deleteTitle'), content: <><p>{resource.name}</p><p>{t('resources.deleteHint')}</p></>,
+  const remove = async (resource: AgentResource): Promise<void> => {
+    await modal.confirm({ title: t('resources.deleteTitle'), content: <><p>{resource.name}</p><p>{t('resources.deleteHint')}</p></>,
       okText: t('resources.deleteAction'), cancelText: t('common.cancel'), okButtonProps: { danger: true },
       onOk: async () => {
         setWriting(true)

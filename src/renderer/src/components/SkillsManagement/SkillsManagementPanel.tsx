@@ -19,6 +19,7 @@ import {
   Space,
   Drawer,
   Modal,
+  Alert,
   Form,
   Input,
   message,
@@ -66,6 +67,7 @@ const SkillsManagementPanel: React.FC = () => {
   const {
     skills,
     isLoading,
+    error,
     selectedSkill,
     isDetailDrawerOpen,
     isFormModalOpen,
@@ -102,7 +104,7 @@ const SkillsManagementPanel: React.FC = () => {
   useEffect(() => {
     if (editingSkill && isFormModalOpen && formMode === 'edit') {
       // 提取Skill内容（移除YAML frontmatter）
-      const frontmatterRegex = /^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)$/
+      const frontmatterRegex = /^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/
       const match = editingSkill.skillMdContent.match(frontmatterRegex)
       const content = match ? match[1] : editingSkill.skillMdContent
 
@@ -598,12 +600,16 @@ const SkillsManagementPanel: React.FC = () => {
         title={formMode === 'add' ? t('skills.form.createTitle') : t('skills.form.editTitle')}
         open={isFormModalOpen}
         onOk={formMode === 'add' ? handleAdd : handleEdit}
+        okText={t('common.save')} confirmLoading={isLoading}
+        closable={!isLoading} keyboard={!isLoading} cancelButtonProps={{ disabled: isLoading }}
         onCancel={() => useAgentContextStore.getState().requestChange(closeFormModal)}
         width={720}
         afterClose={() => form.resetFields()} maskClosable={false}
       >
+        {error && <Alert type="error" showIcon title={error} />}
         <Form
           form={form}
+          disabled={isLoading}
           layout="vertical"
         >
           <Form.Item

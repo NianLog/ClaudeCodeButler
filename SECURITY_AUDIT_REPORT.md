@@ -8,7 +8,11 @@
 
 第二批补齐按 kind 默认发现、坏项隔离、原生格式与只读共享引用，19 个原反例全部入库转绿。路径检查改为从根到叶，先拒绝不允许的链接目标再读取；总预算用尽即停止且禁止修改未完整扫描的集合。写后回读必须匹配计划，失败明确已写入、需核对；OpenCode 已知全局限制不能映射则阻止，变化中止。
 
-核心组合 20 files / 267 tests 通过，无跳过，后端类型/lint 零错误；真实 Electron 全流程、完整回归与新候选仍待最终核验。本轮没有重跑 Semgrep，不发布。决策、官方格式依据与剩余边界见[资源闭环记录](.agents/notes/implemented/bug-fix/2026-10-25-resource-management-closure.md)。
+第三批完成“工具”分类、准确作用域和旧表单提交/常驻错误反馈；真实交互又复现并修复原生多候选打开/创建错位及旧正文起始空行丢失。异步确认等待 Hook Modal 结果，失败不再产生未捕获 Promise；历史列表只声称记录摘要，预览与恢复才实际核验内容。
+
+最终本机回归：57 files / 555 tests 全通过，无跳过（提供既有 rehearsal 配置及 web staging）。statements 50.25%、branches 54.37%、functions 48.91%、lines 50.50%，范围 main/proxy/shared；不表示全部路径已覆盖。类型零错误，lint 零错误/15 个既有非空断言 warning，lint:changed、root/proxy 构建、preflight 与双全依赖 audit（0 漏洞）通过。
+
+Windows 真实 Electron 45 使用生产 out 和真实 preload/IPC，在隔离 HOME/AppData 下完成 19 组资源全流程，renderer 未捕获异常为零，正常退出，5 个用户配置文件摘要不变。九张原生截图覆盖四主题、1280 布局、默认/项目导入和整文件差异预览。可用 `npm.cmd run build` + `npm.cmd run test:electron` 复跑。新候选包正在从干净提交重建核验，旧 289a832 包不含补修。本轮没有重跑 Semgrep，不发布。官方依据、限度及拒绝方案见[资源闭环记录](.agents/notes/implemented/bug-fix/2026-10-25-resource-management-closure.md)。
 
 ## 2026-10-25：多 Agent、稳定依赖与安全边界
 

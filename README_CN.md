@@ -8,8 +8,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Electron](https://img.shields.io/badge/Electron-45.0.0-47848F?logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19.3.1-61DAFB?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
 </div>
 
@@ -27,7 +27,8 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 - **1.5.1 安全修复**：同路径排队原子写、配置集激活前完整校验、设置失败反馈、受限版本读取与上游断连取消；沿用现有配置路径和文件格式。
 - **收尾修复**：损坏或不可读的托管 settings 不再被覆盖，启停和恢复失败会返回错误；重启按钮实际执行服务重启，服务商切换成功后仅刷新状态。
 - **C 批修复**：独立代理强制 accessToken、按协议路由并转换 SSE；Skill 覆盖先校验暂存再替换，失败恢复原目录。独立代理的启动与协议支持范围见 [说明](src/proxy-server/PROTOCOL.md)。
-- **本地验收**：52 个测试文件 / 470 项全通过，无跳过；类型、lint（0 error / 16 warning）、双构建、12 项原生交互通过。未签名 Portable/NSIS/ZIP、包内文件/hash、旧 profile 和三轮性能快照均已校验；未发布，详见 [验收报告](./SECURITY_AUDIT_REPORT.md)。
+- **资源闭环补修**：先识别默认位置，逐项显示缺失/受限/损坏状态；保留现有路径、Skill 附件与权限字段。MCP 按服务器恢复，原生文件明确按整文件恢复；保存过期版本会被拒绝，失败保留草稿。自动化规则与环境排查归入“工具”。
+- **本地验收**：57 个测试文件 / 555 项全通过，无跳过；19 个原始反例和真实 Electron 的 19 组流程均通过，未捕获异常为零。类型、lint（0 error / 15 warning）、双构建和两套全依赖审计通过；新候选包正在核验，未发布。详见 [验收报告](./SECURITY_AUDIT_REPORT.md)。
 - **发布门禁**：两套生产依赖审计、预检、Authenticode 校验、ASAR 完整性、依赖 SBOM、SHA-256 和来源证明。本地未签名包仅供测试，验证记录及开发链告警见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
 
 产品名称继续使用 **Claude Code Butler**。名称用于记录项目起源，不再承担描述全部管理范围的职责；新增工具通过受约束 registry 与内置 capabilities 接入，`CCB`、`.ccb`、应用 identity 和仓库标识保持稳定。

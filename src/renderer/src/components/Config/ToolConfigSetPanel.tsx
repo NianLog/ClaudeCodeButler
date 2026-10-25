@@ -206,12 +206,12 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
   }
 
   /** 激活配置集（托管模式拦截与托盘一致；成功后同步托盘菜单） */
-  const activateSet = (set: ToolConfigSetSummary): void => {
+  const activateSet = async (set: ToolConfigSetSummary): Promise<void> => {
     if (managedModeEnabled) {
       message.warning(panelText.activateManaged)
       return
     }
-    modal.confirm({
+    await modal.confirm({
       title: panelText.activateTitle,
       content: formatPanelText(panelText.activateContent, { name: set.name }),
       okText: panelText.activate,
@@ -219,6 +219,7 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
       onOk: async () => {
         const response = await window.electronAPI.toolRegistry.activateConfigSet(toolId, set.setId)
         if (!response.success) {
+          message.error(response.error || panelText.activateError)
           throw new Error(response.error || panelText.activateError)
         }
         message.success(panelText.activated)
@@ -228,8 +229,8 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
     })
   }
 
-  const deleteSet = (set: ToolConfigSetSummary): void => {
-    modal.confirm({
+  const deleteSet = async (set: ToolConfigSetSummary): Promise<void> => {
+    await modal.confirm({
       title: panelText.deleteTitle,
       content: formatPanelText(panelText.deleteContent, { name: set.name }),
       okText: panelText.delete,
@@ -238,6 +239,7 @@ const ToolConfigSetPanel: React.FC<ToolConfigSetPanelProps> = ({ toolId, toolLab
       onOk: async () => {
         const response = await window.electronAPI.toolRegistry.deleteConfigSet(toolId, set.setId)
         if (!response.success) {
+          message.error(response.error || panelText.deleteError)
           throw new Error(response.error || panelText.deleteError)
         }
         message.success(panelText.deleted)

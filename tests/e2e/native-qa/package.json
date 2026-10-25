@@ -1,0 +1,6 @@
+{
+  "name": "ccb-electron-workflow-tests",
+  "version": "1.5.1",
+  "private": true,
+  "main": "bootstrap.cjs"
+}

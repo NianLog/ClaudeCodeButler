@@ -8,8 +8,8 @@ English | [简体中文](./README_CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Electron](https://img.shields.io/badge/Electron-45.0.0-47848F?logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19.3.1-61DAFB?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
 </div>
 
@@ -27,7 +27,8 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 - **1.5.1 safety fixes**: serialized atomic writes, validation before configuration-set activation, accurate settings error feedback, bounded version requests, and upstream cancellation. Existing paths and data formats remain compatible.
 - **Final fixes**: damaged or unreadable managed settings are preserved; startup, restart and restore failures are reported. The restart button actually restarts the service, while provider switches only refresh the UI after completion.
 - **Batch C**: the standalone proxy requires accessToken and uses protocol-specific endpoints and SSE translation. Skill replacement stages and validates the complete import before swapping, with rollback on failure. See the [standalone proxy guide](src/proxy-server/PROTOCOL.md) for startup and protocol limits.
-- **Local acceptance**: 52 files / 470 tests pass with no skips; type checks, lint (0 errors / 16 warnings), both builds and 12 native interactions pass. Unsigned Portable/NSIS/ZIP, payloads/hashes, legacy profiles and three performance rounds are verified. Unpublished; see the [acceptance report](./SECURITY_AUDIT_REPORT.md).
+- **Resource safety follow-up**: discover default locations first and report missing, restricted and invalid entries separately. Existing paths, Skill attachments and permission fields are preserved. MCP recovery restores individual servers; native-file recovery explicitly restores a whole file. Stale writes are rejected and failed saves retain drafts. Automation and environment checks now belong to Tools.
+- **Local acceptance**: 57 files / 555 tests pass with no skips. All 19 original regressions and 19 real Electron workflows pass, with no uncaught renderer exceptions. Type checks, lint (0 errors / 15 warnings), both builds and both full dependency audits pass. New candidate payload verification is in progress; unpublished. See the [acceptance report](./SECURITY_AUDIT_REPORT.md).
 - **Release gates**: production audits for both packages, preflight, Authenticode checks, ASAR integrity, dependency SBOMs, SHA-256 and build provenance. Local unsigned packages are for testing; see [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for verification and remaining build-tool advisories.
 
 The product name remains **Claude Code Butler**. The name records the project's origin rather than limiting its architecture: new tools are integrated through a bounded registry and built-in capabilities, while `CCB`, `.ccb`, app identity, and repository identifiers remain stable.

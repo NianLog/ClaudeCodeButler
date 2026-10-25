@@ -19,6 +19,7 @@ import {
   Space,
   Drawer,
   Modal,
+  Alert,
   Form,
   Input,
   Upload,
@@ -82,6 +83,7 @@ const AgentsManagementPanel: React.FC = () => {
   const {
     agents,
     isLoading,
+    error,
     selectedAgent,
     isDetailDrawerOpen,
     isFormModalOpen,
@@ -117,7 +119,7 @@ const AgentsManagementPanel: React.FC = () => {
   useEffect(() => {
     if (editingAgent && isFormModalOpen && formMode === 'edit') {
       // 提取Agent内容（移除YAML frontmatter）
-      const frontmatterRegex = /^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)$/
+      const frontmatterRegex = /^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/
       const match = editingAgent.content.match(frontmatterRegex)
       const content = match ? match[1] : editingAgent.content
 
@@ -615,12 +617,16 @@ const AgentsManagementPanel: React.FC = () => {
         title={formMode === 'add' ? t('agents.form.createTitle') : t('agents.form.editTitle')}
         open={isFormModalOpen}
         onOk={formMode === 'add' ? handleAdd : handleEdit}
+        okText={t('common.save')} confirmLoading={isLoading}
+        closable={!isLoading} keyboard={!isLoading} cancelButtonProps={{ disabled: isLoading }}
         onCancel={() => useAgentContextStore.getState().requestChange(closeFormModal)}
         width={720}
         afterClose={() => form.resetFields()} maskClosable={false}
       >
+        {error && <Alert type="error" showIcon title={error} />}
         <Form
           form={form}
+          disabled={isLoading}
           layout="vertical"
         >
           <Form.Item

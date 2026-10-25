@@ -246,8 +246,10 @@ const AppContent: React.FC = () => {
           </div>
         )}
       >
-        {['projects', 'statistics', 'managed-mode', 'automation', 'environment-check'].includes(activeMainTab) &&
+        {['projects', 'statistics', 'managed-mode'].includes(activeMainTab) &&
           <Alert className="scope-notice" showIcon type="info" title={t('agentContext.claudeOnly')} />}
+        {['automation', 'environment-check'].includes(activeMainTab) &&
+          <Alert className="scope-notice" showIcon type="info" title={t('agentContext.toolScope')} />}
         {renderContent()}
       </Suspense>
 

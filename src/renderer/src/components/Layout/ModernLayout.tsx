@@ -415,15 +415,6 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
               {(expandedMenuGroups.advanced || sidebarCollapsed) && (
                 <>
                   <button type="button"
-                className={`nav-item ${activeMainTab === 'automation' ? 'active' : ''}`}
-                onClick={() => setActiveMainTab('automation')}
-              >
-                <div className="nav-icon">
-                  <RobotOutlined />
-                </div>
-                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.automation')}</span>}
-              </button>
-                  <button type="button"
                 className={`nav-item ${activeMainTab === 'statistics' ? 'active' : ''}`}
                 onClick={() => setActiveMainTab('statistics')}
               >
@@ -441,15 +432,6 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
                 </div>
                 {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.projects')}</span>}
               </button>
-                  <button type="button"
-                    className={`nav-item ${activeMainTab === 'environment-check' ? 'active' : ''}`}
-                    onClick={() => setActiveMainTab('environment-check')}
-                  >
-                    <div className="nav-icon">
-                      <CheckCircleOutlined />
-                    </div>
-                    {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.environmentCheck')}</span>}
-                  </button>
                   <button type="button"
                     className={`nav-item ${activeMainTab === 'managed-mode' ? 'active' : ''}`}
                     onClick={() => setActiveMainTab('managed-mode')}
@@ -503,6 +485,20 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({ children }) => {
               <div className="nav-section-title">
                 {!sidebarCollapsed && <span>{t('layout.nav.tools')}</span>}
               </div>
+              <button type="button"
+                className={`nav-item ${activeMainTab === 'automation' ? 'active' : ''}`}
+                onClick={() => setActiveMainTab('automation')}
+              >
+                <div className="nav-icon"><RobotOutlined /></div>
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.automation')}</span>}
+              </button>
+              <button type="button"
+                className={`nav-item ${activeMainTab === 'environment-check' ? 'active' : ''}`}
+                onClick={() => setActiveMainTab('environment-check')}
+              >
+                <div className="nav-icon"><CheckCircleOutlined /></div>
+                {!sidebarCollapsed && <span className="nav-label">{t('layout.nav.environmentCheck')}</span>}
+              </button>
               <button type="button"
                 className={`nav-item ${activeMainTab === 'settings' ? 'active' : ''}`}
                 onClick={() => setActiveMainTab('settings')}

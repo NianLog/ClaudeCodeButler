@@ -21,6 +21,7 @@
     "pack:win:all": "npm run clean:release && electron-builder --win portable nsis zip --publish=never",
     "dist": "npm run clean:release && electron-builder --publish=never",
     "test": "vitest",
+    "test:electron": "node tests/e2e/agent-resource-workflows.mjs",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:changed": "node scripts/lint-changed.cjs",
     "type-check": "tsc --noEmit",
