@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { chmod, mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from 'fs/promises'
+import { chmod, mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, symlink, writeFile } from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import builtin from '../../../src/shared/builtin-tool-registry.json'
@@ -28,7 +28,7 @@ async function put(relative: string, value: string | Buffer): Promise<void> {
 }
 
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'ccb-resource-'))
+  root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'ccb-resource-')))
   definitions = structuredClone(builtin.tools) as ToolDefinition[]
   service = new AgentResourceService({
     home: root,

@@ -15,6 +15,8 @@
 
 外部证据目录 ccb-151-release-20261028 含官方清单、runtime/electron-451、19 份新取公告、runtime-verification.json 及完整日志。云 CI 和发布载荷核验仍待回执，随后才公开 Release。以下记录均为先前运行时的历史证据，旧“仍缺失/暂不发布”状态不代表本次授权与回补结论。
 
+首次云 CI 40640243361 因 Windows 8.3 临时路径别名失败。本机短路径复现后，仅规范化五组测试夹具的临时根和清理边界，生产路径保护不变；短路径下全量 61 files / 647 tests 无跳过通过。官网更新接口由用户稍后手动上传，不声称官网已更新。
+
 ## 2026-10-25：网络 A+B 本机验收完成，未发布
 
 A 将 TLS 证书身份绑定 URL 规范化目标，保留 CA 链、DNS/IP SAN 和代理协议；下载 HEAD 禁复用、立即清理响应并设五秒总时限，保留 2xx/3xx 与 Chromium 实际下载。B 限制 main/独立代理新增 Node fetch、Undici、Resolver、WebSocket/EventSource 和用户快照入口，保留 OS lookup 与 Chromium API。验收发现的旧健康回调竞态已以服务实例身份判断修复，迟到成功/失败均不操作新服务。未增加运行依赖、移动配置或迁移数据。

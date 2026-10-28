@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import builtin from '../../../src/shared/builtin-tool-registry.json'
@@ -21,7 +21,7 @@ const event = { sender: { id: 171, once: vi.fn(), isDestroyed: () => false } }
 const raw = '{"userId":"private-user","large":9007199254740993123,"mcpServers":{"docs":{"command":"old","unknown":9007199254740993999}},"projects":{"project":{"trust":false,"mcpServers":{"local":{"command":"old"}}}}}'
 
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'ccb-resource-ipc-'))
+  root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'ccb-resource-ipc-')))
   definitions = structuredClone(builtin.tools) as ToolDefinition[]
   const isolated = new AgentResourceService({ home: root, backupDirectory: path.join(root, '.ccb', 'resource-backups'), registryService: { getTool: async (id: string) => definitions.find(tool => tool.toolId === id) } as ToolRegistryService, detectionService: new ToolDetectionService({ pathVariables: { HOME: root, CCB_DATA: path.join(root, '.ccb') } }) })
   vi.spyOn(agentResourceService, 'saveLegacyMcpConfig').mockImplementation(input => isolated.saveLegacyMcpConfig(input))

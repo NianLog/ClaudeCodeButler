@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readFile, symlink, writeFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, symlink, writeFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import builtin from '../../../src/shared/builtin-tool-registry.json'
@@ -25,7 +25,7 @@ const put = async (relative, content) => {
   return file
 }
 beforeEach(async ()=>{
-  root=await mkdtemp(path.join(evidenceRoot,'fixture-'))
+  root=await realpath(await mkdtemp(path.join(evidenceRoot,'fixture-')))
   const definitions=structuredClone(builtin.tools)
   const registry={getTool:async id=>definitions.find(t=>t.toolId===id)}
   const detection=new ToolDetectionService({pathVariables:{HOME:root,CCB_DATA:path.join(root,'.ccb'),XDG_CONFIG_HOME:path.join(root,'.config')}})
@@ -163,6 +163,6 @@ describe('resource write and recovery regression cases',()=>{
 
 afterEach(async () => {
   vi.unstubAllGlobals()
-  if (path.dirname(root) !== path.resolve(os.tmpdir()) || !path.basename(root).startsWith('fixture-')) throw new Error('Unexpected fixture cleanup path')
+  if (path.dirname(root) !== await realpath(evidenceRoot) || !path.basename(root).startsWith('fixture-')) throw new Error('Unexpected fixture cleanup path')
   await rm(root, { recursive: true, force: true })
 })

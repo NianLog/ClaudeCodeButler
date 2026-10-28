@@ -10,7 +10,7 @@ const markdown = '---\nname: fixture\ndescription: fixture description\n---\n\nn
 const files = (content = markdown) => ({ rootDirName: 'fixture', files: [{ relativePath: 'SKILL.md', contentBase64: Buffer.from(content).toString('base64') }] })
 const target = () => path.join(directory, '.claude/skills/fixture')
 beforeEach(async () => {
-  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ccb-skills-import-'))
+  directory = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ccb-skills-import-')))
   await fs.mkdir(target(), { recursive: true })
   await fs.writeFile(path.join(target(), 'SKILL.md'), 'original skill bytes')
   await fs.writeFile(path.join(target(), 'keep.bin'), Buffer.from([0, 255, 1]))
