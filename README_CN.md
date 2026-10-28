@@ -7,7 +7,7 @@
 [English](./README.md) | 简体中文
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Electron](https://img.shields.io/badge/Electron-45.0.0-47848F?logo=electron)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-45.1.0-47848F?logo=electron)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-19.3.1-61DAFB?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
@@ -21,17 +21,17 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 
 ### 项目状态
 
-- **当前候选**：`1.5.1`（未发布）；最新已发布版本 `1.5.0`（2026-09-05）
+- **版本**：`1.5.1`；公开下载以 [GitHub Releases](https://github.com/NianLog/ClaudeCodeButler/releases) 为准。
 - **v1.5.0 主题**：从 Claude Code 专用管理器演进为规则驱动的多 AI 工具配置控制平面
 - **已支持工具**：Claude Code、Codex CLI、Gemini CLI、Antigravity —— 声明式 JSON registry 接入，覆盖配置发现、校验、原子编辑、备份恢复与配置集快照切换全链路
 - **1.5.1 安全修复**：同路径排队原子写、配置集激活前完整校验、设置失败反馈、受限版本读取与上游断连取消；沿用现有配置路径和文件格式。
 - **收尾修复**：损坏或不可读的托管 settings 不再被覆盖，启停和恢复失败会返回错误；重启按钮实际执行服务重启，服务商切换成功后仅刷新状态。
 - **C 批修复**：独立代理强制 accessToken、按协议路由并转换 SSE；Skill 覆盖先校验暂存再替换，失败恢复原目录。独立代理的启动与协议支持范围见 [说明](src/proxy-server/PROTOCOL.md)。
 - **资源闭环补修**：先识别默认位置，逐项显示缺失/受限/损坏状态；保留现有路径、Skill 附件与权限字段。MCP 按服务器恢复，原生文件明确按整文件恢复；保存过期版本会被拒绝，失败保留草稿。自动化规则与环境排查归入“工具”。
-- **本地验收**：60 个测试文件 / 642 项测试全部通过，无跳过；真实 Electron 的 22 组流程通过，未捕获异常为零，5 个用户文件摘要不变。类型、lint（0 error / 15 个既有 warning）、双构建、预检和双全依赖审计通过。干净源码 2086a94 的未签名 Portable/NSIS/ZIP 已核验载荷、ASAR、SBOM 和摘要；Portable/ZIP/解包目录版各 17 项业务验收通过，NSIS 仅解包。详见[验收报告](./SECURITY_AUDIT_REPORT.md)。
-- **发布门禁**：两套生产依赖审计、预检、Authenticode 校验、ASAR 完整性、依赖 SBOM、SHA-256 和来源证明。本地未签名包仅供测试，验证记录及开发链告警见 [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md)。
+- **验收证据**：本机回归、真实 Electron 流程、发布载荷和云 CI 分别记录在[验收报告](./SECURITY_AUDIT_REPORT.md)，不将源码测试等同于安装验证。
+- **发布门禁**：双依赖审计、预检、ASAR 完整性、依赖 SBOM、SHA-256 和云端来源证明。经维护者批准，仅 1.5.1 接受未签名包；其他版本仍要求 Authenticode，有损坏签名始终拒绝。
 - **网络缓解**：A+B 已完成并通过本地验收：TLS 证书身份绑定规范目标；HEAD 禁复用、收尾响应并保留 2xx/3xx；限制新增 Node 网络入口，旧健康回调不影响重启后的服务。配置路径、数据格式和用户数据保持兼容。
-- **运行时安全复核**：七项 Node 上游修复仍缺失；c-ares 11 项、Undici 8 项当前未识别触发路径，按条件持续跟踪，不把应用缓解等同于厂商修复。Node HEAD 临时例外在下次入口/依赖变更或 2026-11-01 复核。签名、安装/覆盖升级/卸载按用户要求暂缓，云 CI 与其他平台未验，不发布。
+- **运行时安全**：Electron 45.1.0 实际内嵌 Node 24.22.1；九份内置源码匹配修复版，6 个 TLS 与 6 个 DNS 反例全部拒绝。c-ares 1.34.9 / Undici 7.30.1 已脱离此前跟踪的 19 项公告受影响范围。应用 TLS/HEAD 缓解继续保留；签名和安装/覆盖升级/卸载仍暂缓。
 
 产品名称继续使用 **Claude Code Butler**。名称用于记录项目起源，不再承担描述全部管理范围的职责；新增工具通过受约束 registry 与内置 capabilities 接入，`CCB`、`.ccb`、应用 identity 和仓库标识保持稳定。
 
@@ -220,7 +220,7 @@ npm run dist:all
 
 ### 应用运行时
 
-- **Electron**: 45.0.0
+- **Electron**: 45.1.0
 - **electron-vite**: 5.0.0
 - **Vite**: 7.3.6
 - **TypeScript**: 6.0.3
@@ -459,7 +459,7 @@ Made by NianSir
 </div>
 
 
-工具链更新（2026-10-25）：Electron 45.0.0、React 19、AntD 6、Zustand 5；隔离 Node 24.22.1 / npm 12.2.1。TypeScript 保留解析器支持的 6.0.3；Electron 内嵌 Node 厂商回补仍为正式发布门禁，未发布。
+工具链更新（2026-10-28）：Electron 45.1.0、React 19、AntD 6、Zustand 5；构建和独立代理使用隔离 Node 24.22.1 / npm 12.2.1。TypeScript 保留解析器支持的 6.0.3。内嵌 Node 回补已实测，旧 45.0.0 候选证据保留为历史。
 
 
 ### 1.5.1 跨工具配置

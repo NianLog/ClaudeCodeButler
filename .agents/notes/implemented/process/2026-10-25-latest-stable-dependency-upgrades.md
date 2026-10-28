@@ -2,13 +2,17 @@
 
 Status: implemented
 Scope: package.json, package-lock.json, .npmrc, src/proxy-server/package.json, src/proxy-server/package-lock.json, src/proxy-server/.npmrc, src/proxy-server/tsconfig.json, .github/workflows/release.yml, electron.vite.config.mts, eslint.config.cjs, vitest.config.mts, postcss.config.js, tsconfig.json, src/main/**, src/renderer/src/**, src/proxy-server/src/**, tests/unit/**, ARCHITECTURE.md, CAPABILITIES.md, SECURITY_AUDIT_REPORT.md, README.md, README_CN.md, CHANGELOG.md
-Last-verified: 2026-10-25
+Last-verified: 2026-10-28
 
 ## Problem
 
 用户要求把项目依赖升级到最新稳定兼容组合，并明确允许必要的 br 限制；同时保留 1.5.1 应用身份、用户数据和旧配置路径。2026-10-25 已批准方案。扩展前源码已存档 ed53f23，不修改全局 Node/npm，不自动升级用户的 AI CLI。
 
 既有结论分别见[受支持运行时与正式门禁](2026-10-19-supported-runtime-and-release-gates.md)、[持久化与代理失败边界](../bug-fix/2026-10-19-persistence-and-proxy-safety.md)。当前功能扩展见[导入与全局对象](../../implemented/feature/2026-10-25-agent-import-and-global-context.md)。保留历史验收事实；本记录取代当前工具链版本的描述。
+
+## 2026-10-28 当前补充
+
+Electron 升级到 45.1.0，真实内嵌 Node 24.22.1 / Chromium 156.0.8078.49。九份内置 JS 匹配已校验修复版；6 个 TLS 与 6 个 DNS 反例全部拒绝。c-ares 1.34.9 / Undici 7.30.1 与重新获取的 19 项公告逐项比对均脱离受影响范围。此前七项 Node 缺补丁结论现已关闭；下面保留 45.0.0 历史取证。发布过程、未签名单版本例外见[发布授权](2026-10-28-v151-release-authorization.md)。
 
 ## Decision
 

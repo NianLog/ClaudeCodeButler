@@ -7,7 +7,7 @@
 English | [简体中文](./README_CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Electron](https://img.shields.io/badge/Electron-45.0.0-47848F?logo=electron)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-45.1.0-47848F?logo=electron)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-19.3.1-61DAFB?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 
@@ -21,17 +21,17 @@ CCB (Claude Code Butler) is a local-first desktop application built with Electro
 
 ### Project Status
 
-- **Current candidate**: `1.5.1` (unreleased); latest published release `1.5.0` (2026-09-05)
+- **Version**: `1.5.1`; public downloads are listed on [GitHub Releases](https://github.com/NianLog/ClaudeCodeButler/releases).
 - **v1.5.0 theme**: from a Claude Code-only manager to a registry-driven multi-AI-tool configuration control plane
 - **Managed targets**: Claude Code, Codex CLI, Gemini CLI and Antigravity across configuration/MCP/Skills/subagents. Cursor, Qoder, WorkBuddy, TRAE, Pi and OpenCode are additional import sources.
 - **1.5.1 safety fixes**: serialized atomic writes, validation before configuration-set activation, accurate settings error feedback, bounded version requests, and upstream cancellation. Existing paths and data formats remain compatible.
 - **Final fixes**: damaged or unreadable managed settings are preserved; startup, restart and restore failures are reported. The restart button actually restarts the service, while provider switches only refresh the UI after completion.
 - **Batch C**: the standalone proxy requires accessToken and uses protocol-specific endpoints and SSE translation. Skill replacement stages and validates the complete import before swapping, with rollback on failure. See the [standalone proxy guide](src/proxy-server/PROTOCOL.md) for startup and protocol limits.
 - **Resource safety follow-up**: discover default locations first and report missing, restricted and invalid entries separately. Existing paths, Skill attachments and permission fields are preserved. MCP recovery restores individual servers; native-file recovery explicitly restores a whole file. Stale writes are rejected and failed saves retain drafts. Automation and environment checks now belong to Tools.
-- **Local acceptance**: all 60 files / 642 tests pass without skips. Type checks, lint (0 errors / 15 existing warnings), both builds, preflight and both full dependency audits pass. Real Electron passes 22 workflows, including 14 TLS/proxy/Host cases and download compatibility, with no uncaught renderer exceptions or changes to five user files. Unsigned candidates from clean source 2086a94 pass payload, ASAR, two SBOMs and six checksum checks; Portable, ZIP and unpacked builds each pass 17 business checks. NSIS was extracted only. See the [acceptance report](./SECURITY_AUDIT_REPORT.md).
-- **Release gates**: production audits for both packages, preflight, Authenticode checks, ASAR integrity, dependency SBOMs, SHA-256 and build provenance. Local unsigned packages are for testing; see [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) for verification and remaining build-tool advisories.
+- **Acceptance evidence**: local regression, real Electron workflows, release payloads and cloud CI are recorded separately in the [acceptance report](./SECURITY_AUDIT_REPORT.md); source tests do not constitute installation acceptance.
+- **Release gates**: dual dependency audits, preflight, ASAR integrity, SBOMs, SHA-256 and cloud provenance. The maintainer approved unsigned artifacts for 1.5.1 only; other versions still require Authenticode and invalid signatures are always rejected.
 - **Network mitigations**: A+B pass local acceptance. TLS identity is bound to the normalized target; HEAD probes disable reuse and release responses while preserving 2xx/3xx behavior. New Node network entry points are restricted, and stale health callbacks cannot affect a restarted service. Existing paths, data formats and user data remain compatible.
-- **Embedded runtime security**: seven upstream Node fixes are still absent. Eleven c-ares and eight Undici advisories remain tracked against their currently unmet trigger conditions; application mitigations are not vendor fixes. Recheck the approved Node HEAD exception on the next entry-point/dependency change or 2026-11-01. Signing and Windows installation lifecycle tests remain deferred; cloud CI and other platforms were not verified. Unpublished.
+- **Runtime security**: Electron 45.1.0 embeds Node 24.22.1; nine built-in modules match patched upstream sources and all six TLS and six DNS counterexamples are rejected. c-ares 1.34.9 / Undici 7.30.1 fall outside the 19 previously tracked advisory ranges. Application TLS/HEAD mitigations remain; signing and installation/upgrade/uninstallation acceptance remain deferred.
 
 The product name remains **Claude Code Butler**. The name records the project's origin rather than limiting its architecture: new tools are integrated through a bounded registry and built-in capabilities, while `CCB`, `.ccb`, app identity, and repository identifiers remain stable.
 
@@ -220,7 +220,7 @@ npm run dist:all
 
 ### Application runtime
 
-- **Electron**: 45.0.0
+- **Electron**: 45.1.0
 - **electron-vite**: 5.0.0
 - **Vite**: 7.3.6
 - **TypeScript**: 6.0.3
@@ -459,7 +459,7 @@ Made by NianSir
 </div>
 
 
-Toolchain update (2026-10-25): Electron 45.0.0, React 19, AntD 6, Zustand 5; isolated Node 24.22.1 / npm 12.2.1. TypeScript stays on supported 6.0.3 pending parser support for 7. Electron Node backport verification remains a release gate. No release has been published.
+Toolchain update (2026-10-28): Electron 45.1.0, React 19, AntD 6, Zustand 5; isolated Node 24.22.1 / npm 12.2.1 for builds and the standalone proxy. TypeScript remains on parser-supported 6.0.3. Embedded Node patches have been verified; 45.0.0 evidence is historical.
 
 
 ### 1.5.1 cross-tool configuration

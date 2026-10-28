@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — 架构现状与演进计划
 
 > 活文档。新增/移动模块、改变分层边界、引入新依赖或新数据流时，必须在同一提交更新本文件。
-> 更新时间：2026-10-25（1.5.1 未发布候选，分支 `codex/v1.5.1-agents-ux-upgrades`）。
+> 更新时间：2026-10-28（1.5.1）。
 
 > 2026-10-25 最新本机验收：资源三批与网络 A+B 已完成；642 项测试和 22 组真实 Electron 流程通过，无跳过/未捕获异常。干净源码 2086a94 的未签名候选已通过业务及载荷核验，暂不发布。详见[验收报告](SECURITY_AUDIT_REPORT.md)；早期 37e020e 验收保留在历史记录中。
 
@@ -24,7 +24,7 @@
 
 ## 1. 产品与架构定位
 
-CCB（Claude Code Butler）是本地优先的 Windows 桌面应用（Electron 45.0.0 + React 19 + TS），核心价值是把分散在用户主目录的 AI CLI 工具配置（`~/.claude/settings.json`、MCP 注册表、Codex `config.toml` 等）纳入统一的生命周期管理：发现、校验、编辑、备份、恢复、模板化。
+CCB（Claude Code Butler）是本地优先的 Windows 桌面应用（Electron 45.1.0 + React 19 + TS），核心价值是把分散在用户主目录的 AI CLI 工具配置（`~/.claude/settings.json`、MCP 注册表、Codex `config.toml` 等）纳入统一的生命周期管理：发现、校验、编辑、备份、恢复、模板化。
 
 v1.4.0 及以前是"Claude Code 专用管理器"：路径、格式、业务逻辑硬编码在各 service 中。v1.5.0 起演进为**规则驱动的多工具配置控制平面**：工具能力以 declarative JSON registry 声明，应用侧只实现有限的、审计过的内置 capability handler。这是典型的 Strangler 渐进迁移，而非重写。
 

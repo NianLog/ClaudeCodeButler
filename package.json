@@ -81,7 +81,7 @@
     "antd": "6.6.7",
     "baseline-browser-mapping": "2.11.32",
     "dayjs": "1.11.23",
-    "electron": "45.0.0",
+    "electron": "45.1.0",
     "electron-builder": "26.18.0",
     "electron-vite": "6.0.0",
     "eslint": "10.13.0",

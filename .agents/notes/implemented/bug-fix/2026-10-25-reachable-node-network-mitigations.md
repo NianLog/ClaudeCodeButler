@@ -24,7 +24,7 @@ postUpstream 保持签名和原始流协议。HTTPS 证书检查显式使用 URL
 
 ### 应用验收与厂商修复分开
 
-[依赖与内嵌运行时记录](../process/2026-10-25-latest-stable-dependency-upgrades.md)中的七项未回补事实继续保留。应用风险按入口、触发条件、缓解及复核日期验收；未识别入口不写成组件已修复。A+B 入口约束、完整回归和真实 Electron/干净新候选本机验收已完成；签名、安装生命周期、云 CI 与跨平台不记为通过。不发布。
+[依赖与内嵌运行时记录](../process/2026-10-25-latest-stable-dependency-upgrades.md)保留 45.0.0 七项未回补的历史取证；2026-10-28 已实测 45.1.0 包含对应修复。应用缓解继续保留，HEAD 例外仍用于兼容已验证的重定向行为，连接池复用另行验证。最新发布授权与单版本签名例外见[发布记录](../process/2026-10-28-v151-release-authorization.md)，安装生命周期与跨平台不记为通过。
 
 当前排除条件：不使用 Node Resolver 查询；lookup 走 uv/OS；Node c-ares 绑定关闭查询缓存，部分公告 API 未暴露；桌面普通请求走 Chromium，无 Node Undici 网络入口；独立代理实际选择 Axios HTTP adapter，启动已有 Node 24.22.1 / major 24 检查。没有用户 Node snapshot/SEA 构建，也不以 Node Permission Model 替代路径授权。B 批已把这些边界加入现有 lint 与回归，不重复实现运行时检查。
 

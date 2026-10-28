@@ -114,6 +114,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      # 用户批准 1.5.1 暂缓签名；其他版本继续强制签名。
+      CCB_ALLOW_UNSIGNED: ${{ github.ref_name == 'v1.5.1' && 'true' || 'false' }}
     permissions:
       contents: write
       id-token: write
@@ -157,7 +160,7 @@ jobs:
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag does not match package version' }
-          if (!$env:CSC_LINK) { throw 'CSC_LINK is required for a signed release' }
+          if (!$env:CSC_LINK -and $env:CCB_ALLOW_UNSIGNED -ne 'true') { throw 'CSC_LINK is required for a signed release' }
 
       - name: Release preflight (blocking)
         run: npm run release:preflight
@@ -175,10 +178,12 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: npx --no-install electron-builder --win portable zip nsis --publish=never --config.forceCodeSigning=true
+        run: |
+          $requireSigning = if ($env:CCB_ALLOW_UNSIGNED -eq 'true') { 'false' } else { 'true' }
+          npx --no-install electron-builder --win portable zip nsis --publish=never "--config.forceCodeSigning=$requireSigning"
 
       - name: Verify Authenticode and ZIP application
-        run: ./scripts/verify-release.ps1
+        run: ./scripts/verify-release.ps1 -AllowUnsigned:($env:CCB_ALLOW_UNSIGNED -eq 'true')
 
       - name: Generate dependency SBOMs and SHA-256 manifest
         run: npm run release:metadata

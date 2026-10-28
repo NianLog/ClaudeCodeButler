@@ -112,7 +112,7 @@ export function postUpstream(opts: UpstreamRequestOptions): Promise<UpstreamResp
       // CONNECT 隧道可能丢失目标 host；校验始终绑定规范化后的目标，而非代理或 Host。
       checkServerIdentity: (_hostname: string, cert: PeerCertificate) =>
         checkServerIdentity(target.hostname.replace(/^\[|\]$/g, ''), cert),
-      // shortcut: Electron 45 未包含 CVE-2026-105481 修复；稳定回补及复用回归通过后再恢复。
+      // shortcut: 暂不复用连接；Electron 回补后的连接池专项回归通过后再恢复。
       agent: opts.proxyUrl ? new HttpsProxyAgent(opts.proxyUrl) : false
     }
 

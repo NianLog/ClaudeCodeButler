@@ -1,6 +1,7 @@
-param([string]$OutputDirectory = 'release')
+param([string]$OutputDirectory = 'release', [switch]$AllowUnsigned)
 $ErrorActionPreference = 'Stop'
 $version = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../package.json') -Raw | ConvertFrom-Json).version
+if ($AllowUnsigned -and $version -ne '1.5.1') { throw 'Unsigned exception is restricted to 1.5.1' }
 $outputPath = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $files = @("CCB-Portable-$version.exe", "CCB-Setup-$version.exe", "CCB-$version-win.zip", 'win-unpacked/CCB.exe')
 foreach ($name in $files) {
@@ -8,11 +9,13 @@ foreach ($name in $files) {
     if ($file.Length -eq 0) { throw "Empty release artifact: $name" }
     if ($file.Extension -eq '.exe') {
         $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
-        if ($signature.Status -ne 'Valid') { throw "Invalid Authenticode signature ($($signature.Status)): $name" }
+        if ($signature.Status -ne 'Valid' -and !($AllowUnsigned -and $signature.Status -eq 'NotSigned')) {
+            throw "Invalid Authenticode signature ($($signature.Status)): $name"
+        }
     }
 }
 
-# ZIP 必须包含本次已验证签名的应用，拒绝混入旧包。
+# Verify that the ZIP contains the current application, not stale output.
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $outputPath "CCB-$version-win.zip"))
 try {
@@ -24,7 +27,7 @@ try {
         try { $zipHash = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '') }
         finally { $stream.Dispose(); $sha.Dispose() }
         $appHash = (Get-FileHash -LiteralPath (Join-Path $outputPath "win-unpacked/$entryName") -Algorithm SHA256).Hash
-        if ($zipHash -ne $appHash) { throw "ZIP differs from the signed application: $entryName" }
+        if ($zipHash -ne $appHash) { throw "ZIP differs from the verified application: $entryName" }
     }
 } finally { $zip.Dispose() }
-Write-Output "Release signatures and ZIP identity verified: $version"
+Write-Output "Release signature policy and ZIP identity verified: $version (unsigned exception: $AllowUnsigned)"

@@ -1,5 +1,20 @@
 # Semgrep 安全审计与改进报告
 
+## 2026-10-28：1.5.1 发布准备与厂商回补复核
+
+官方 [Electron 45.1.0](https://github.com/electron/electron/releases/tag/v45.1.0) 已更新 Node 24.22.1。安装缓存 ZIP 与官方 SHASUMS256 一致；实际运行确认为 Electron 45.1.0 / Chromium 156.0.8078.49 / Node 24.22.1。
+
+- 九份内置 JS 在仅规范换行后，与已校验的 Node 24.22.1 上游源码一致；覆盖 DNS NUL、TLS 三项、HTTP Agent pending-read、快照随机缓存和 realpathSync Permission Model 七项修复。6 个 TLS 反例、6 个 DNS 反例全部拒绝，畸形 DNS 输入未发出查询。不是仅根据版本字符串判定。
+- 内置 c-ares 1.34.9 / Undici 7.30.1 与本次重新获取的 19 份官方公告逐项比对，全部脱离此前受影响范围；Undici 内置源码亦匹配 Node 修复版本。此结论仅覆盖已跟踪公告，不表示没有未来漏洞。
+- 原 TLS 目标绑定、HEAD 清理及禁复用措施、入口约束继续保留。HEAD 临时例外仍用于保持已验证的重定向行为；连接池恢复须另做专项回归。
+- 签名及真实安装/覆盖升级/卸载经用户批准暂缓；仅 1.5.1 有未签名例外。无效签名仍拒绝，后续版本默认强制签名。本轮发布授权见[发布 DDE](.agents/notes/implemented/process/2026-10-28-v151-release-authorization.md)。
+
+本机门禁已通过：61 files / 647 tests 全通过、无跳过；新增 5 项签名策略回归覆盖默认拒绝、单版本例外、损坏签名拒绝、正常签名和禁止其他版本例外。type-check、lint（0 error / 15 个既有 warning）、lint:changed、双构建、正式 preflight 和根/代理双全依赖 audit（0 漏洞）通过。覆盖率 statements 50.45%、branches 54.52%、functions 49.26%、lines 50.71%，不声称全路径覆盖。
+
+真实 Electron 45.1.0 的 22 组流程通过，含 14 组 TLS/代理/Host 场景、下载 200/302 正确字节、405 拒绝和五秒超时；四主题、9 张截图、零未捕获 renderer 异常，5 个用户文件摘要不变。证据：release/electron-e2e/profile-1793166430405/evidence/qa-report.json。
+
+外部证据目录 ccb-151-release-20261028 含官方清单、runtime/electron-451、19 份新取公告、runtime-verification.json 及完整日志。云 CI 和发布载荷核验仍待回执，随后才公开 Release。以下记录均为先前运行时的历史证据，旧“仍缺失/暂不发布”状态不代表本次授权与回补结论。
+
 ## 2026-10-25：网络 A+B 本机验收完成，未发布
 
 A 将 TLS 证书身份绑定 URL 规范化目标，保留 CA 链、DNS/IP SAN 和代理协议；下载 HEAD 禁复用、立即清理响应并设五秒总时限，保留 2xx/3xx 与 Chromium 实际下载。B 限制 main/独立代理新增 Node fetch、Undici、Resolver、WebSocket/EventSource 和用户快照入口，保留 OS lookup 与 Chromium API。验收发现的旧健康回调竞态已以服务实例身份判断修复，迟到成功/失败均不操作新服务。未增加运行依赖、移动配置或迁移数据。
