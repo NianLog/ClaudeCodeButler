@@ -3,6 +3,8 @@
 > 活文档。新增/移动模块、改变分层边界、引入新依赖或新数据流时，必须在同一提交更新本文件。
 > 更新时间：2026-10-28（1.5.1）。
 
+> 架构探索分支：codex/tauri-rust-exploration。已完成 Electron/IPC 依赖面盘点，并记录[Tauri 2 + Rust 探索方案](.agents/notes/proposed/architecture/2026-10-28-tauri-rust-exploration.md)。先验证隔离夹具的配置读写与恢复，再测同任务资源占用；保留 React 前端。原型尚未实施，未取得新架构的性能或兼容性验收证据。
+
 > 2026-10-28 发布状态：1.5.1 已发布，基线 099b0b5；Electron 45.1.0 / Node 24.22.1。本机 647 tests 与 22 组真实 Electron 源码构建流程通过；云 Quality + Windows Release 成功，637 tests 通过 / 10 条件跳过。用户已要求停止本机安装包传输，云端三产物未追加本机运行/ASAR 验收；签名和安装生命周期仍暂缓。详见[验收报告](SECURITY_AUDIT_REPORT.md)。以下 10 月 25 日段落保留历史过程。
 
 ### 资源闭环三批
