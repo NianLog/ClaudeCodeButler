@@ -24,10 +24,12 @@ Last-verified: 2026-10-28
 
 ## Consequences
 
-未签名 Windows 包可能出现系统信誉提示；SHA-256 和 GitHub provenance 不替代 Authenticode。安装生命周期验收仍缺失。发布准备进行中，不能在取得云 CI、产物和公开 Release 回执前宣称已发布。
+未签名 Windows 包可能出现系统信誉提示；SHA-256 和 GitHub provenance 不替代 Authenticode。安装生命周期验收仍缺失。用户最终要求停止本机安装包传输，云端包的本机启动/ASAR 比对/篡改验收未完成，发布说明明确披露；不把此前的旧候选或源码构建验收替代这项证据。
 
 ## Verification
 
 运行时 ZIP 与官方 SHA-256 一致；实际内嵌 Node 24.22.1，九份 JS 规范换行后匹配上游修复源码。6 个 TLS / 6 个 DNS 反例全部拒绝；内置 c-ares 1.34.9 与 Undici 7.30.1 已脱离重新取得的 19 项公告范围。61 files / 647 tests 无跳过通过，新增 5 项签名策略回归；双构建、类型、lint、双全依赖审计及 preflight 通过。真实 Electron 22 组流程、14 组 TLS 场景、下载兼容和用户文件摘要保护通过。云端回执与公开发布结果另行补充，不将本机测试计为云 CI。
 
 首次云 CI（40640243361）暴露 Windows 8.3 临时目录别名差异；本机把 TMP/TEMP 指向同类短路径后，Skill 夹具稳定复现 10 fail / 14 pass。修复仅将五组测试新建的临时根目录经 realpath 规范化，清理前仍校验规范父目录和夹具名称，未放宽生产路径、链接或恢复保护。短路径下完整回归 61 files / 647 tests 无跳过通过。官网 version.txt 仍为 1.5.0，用户已明确官网稍后手动上传，GitHub 发布继续。
+
+发布回执：tag v1.5.1 指向 099b0b5104648fec3382964d6236f27fdf917dad，2026-10-28 14:51 UTC+8 公开为 Latest。[main CI](https://github.com/NianLog/ClaudeCodeButler/actions/runs/40641003379) 和 [tag Quality + Windows Release](https://github.com/NianLog/ClaudeCodeButler/actions/runs/40641276956) 均成功；云端 637 tests 通过 / 10 条件跳过。7 个云资产及来源证明已生成；4 份小文件本机验签通过，验证声明中全部 7 个摘要与 GitHub 服务器摘要一致。用户要求停止安装包下载/上传后，未继续传输大文件；官网上传包由用户后续部署。

@@ -1,6 +1,12 @@
 # Semgrep 安全审计与改进报告
 
-## 2026-10-28：1.5.1 发布准备与厂商回补复核
+## 2026-10-28：1.5.1 发布与厂商回补复核
+
+1.5.1 已于 2026-10-28 14:51（UTC+8）[公开发布并设为 Latest](https://github.com/NianLog/ClaudeCodeButler/releases/tag/v1.5.1)，发布基线为 099b0b5104648fec3382964d6236f27fdf917dad。GitHub [main Quality Check](https://github.com/NianLog/ClaudeCodeButler/actions/runs/40641003379) 与 [tag Quality Check + Windows Release](https://github.com/NianLog/ClaudeCodeButler/actions/runs/40641276956) 均成功；云端 637 tests 通过，10 项因缺少本地密钥或 web staging 材料条件跳过，这 10 项已在本机完整回归通过。
+
+CI 生成 Portable、Setup、ZIP、两份 SBOM、build-metadata.json 和 SHA256SUMS.txt，共 7 个资产，签名例外与 ZIP/打包目录载荷一致性检查通过。构建元数据 sourceDirty=false、Electron 45.1.0、sourceCommit 与 tag 一致。4 份小文件的 gh attestation verify 通过，并约束 workflow、source-ref、source-digest 和 GitHub hosted runner；该已验证声明包含全部 7 个资产，其摘要与 GitHub 服务器记录逐项一致。这不是三种安装包在本机下载重算摘要的证据。
+
+用户要求停止本机安装包下载/上传，已停止所有相关传输；不再等待本机云端产物启动、ASAR 比对与篡改验收。真实 Electron 源码构建验收见下，不能替代缺失的本次云端包验收。未签名、真实安装/覆盖升级/卸载和企业网络/其他平台验收仍明确暂缓。官网 version.txt 仍为 1.5.0，由用户稍后手动上传，已准备两文件更新包；没有执行服务器部署。
 
 官方 [Electron 45.1.0](https://github.com/electron/electron/releases/tag/v45.1.0) 已更新 Node 24.22.1。安装缓存 ZIP 与官方 SHASUMS256 一致；实际运行确认为 Electron 45.1.0 / Chromium 156.0.8078.49 / Node 24.22.1。
 
@@ -13,7 +19,7 @@
 
 真实 Electron 45.1.0 的 22 组流程通过，含 14 组 TLS/代理/Host 场景、下载 200/302 正确字节、405 拒绝和五秒超时；四主题、9 张截图、零未捕获 renderer 异常，5 个用户文件摘要不变。证据：release/electron-e2e/profile-1793166430405/evidence/qa-report.json。
 
-外部证据目录 ccb-151-release-20261028 含官方清单、runtime/electron-451、19 份新取公告、runtime-verification.json 及完整日志。云 CI 和发布载荷核验仍待回执，随后才公开 Release。以下记录均为先前运行时的历史证据，旧“仍缺失/暂不发布”状态不代表本次授权与回补结论。
+外部证据目录 ccb-151-release-20261028 含官方清单、runtime/electron-451、19 份新取公告、runtime-verification.json、云 CI 日志、provenance 与 published-release.json。以下记录均为先前运行时的历史证据，旧“仍缺失/暂不发布”状态不代表本次授权与回补结论。
 
 首次云 CI 40640243361 因 Windows 8.3 临时路径别名失败。本机短路径复现后，仅规范化五组测试夹具的临时根和清理边界，生产路径保护不变；短路径下全量 61 files / 647 tests 无跳过通过。官网更新接口由用户稍后手动上传，不声称官网已更新。
 

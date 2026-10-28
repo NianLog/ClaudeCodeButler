@@ -21,7 +21,7 @@ CCB（Claude Code Butler）是一个基于 Electron、React 和 TypeScript 构�
 
 ### 项目状态
 
-- **版本**：`1.5.1`；公开下载以 [GitHub Releases](https://github.com/NianLog/ClaudeCodeButler/releases) 为准。
+- **最新发布**：[`1.5.1`](https://github.com/NianLog/ClaudeCodeButler/releases/tag/v1.5.1)（2026-10-28）；GitHub Quality Check 与 Windows Release 均通过。安装包由维护者后续自行下载；本次云端包未追加本机运行验收，签名和安装生命周期仍暂缓。
 - **v1.5.0 主题**：从 Claude Code 专用管理器演进为规则驱动的多 AI 工具配置控制平面
 - **已支持工具**：Claude Code、Codex CLI、Gemini CLI、Antigravity —— 声明式 JSON registry 接入，覆盖配置发现、校验、原子编辑、备份恢复与配置集快照切换全链路
 - **1.5.1 安全修复**：同路径排队原子写、配置集激活前完整校验、设置失败反馈、受限版本读取与上游断连取消；沿用现有配置路径和文件格式。
